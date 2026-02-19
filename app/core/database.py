@@ -71,7 +71,6 @@ def init_db() -> None:
                 ComputationJob,
                 ComputationScript,
                 Dashboard,
-                DataSource,
                 GeoFeature,
                 GeoLayer,
                 Project,

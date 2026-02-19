@@ -9,6 +9,12 @@ class UnitOfMeasurement(BaseModel):
     label: str
 
 
+class DatastreamUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    unit_of_measurement: Optional[UnitOfMeasurement] = None
+
+
 class Datastream(BaseModel):
     datastream_id: str
     thing_id: str

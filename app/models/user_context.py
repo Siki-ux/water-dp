@@ -35,6 +35,7 @@ project_sensors = Table(
     Column(
         "added_at", DateTime, default=datetime.utcnow
     ),  # Track when sensor was added
+    schema="water_dp",
 )
 
 

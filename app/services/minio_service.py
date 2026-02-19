@@ -172,6 +172,34 @@ class MinioService:
             logger.error(f"Error getting object info: {e}")
             raise
 
+    def get_file_content(self, bucket_name: str, object_name: str) -> Optional[bytes]:
+        """
+        Get the content of a file from MinIO.
+        """
+        try:
+            response = self.client.get_object(bucket_name, object_name)
+            try:
+                return response.read()
+            finally:
+                response.close()
+                response.release_conn()
+        except S3Error as e:
+            if e.code == "NoSuchKey":
+                return None
+            logger.error(f"Error getting file content: {e}")
+            raise
+
+    def remove_file(self, bucket_name: str, object_name: str) -> None:
+        """
+        Remove a file from MinIO.
+        """
+        try:
+            self.client.remove_object(bucket_name, object_name)
+            logger.info(f"Removed {object_name} from {bucket_name}")
+        except S3Error as e:
+            logger.error(f"Error removing file: {e}")
+            raise
+
 
 # Singleton instance
 minio_service = MinioService()

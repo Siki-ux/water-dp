@@ -10,7 +10,7 @@ from app.core.exceptions import (
     ResourceNotFoundException,
 )
 from app.models.user_context import Project
-from app.schemas.frost.datastream import Datastream, Observation
+from app.schemas.frost.datastream import Datastream, Observation, DatastreamUpdate
 from app.schemas.frost.thing import Thing
 from app.schemas.sensor import (
     IngestionResponse,
@@ -26,6 +26,8 @@ logger = logging.getLogger(__name__)
 
 
 router = APIRouter()
+
+
 
 orchestrator = TimeIOOrchestrator()
 
@@ -92,7 +94,10 @@ async def create_sensor(
     try:
         location = None
         if sensor.latitude is not None and sensor.longitude is not None:
-            location = {"latitude": sensor.latitude, "longitude": sensor.longitude}
+            location = {
+                "type": "Point",
+                "coordinates": [sensor.longitude, sensor.latitude],
+            }
 
         # Fetch project details for refined schema naming
         project = (
@@ -113,10 +118,13 @@ async def create_sensor(
                 else None
             ),
             project_schema=project.schema_name,
-        )
+            mqtt_username=sensor.mqtt_username,
+            mqtt_password=sensor.mqtt_password,
+            mqtt_topic=sensor.mqtt_topic,
 
-        # Automatic Link to Project
-        from app.services.project_service import ProjectService
+            ingest_type=sensor.ingest_type,
+            parser_id=sensor.parser_id,
+        )
 
         try:
             # Check permissions implicitly via add_sensor (requires 'editor')
@@ -124,7 +132,7 @@ async def create_sensor(
             ProjectService.add_sensor(
                 database,
                 project_id=sensor.project_uuid,
-                sensor_id=result["uuid"],
+                thing_uuid=result["uuid"],
                 user=user,
             )
         except Exception as error:
@@ -133,8 +141,12 @@ async def create_sensor(
             print(f"Failed to auto-link sensor to project: {error}")
 
         if location:
-            result["latitude"] = location["latitude"]
-            result["longitude"] = location["longitude"]
+            result["latitude"] = location["coordinates"][1]
+            result["longitude"] = location["coordinates"][0]
+
+        # Ensure ID is string for Pydantic response model
+        if result.get("id"):
+            result["id"] = str(result["id"])
 
         return result
     except Exception as error:
@@ -145,7 +157,7 @@ async def create_sensor(
 
 
 @router.get(
-    "/{uuid}/datastreams",
+    "/{sensor_uuid}/datastreams",
     response_model=List[Datastream],
     summary="Get Sensor Datastreams (FROST)",
     description="Get datastreams for a sensor via FROST.",
@@ -164,6 +176,145 @@ async def get_sensor_datastreams(
     if not datastreams:
         return []
     return datastreams
+
+
+@router.post(
+    "/{sensor_uuid}/datastreams",
+    status_code=status.HTTP_201_CREATED,
+    summary="Create Datastream",
+    description="Create a new datastream for a sensor in the project database.",
+)
+async def create_sensor_datastream(
+    sensor_uuid: str,
+    payload: DatastreamUpdate,
+):
+    """
+    Create a new datastream for a sensor.
+    """
+    from app.services.timeio.timeio_db import TimeIODatabase
+
+    name = payload.name
+    if not name:
+        raise HTTPException(status_code=400, detail="Datastream name is required")
+
+    db = TimeIODatabase()
+    schema = db.get_thing_schema(sensor_uuid)
+    if not schema:
+        raise ResourceNotFoundException("Schema not found for sensor")
+
+    # Build property dict
+    unit_label = ""
+    unit_symbol = ""
+    unit_definition = ""
+    if payload.unit_of_measurement:
+        uom = payload.unit_of_measurement
+        unit_label = uom.label or ""
+        unit_symbol = uom.symbol or ""
+        unit_definition = uom.definition or ""
+
+    prop = {
+        "name": name,
+        "unit": unit_label or unit_symbol or "Unknown",
+        "label": unit_label or name,
+    }
+
+    success = db.ensure_datastreams_in_project_db(schema, sensor_uuid, [prop])
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to create datastream")
+
+    # Also register SMS metadata for unit display
+    try:
+        db.register_sensor_metadata(sensor_uuid, [prop])
+    except Exception as e:
+        logger.warning(f"Failed to register SMS metadata for new datastream: {e}")
+
+    return {"name": name, "status": "created"}
+
+
+@router.put(
+    "/{sensor_uuid}/datastreams/id/{datastream_id}",
+    response_model=bool,
+    summary="Update Sensor Datastream by ID",
+    description="Update a datastream's properties (name, units, description) using its ID.",
+)
+async def update_sensor_datastream_by_id(
+    sensor_uuid: str,
+    datastream_id: int,
+    update: DatastreamUpdate,
+):
+    """
+    Update a datastream by ID.
+    """
+    schema_name = await AsyncThingService.get_schema_from_uuid(sensor_uuid)
+    if schema_name is None:
+        raise ResourceNotFoundException("Schema not found")
+
+    thing_service = AsyncThingService(schema_name)
+    
+    # Prepare payload -> convert snake_case to camelCase for FROST
+    payload = {}
+    if update.name:
+        payload["name"] = update.name
+    if update.description:
+        payload["description"] = update.description
+    if update.unit_of_measurement:
+        uom = update.dict()["unit_of_measurement"]
+        # Map 'label' to 'name' for FROST
+        if "label" in uom:
+            uom["name"] = uom.pop("label")
+        payload["unitOfMeasurement"] = uom
+
+    if not payload:
+        return False
+
+    success = await thing_service.update_datastream_by_id(datastream_id, payload)
+    if not success:
+         raise HTTPException(status_code=404, detail="Datastream not found or update failed")
+    
+    return True
+
+
+@router.put(
+    "/{sensor_uuid}/datastreams/{datastream_name:path}",
+    response_model=bool,
+    summary="Update Sensor Datastream",
+    description="Update a datastream's properties (units, description).",
+)
+async def update_sensor_datastream(
+    sensor_uuid: str,
+    datastream_name: str,
+    update: DatastreamUpdate,
+):
+    """
+    Update a datastream.
+    """
+    schema_name = await AsyncThingService.get_schema_from_uuid(sensor_uuid)
+    if schema_name is None:
+        raise ResourceNotFoundException("Schema not found")
+
+    thing_service = AsyncThingService(schema_name)
+    
+    # Prepare payload -> convert snake_case to camelCase for FROST
+    payload = {}
+    if update.name:
+        payload["name"] = update.name
+    if update.description:
+        payload["description"] = update.description
+    if update.unit_of_measurement:
+        uom = update.dict()["unit_of_measurement"]
+        # Map 'label' to 'name' for FROST
+        if "label" in uom:
+            uom["name"] = uom.pop("label")
+        payload["unitOfMeasurement"] = uom
+
+    if not payload:
+        return False
+
+    success = await thing_service.update_datastream(sensor_uuid, datastream_name, payload)
+    if not success:
+         raise HTTPException(status_code=404, detail="Datastream not found or update failed")
+    
+    return True
 
 
 @router.get(
@@ -186,6 +337,8 @@ async def get_sensor_datastream(
     datastream = await thing_service.get_sensor_datastream(sensor_uuid, datastream_name)
     if not datastream:
         raise ResourceNotFoundException("Datastream not found")
+    if not datastream:
+        raise ResourceNotFoundException("Datastream not found")
     return datastream
 
 
@@ -197,7 +350,7 @@ async def get_sensor_datastream(
 )
 async def get_sensor_observations(
     sensor_uuid: str,
-    datastream_name: Optional[str] = None,
+    datastream_name: str,
     limit: int = 100,
     start_time: str = None,
     end_time: str = None,

@@ -314,7 +314,7 @@ export default function ProjectMap({ sensors: initialSensors, projectId, token, 
                                 </div>
                                 <div class="flex items-baseline gap-1">
                                     <span id="popup-val-${props?.uuid}-${ds.name}" class="text-xl font-bold tracking-tight text-white animate-pulse">--</span>
-                                    <span class="text-xs font-medium text-white/50">${ds.unit || ''}</span>
+                                    <span class="text-xs font-medium text-white/50">${ds.unit_of_measurement?.symbol || ds.unit || ''}</span>
                                 </div>
                             </div>
                          `).join('<div class="h-px bg-white/5 my-2"></div>') : '<div class="text-sm text-white/50 italic">No datastreams found</div>'}

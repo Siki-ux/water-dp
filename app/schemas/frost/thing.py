@@ -6,6 +6,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
+from app.schemas.frost.datastream import Datastream
+
 
 class Coordinate(BaseModel):
     """
@@ -39,40 +41,7 @@ class Location(BaseModel):
         return cls(type="Unknown")
 
 
-class Datastream(BaseModel):
-    """
-    Represents a Datastream capability of a Thing.
-    """
 
-    name: str = Field(..., description="Name of the datastream (e.g. water_level)")
-    unit: str = Field(..., description="Unit of measurement symbol (e.g. m)")
-    label: str = Field(..., description="Human-readable label (e.g. Water Level)")
-    properties: Optional[Dict[str, Any]] = Field(
-        default=None, description="Additional properties"
-    )
-
-    @classmethod
-    def from_frost(cls, data: Dict[str, Any]) -> "Datastream":
-        name = data.get("name", "Unknown")
-        props = data.get("properties", {}) or {}
-
-        # Unit Logic: Top-level UoM > Properties UoM > ?
-        uom = data.get("unitOfMeasurement", {})
-        unit = uom.get("symbol")
-
-        if not unit or unit == "?":
-            # Fallback to properties
-            prop_uom = props.get("unitOfMeasurement", {})
-            if isinstance(prop_uom, dict):
-                unit = prop_uom.get("symbol")
-
-        if not unit:
-            unit = "?"
-
-        # Label Logic: Properties label > Name
-        label = props.get("label", name)
-
-        return cls(name=name, unit=unit, label=label, properties=props)
 
 
 class Thing(BaseModel):

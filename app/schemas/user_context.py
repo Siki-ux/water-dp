@@ -96,7 +96,9 @@ class ProjectResponse(ProjectBase):
     owner_id: str
     authorization_provider_group_id: Optional[str] = None
     created_at: datetime
+    created_at: datetime
     updated_at: datetime
+    schema_name: Optional[str] = None
 
     # Optional fields to include linked resources?
     # For now, keep it simple. Members and Dashboards fetched separately or via include param.

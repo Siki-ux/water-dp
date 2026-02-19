@@ -90,6 +90,22 @@ async def delete_project(
     return
 
 
+# --- Grafana Integration ---
+
+
+@router.get("/{project_id}/grafana-folder")
+async def get_grafana_folder(
+    project_id: UUID,
+    database: Session = Depends(get_db),
+    user: dict = Depends(deps.get_current_user),
+) -> Any:
+    """Get the Grafana folder UID for this project's dashboards."""
+    folder_uid = await asyncio.to_thread(
+        ProjectService.get_grafana_folder_uid, database, project_id, user
+    )
+    return {"folder_uid": folder_uid}
+
+
 # --- Project Members ---
 
 

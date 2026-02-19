@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
     LayoutDashboard,
-    Map as MapIcon,
     Database,
     Settings,
     ChevronLeft,
@@ -62,10 +61,9 @@ export function ProjectSidebar({ projectId, projectName }: ProjectSidebarProps) 
     const links = [
         { label: "Overview", icon: Activity, href: `/projects/${projectId}` },
         { label: "Dashboards", icon: LayoutDashboard, href: `/projects/${projectId}/dashboards` },
-        { label: "Map", icon: MapIcon, href: `/projects/${projectId}` },
-        { label: "Data", icon: Database, href: `/projects/${projectId}/data` },
+        { label: "Data Sources", icon: Database, href: `/projects/${projectId}/data` },
         { label: "Parsers", icon: FileCode, href: `/projects/${projectId}/parsers` },
-        { label: "Computations", icon: FileCode, href: `/projects/${projectId}/computations` },
+
         { label: "Alerts", icon: Bell, href: `/projects/${projectId}/alerts` },
         { label: "Settings", icon: Settings, href: `/projects/${projectId}/settings` },
     ];

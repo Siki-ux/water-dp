@@ -39,17 +39,8 @@ async def lifespan(app: FastAPI):
         # Ensure tables exist (create_all is idempotent - won't recreate existing tables)
         init_db()
         logger.info("Database initialized successfully")
+
         logger.info("Application starting...")
-
-        # Always register system datasources (infra discovery)
-        from app.core.database import SessionLocal
-        from app.core.system_datasources import register_system_datasources
-
-        database_session = SessionLocal()
-        try:
-            register_system_datasources(database_session)
-        finally:
-            database_session.close()
 
         app.state.startup_complete = True
         logger.info("Application is now fully healthy and ready.")
@@ -174,22 +165,25 @@ async def root():
     - **Geospatial**: `/api/v1/geospatial/` - Layers, features, GeoServer integration
     - **Projects**: `/api/v1/projects/` - Project management
     """
+    root_path = os.getenv("ROOT_PATH", "")
+    api_prefix = settings.api_prefix
+
     return {
         "message": "Water Data Platform API",
         "version": settings.version,
         "status": "running",
         "documentation": {
-            "swagger_ui": f"{settings.api_prefix}/docs",
-            "redoc": f"{settings.api_prefix}/redoc",
-            "openapi_json": f"{settings.api_prefix}/openapi.json",
+            "swagger_ui": f"{root_path}{api_prefix}/docs",
+            "redoc": f"{root_path}{api_prefix}/redoc",
+            "openapi_json": f"{root_path}{api_prefix}/openapi.json",
         },
         "endpoints": {
-            "sensors": f"{settings.api_prefix}/things/",
-            "geospatial": f"{settings.api_prefix}/geospatial/",
-            "projects": f"{settings.api_prefix}/projects/",
-            "health": "/health",
+            "sensors": f"{root_path}{api_prefix}/things/",
+            "geospatial": f"{root_path}{api_prefix}/geospatial/",
+            "projects": f"{root_path}{api_prefix}/projects/",
+            "health": f"{root_path}/health",
         },
-        "health_url": "/health",
+        "health_url": f"{root_path}/health",
     }
 
 

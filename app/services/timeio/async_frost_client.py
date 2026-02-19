@@ -82,7 +82,11 @@ class AsyncFrostClient:
             logger.debug(f"FROST async PATCH: {url} with payload {payload}")
             resp = await client.patch(url, json=payload)
             logger.debug(f"FROST response: {resp.status_code}")
-            resp.raise_for_status()
+            try:
+                resp.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                logger.error(f"FROST PATCH error body: {e.response.text}")
+                raise e
             return True
         except Exception as e:
             logger.error(f"Failed to PATCH {url}: {e}")
@@ -122,6 +126,31 @@ class AsyncFrostClient:
             return []
         return data.get("value", [])
 
+    async def get_things_paginated(
+        self,
+        expand: str = None,
+        filter: str = None,
+        skip: int = 0,
+        top: int = 20,
+    ) -> Dict[str, Any]:
+        """
+        Get things with pagination info.
+        Returns: {"value": [...], "@iot.count": int}
+        """
+        path = "Things"
+        params = {
+            "$count": "true",
+            "$skip": skip,
+            "$top": top,
+        }
+        if expand:
+            params["$expand"] = expand
+        if filter:
+            params["$filter"] = filter
+
+        data = await self._request("GET", path, params=params)
+        return data or {"value": [], "@iot.count": 0}
+
     async def update_thing(self, thing_id: Any, payload: Dict[str, Any]) -> bool:
         """Update Thing details via PATCH."""
         path = f"Things({thing_id})"
@@ -149,6 +178,11 @@ class AsyncFrostClient:
             return None
         # Return the datastream directly, not from "value"
         return data if "@iot.id" in data else data.get("value", [])
+
+    async def update_datastream(self, datastream_id: Any, payload: Dict[str, Any]) -> bool:
+        """Update Datastream details via PATCH."""
+        path = f"Datastreams({datastream_id})"
+        return await self._patch(path, payload)
 
     async def get_observations(
         self,

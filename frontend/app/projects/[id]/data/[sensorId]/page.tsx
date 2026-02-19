@@ -219,7 +219,7 @@ export default function SensorDataPage({ params }: PageProps) {
         {
             header: "Unit",
             accessorKey: "unit",
-            cell: () => <span className="text-white/50">{datastreams.find(d => d.name === selectedDatastream)?.unit || '-'}</span>
+            cell: () => <span className="text-white/50">{datastreams.find(d => d.name === selectedDatastream)?.unit_of_measurement?.symbol || datastreams.find(d => d.name === selectedDatastream)?.unit || '-'}</span>
         }
     ], [datastreams, selectedDatastream]);
 
@@ -281,7 +281,7 @@ export default function SensorDataPage({ params }: PageProps) {
                                     >
                                         {datastreams.map((ds: any) => (
                                             <option key={ds.name} value={ds.name} className="bg-gray-900 text-white">
-                                                {ds.label || ds.name} ({ds.unit})
+                                                {ds.label || ds.name} ({ds.unit_of_measurement?.symbol || ds.unit || '-'})
                                             </option>
                                         ))}
                                     </select>
@@ -380,7 +380,7 @@ export default function SensorDataPage({ params }: PageProps) {
                                         name: sensor?.name || "Value",
                                         label: selectedDatastream,
                                         color: "#10b981", // Primary emerald color
-                                        unit: datastreams.find(d => d.name === selectedDatastream)?.unit || "",
+                                        unit: datastreams.find(d => d.name === selectedDatastream)?.unit_of_measurement?.symbol || datastreams.find(d => d.name === selectedDatastream)?.unit || "",
                                         data: displayedChartData
                                     }
                                 ]}
@@ -403,7 +403,7 @@ export default function SensorDataPage({ params }: PageProps) {
                         <div className="text-xl font-bold text-white">
                             {stats.min !== null ? stats.min.toFixed(2) : "-"}
                             <span className="text-sm font-normal text-white/30 ml-1">
-                                {datastreams.find(d => d.name === selectedDatastream)?.unit || ""}
+                                {datastreams.find(d => d.name === selectedDatastream)?.unit_of_measurement?.symbol || datastreams.find(d => d.name === selectedDatastream)?.unit || ""}
                             </span>
                         </div>
                     </div>
@@ -414,7 +414,7 @@ export default function SensorDataPage({ params }: PageProps) {
                         <div className="text-xl font-bold text-white">
                             {stats.max !== null ? stats.max.toFixed(2) : "-"}
                             <span className="text-sm font-normal text-white/30 ml-1">
-                                {datastreams.find(d => d.name === selectedDatastream)?.unit || ""}
+                                {datastreams.find(d => d.name === selectedDatastream)?.unit_of_measurement?.symbol || datastreams.find(d => d.name === selectedDatastream)?.unit || ""}
                             </span>
                         </div>
                     </div>
@@ -425,7 +425,7 @@ export default function SensorDataPage({ params }: PageProps) {
                         <div className="text-xl font-bold text-emerald-400">
                             {stats.avg !== null ? stats.avg.toFixed(2) : "-"}
                             <span className="text-sm font-normal text-white/30 ml-1">
-                                {datastreams.find(d => d.name === selectedDatastream)?.unit || ""}
+                                {datastreams.find(d => d.name === selectedDatastream)?.unit_of_measurement?.symbol || datastreams.find(d => d.name === selectedDatastream)?.unit || ""}
                             </span>
                         </div>
                     </div>

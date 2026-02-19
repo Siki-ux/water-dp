@@ -71,12 +71,11 @@ def setup_logging():
                 "level": "INFO",
             },
         },
+        "root": {
+            "handlers": handlers,
+            "level": settings.log_level.upper(),
+        },
         "loggers": {
-            "root": {
-                "handlers": handlers,
-                "level": settings.log_level.upper(),
-                "propagate": False,
-            },
             "app": {
                 "handlers": handlers,
                 "level": settings.log_level.upper(),
@@ -103,16 +102,23 @@ def setup_logging():
 
     try:
         # If using json formatter, ensure library is installed or fallback
-        if settings.log_format == "json":
-            try:
-                import pythonjsonlogger  # noqa: F401
-            except ImportError:
+        try:
+            import pythonjsonlogger  # noqa: F401
+        except ImportError:
+            if settings.log_format == "json":
                 print(
                     "WARNING: python-json-logger not found. Falling back to console format."
                 )
+
+            # Force handlers using json to console
+            if logging_config["handlers"]["console"]["formatter"] == "json":
                 logging_config["handlers"]["console"]["formatter"] = "console"
-                if "json" in logging_config["formatters"]:
-                    del logging_config["formatters"]["json"]
+
+            if "external_mock" in logging_config["handlers"]:
+                logging_config["handlers"]["external_mock"]["formatter"] = "console"
+
+            if "json" in logging_config["formatters"]:
+                del logging_config["formatters"]["json"]
 
         logging.config.dictConfig(logging_config)
     except Exception as e:

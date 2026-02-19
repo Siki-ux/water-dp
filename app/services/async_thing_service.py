@@ -122,6 +122,29 @@ class AsyncThingService:
 
         return [Thing.from_frost(t) for t in things_data]
 
+    async def get_things_paginated(
+        self,
+        expand: List[str] = None,
+        filter: str = None,
+        skip: int = 0,
+        top: int = 20,
+    ) -> Dict[str, Any]:
+        """
+        Fetch sensors with pagination.
+        Returns: {"items": List[Thing], "total": int}
+        """
+        if expand is None:
+            expand = ["Locations", "Datastreams"]
+
+        data = await self.frost_client.get_things_paginated(
+            expand=",".join(expand), filter=filter, skip=skip, top=top
+        )
+
+        things = [Thing.from_frost(t) for t in data.get("value", [])]
+        total = data.get("@iot.count", 0)
+
+        return {"items": things, "total": total}
+
     @staticmethod
     async def get_all_things(
         schema_name: str,
@@ -168,6 +191,53 @@ class AsyncThingService:
                 return Datastream.from_frost(ds)
 
         return None
+
+    async def update_datastream(
+        self, sensor_uuid: str, datastream_name: str, payload: Dict[str, Any]
+    ) -> bool:
+        """Update a datastream details (Name, Desc, Units) in TimeIO DB."""
+        datastream = await self.get_sensor_datastream(sensor_uuid, datastream_name)
+        if not datastream:
+            return False
+
+        # Extract fields from payload (which might have camelCase from things.py preparation)
+        name = payload.get("name")
+        description = payload.get("description")
+        uom = payload.get("unitOfMeasurement")  # things.py puts it here
+
+        try:
+            ds_id = int(datastream.datastream_id)
+        except ValueError:
+            logger.error(f"Invalid datastream ID: {datastream.datastream_id}")
+            return False
+
+        # We update directly in DB because FROST PATCH is not reliable/supported
+        return await asyncio.to_thread(
+            self._timeio_db.update_datastream_metadata,
+            schema=self.schema_name,
+            datastream_id=ds_id,
+            name=name,
+            description=description,
+            unit_of_measurement=uom,
+        )
+
+    async def update_datastream_by_id(
+        self, datastream_id: int, payload: Dict[str, Any]
+    ) -> bool:
+        """Update a datastream details (Name, Desc, Units) in TimeIO DB by ID."""
+        # Extract fields from payload
+        name = payload.get("name")
+        description = payload.get("description")
+        uom = payload.get("unitOfMeasurement")
+
+        return await asyncio.to_thread(
+            self._timeio_db.update_datastream_metadata,
+            schema=self.schema_name,
+            datastream_id=datastream_id,
+            name=name,
+            description=description,
+            unit_of_measurement=uom,
+        )
 
     # ─────────────────────────────────────────────────────────────────────
     # Observation Operations

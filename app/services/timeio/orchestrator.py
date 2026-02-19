@@ -41,17 +41,27 @@ class TimeIOOrchestrator:
         geometry: Optional[Dict[str, Any]] = None,
         project_schema: Optional[str] = None,
         mqtt_device_type: str = "chirpstack_generic",
+        mqtt_username: Optional[str] = None,
+        mqtt_password: Optional[str] = None,
+        mqtt_topic: Optional[str] = None,
+        ingest_type: str = "mqtt",
+        parser_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Create a new sensor (Thing) in the TimeIO ecosystem.
 
         Args:
-            project_group: Name of the project/group (e.g. "MyProject") - acts as fallback name if schema lookup fails
+            project_group: Name of the project/group (e.g. "MyProject")
             sensor_name: Name of the sensor (e.g. "Sensor1")
             description: Optional description
-            properties: Optional metadata (e.g. {"unit": "C"})
+            properties: Optional metadata
             geometry: Optional GeoJSON geometry
-            project_schema: Optional known database schema (e.g. "user_myproject")
+            project_schema: Optional known database schema
+            mqtt_device_type: MQTT Device Type
+            mqtt_username: Optional custom MQTT username
+            mqtt_password: Optional custom MQTT password
+            mqtt_topic: Optional custom MQTT topic (must follow pattern or be allowed by broker)
+            ingest_type: Ingest type (default: "mqtt")
 
         Returns:
             Dict containing the created Thing's UUID and other details.
@@ -93,11 +103,8 @@ class TimeIOOrchestrator:
 
         # Verify uniqueness
         if self.db.check_thing_exists(thing_uuid):
-            # Extremely rare collision, but good to handle
             logger.warning(f"UUID collision for {thing_uuid}, regenerating.")
             thing_uuid = str(uuid.uuid4())
-
-        # project_uuid calculated above
 
         # Database credentials
         existing_db_config = self.db.get_database_config(target_schema)
@@ -106,7 +113,6 @@ class TimeIOOrchestrator:
             logger.info(
                 f"Reusing existing database credentials for schema {target_schema}"
             )
-            # Use content from DB directly (already encrypted)
             db_payload = {
                 "schema": target_schema,
                 "username": existing_db_config["username"],
@@ -117,14 +123,12 @@ class TimeIOOrchestrator:
                 "ro_url": existing_db_config["ro_url"],
             }
         else:
-            f"u_{project_group.lower()}"
             db_pass = self._generate_password()
-            f"ro_{project_group.lower()}"
             ro_pass = self._generate_password()
 
             db_payload = {
                 "schema": target_schema,
-                "username": target_schema,  # TSM usually uses schema name as user
+                "username": target_schema,
                 "password": encrypt_password(db_pass),
                 "ro_username": f"ro_{target_schema}",
                 "ro_password": encrypt_password(ro_pass),
@@ -133,25 +137,26 @@ class TimeIOOrchestrator:
             }
 
         # MQTT credentials
-        mqtt_user = f"u_{thing_uuid.split('-')[0]}"  # Short user
-        mqtt_pass = self._generate_password()
+        mqtt_user = mqtt_username if mqtt_username else f"u_{thing_uuid.split('-')[0]}"
+        mqtt_pass = mqtt_password if mqtt_password else self._generate_password()
         mqtt_hash = hash_password_pbkdf2(mqtt_pass)
+
+        # Topic calculation
+        # If user provides topic, use it. Otherwise default logic.
+        final_mqtt_topic = mqtt_topic if mqtt_topic else f"mqtt_ingest/{mqtt_user}/data"
 
         # MinIO credentials
         bucket_name = f"b-{thing_uuid}"
-        bucket_user = mqtt_user  # Reuse for simplicity or generate new
+        bucket_user = mqtt_user  # Reuse for simplicity
         bucket_pass = self._generate_password()
 
-        # 2. Resolve Project Schema (handled above)
-
         # 3. Construct JSON Payload (Version 7)
-        # Matches tsm-orchestration/start/test-create-thing2.json
         payload = {
             "version": 7,
             "uuid": thing_uuid,
             "name": sensor_name,
             "description": description,
-            "ingest_type": "mqtt",
+            "ingest_type": ingest_type,
             "mqtt_device_type": mqtt_device_type,
             "project": {"name": project_name, "uuid": project_uuid},
             "database": db_payload,
@@ -159,7 +164,7 @@ class TimeIOOrchestrator:
                 "username": mqtt_user,
                 "password": encrypt_password(mqtt_pass),
                 "password_hash": mqtt_hash,
-                "topic": f"mqtt_ingest/{mqtt_user}/data",
+                "topic": final_mqtt_topic,
             },
             "raw_data_storage": {
                 "bucket_name": bucket_name,
@@ -168,8 +173,7 @@ class TimeIOOrchestrator:
                 "filename_pattern": "*",
             },
             "parsers": {
-                "default": 0,
-                "parsers": [{"type": "csvparser", "name": "default", "settings": {}}],
+                "parsers": [],
             },
             "external_sftp": {},
             "external_api": {},
@@ -214,16 +218,38 @@ class TimeIOOrchestrator:
                     target_schema, thing_uuid, properties, geometry
                 )
 
+                # 7. Link Parser to S3 Store (for SFTP ingestion)
+                if parser_id:
+                    linked = False
+                    for retry in range(5):
+                        linked = self.db.link_thing_to_parser(thing_uuid, parser_id)
+                        if linked:
+                            logger.info(f"Linked parser {parser_id} to thing {thing_uuid}")
+                            break
+                        logger.info(f"Parser link attempt {retry + 1}/5 failed for {thing_uuid}, S3 store may not exist yet. Retrying...")
+                        time.sleep(2)
+                    if not linked:
+                        logger.warning(f"Could not link parser {parser_id} to thing {thing_uuid} after 5 attempts")
+
                 return {
                     "uuid": thing_uuid,
                     "id": thing_id,
                     "name": sensor_name,
+                    "project_id": project_uuid,
                     "project_group": project_group,
-                    "mqtt_device_type": "chirpstack_generic",
+                    "mqtt_device_type": mqtt_device_type,
                     "schema": target_schema,
+                    # Legacy flat returns (keep for compatibility if needed internally)
                     "mqtt_username": mqtt_user,
                     "mqtt_password": mqtt_pass,
                     "mqtt_topic": payload["mqtt"]["topic"],
+                    # Structured returns for API response
+                    "mqtt": {
+                        "username": mqtt_user,
+                        "password": mqtt_pass,
+                        "topic": payload["mqtt"]["topic"],
+                        "device_type": mqtt_device_type,
+                    },
                     "properties": properties,
                     "location": geometry,
                 }
@@ -237,28 +263,31 @@ class TimeIOOrchestrator:
         self,
         schema: str,
         thing_uuid: str,
-        properties: Dict[str, Any],
+        properties: Any,
         geometry: Dict[str, Any] = None,
     ):
         """
         Register additional metadata and location.
-        This part remains managed by us because TSM creation flow might not handle
-        arbitrary properties or complex geometry in the initial payload exactly how we want.
         """
-        # Convert properties dict to list of dicts for registration if needed
-        # But wait, TSM might overwrite properties if we just set them?
-        # The TSM payload allows 'properties' on Thing in DB if updated.
+        # Distinguish between List (Datastream Metadata) and Dict (Thing Properties)
+        flat_props = []
+        thing_props = {}
 
-        # We use the existing helper from TimeIODatabase
-        # But we need to ensure datastreams exist if we want to use them.
-
-        # Flatten properties for datastream creation
         if isinstance(properties, list):
+            # It's a list of properties (metadata for datastreams)
             flat_props = properties
+            # Handle Pydantic models if passed
+            if flat_props and not isinstance(flat_props[0], dict):
+                 flat_props = [p.dict() for p in flat_props]
+        elif isinstance(properties, dict):
+             flat_props = [{"name": k, "unit": str(v)} for k, v in properties.items()]
+             thing_props = properties.copy()
+        elif properties is None:
+            pass
         else:
-            flat_props = [{"name": k, "unit": str(v)} for k, v in properties.items()]
+            logger.warning(f"Unknown properties format: {type(properties)}")
 
-        # Ensure datastream entries
+        # Ensure datastreams in project DB
         self.db.ensure_datastreams_in_project_db(schema, thing_uuid, flat_props)
 
         # Register metadata (units/labels)
@@ -268,33 +297,60 @@ class TimeIOOrchestrator:
             logger.warning(
                 f"Failed to register legacy SMS metadata for {thing_uuid}: {e}"
             )
-            # Continue as this is likely a view/legacy issue and not critical for TSM
 
         # Update Location/Properties in Thing table
-        update_props = properties.copy()
+        update_props = thing_props.copy()
         if geometry:
             # Flatten text coordinates for SQL View compatibility / Legacy support
-            # The intent is to make 'latitude' and 'longitude' available at top level.
-
             # Case 1: GeoJSON (New Standard)
             if geometry.get("type") == "Point" and "coordinates" in geometry:
                 coords = geometry["coordinates"]
                 if coords and len(coords) >= 2:
                     update_props["longitude"] = coords[0]
                     update_props["latitude"] = coords[1]
-
             # Case 2: Flat Dict (Legacy / Direct Input)
             elif "latitude" in geometry:
                 update_props["latitude"] = geometry["latitude"]
                 if "longitude" in geometry:
                     update_props["longitude"] = geometry["longitude"]
-
-            # Store full geometry object as 'location' for Views that use it (e.g. ST_GeomFromGeoJSON)
+            
+            # Store full geometry object
             update_props["location"] = geometry
 
         self.db.update_thing_properties(
             schema, thing_uuid, {"properties": update_props}
         )
+
+    def sync_sensor(self, thing_uuid: str) -> bool:
+        """
+        Trigger a re-sync of the sensor's configuration.
+        This re-publishes the full configuration to MQTT, which triggers
+        the orchestration workers to re-deploy infrastructure (views, etc.).
+        """
+        logger.info(f"Triggering sync for sensor {thing_uuid}")
+
+        # 1. Fetch full configuration
+        payload = self.db.get_thing_full_config(thing_uuid)
+        if not payload:
+            logger.error(f"Failed to fetch configuration for sensor {thing_uuid}")
+            return False
+
+        # 2. Publish to MQTT
+        topic = "frontend_thing_update"
+        logger.info(f"Publishing sync request for thing {thing_uuid} to {topic}")
+
+        success = self.mqtt.publish_message(
+            topic=topic,
+            payload=payload,
+            username=settings.mqtt_username,
+            password=settings.mqtt_password,
+        )
+
+        if not success:
+            logger.error(f"Failed to publish sync request for thing {thing_uuid}")
+            return False
+
+        return True
 
     def delete_sensor(self, thing_uuid: str, known_schema: str = None) -> bool:
         """

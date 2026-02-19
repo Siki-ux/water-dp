@@ -145,5 +145,5 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
     trustHost: true,
     debug: true,
-    basePath: "/portal/api/auth",
+    basePath: "/api/auth",
 })

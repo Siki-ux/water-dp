@@ -1,0 +1,26 @@
+"use client";
+
+import { useState } from "react";
+import { Plus } from "lucide-react";
+import { DeviceTypeCreateDialog } from "@/components/DeviceTypeCreateDialog";
+
+export function DeviceTypeListActions() {
+    const [isCreateOpen, setIsCreateOpen] = useState(false);
+
+    return (
+        <>
+            <button
+                onClick={() => setIsCreateOpen(true)}
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors shadow-lg shadow-blue-900/20"
+            >
+                <Plus className="w-4 h-4" />
+                Create Device Type
+            </button>
+
+            <DeviceTypeCreateDialog
+                isOpen={isCreateOpen}
+                onClose={() => setIsCreateOpen(false)}
+            />
+        </>
+    );
+}

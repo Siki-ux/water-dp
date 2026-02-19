@@ -11,13 +11,15 @@ from app.api.v1.endpoints import (
     computations,
     dashboards,
     datasets,
-    datasources,
     geospatial,
     groups,
     parsers,
     projects,
     simulator,
     things,
+    custom_parsers,
+    mqtt,
+    sms,
 )
 
 api_router = APIRouter()
@@ -37,4 +39,8 @@ api_router.include_router(alerts.router, prefix="/alerts", tags=["alerts"])
 api_router.include_router(simulator.router, tags=["simulator"])
 api_router.include_router(dashboards.router, prefix="/dashboards", tags=["dashboards"])
 api_router.include_router(bulk.router, prefix="/bulk", tags=["bulk"])
-api_router.include_router(datasources.router, tags=["datasources"])
+api_router.include_router(
+    custom_parsers.router, prefix="/custom-parsers", tags=["custom-parsers"]
+)
+api_router.include_router(mqtt.router, prefix="/mqtt", tags=["mqtt"])
+api_router.include_router(sms.router, prefix="/sms", tags=["sms"])

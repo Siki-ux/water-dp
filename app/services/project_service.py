@@ -417,6 +417,39 @@ class ProjectService:
         db.commit()
         return project
 
+    # --- Grafana Integration ---
+
+    @staticmethod
+    def get_grafana_folder_uid(
+        db: Session, project_id: UUID, user: Dict[str, Any]
+    ) -> Optional[str]:
+        """
+        Resolve the Grafana folder UID for a project.
+        TSM creates Grafana folders using the configdb project UUID as the folder UID.
+        """
+        project = ProjectService._check_access(
+            db, project_id, user, required_role="viewer"
+        )
+
+        if not project.schema_name:
+            logger.warning(
+                f"Project {project_id} has no schema_name, cannot resolve Grafana folder"
+            )
+            return None
+
+        try:
+            timeio_db = TimeIODatabase()
+            config_project = timeio_db.get_config_project_by_schema(project.schema_name)
+            if config_project and "uuid" in config_project:
+                return str(config_project["uuid"])
+            logger.warning(
+                f"No configdb project found for schema '{project.schema_name}'"
+            )
+            return None
+        except Exception as e:
+            logger.error(f"Failed to resolve Grafana folder UID: {e}")
+            return None
+
     # --- Sensor Management ---
 
     @staticmethod

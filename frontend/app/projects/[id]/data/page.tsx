@@ -29,7 +29,7 @@ export default function ProjectDataPage({ params }: PageProps) {
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
     const [editingSensor, setEditingSensor] = useState<any | null>(null);
-    const [activeTab, setActiveTab] = useState<"sensors" | "datasets">("sensors");
+    const [grafanaFolderUid, setGrafanaFolderUid] = useState<string | null>(null);
 
     const [offset, setOffset] = useState(0);
     const [hasMore, setHasMore] = useState(true);
@@ -100,6 +100,20 @@ export default function ProjectDataPage({ params }: PageProps) {
         fetchSensors(false);
         // Disable auto-refresh for now as it conflicts with infinite scroll
     }, [session?.accessToken, id]); // Dependencies minimized to avoid loops
+
+    // Fetch Grafana folder UID for this project
+    useEffect(() => {
+        if (!session?.accessToken || !id) return;
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+        fetch(`${apiUrl}/projects/${id}/grafana-folder`, {
+            headers: { Authorization: `Bearer ${session.accessToken}` }
+        })
+            .then(res => res.ok ? res.json() : null)
+            .then(data => {
+                if (data?.folder_uid) setGrafanaFolderUid(data.folder_uid);
+            })
+            .catch(() => { });
+    }, [session?.accessToken, id]);
 
     // ID param logic must wait for sensors to be loaded
     const searchParams = useSearchParams();
@@ -275,7 +289,7 @@ export default function ProjectDataPage({ params }: PageProps) {
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-2xl font-bold text-white">Data Management</h1>
+                    <h1 className="text-2xl font-bold text-white">Data Sources</h1>
                     <p className="text-white/60 flex items-center gap-2">
                         Manage sensors and datasets.
                         <span className="text-xs bg-white/10 px-2 py-0.5 rounded text-white/50">
@@ -285,12 +299,12 @@ export default function ProjectDataPage({ params }: PageProps) {
                 </div>
                 <div className="flex gap-2">
                     <a
-                        href="http://localhost:8082"
+                        href={grafanaFolderUid ? `/visualization/dashboards/f/${grafanaFolderUid}/?orgId=1` : `/visualization/dashboards`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="px-4 py-2 bg-white/5 hover:bg-white/10 text-hydro-secondary font-semibold rounded-lg transition-colors border border-white/10 flex items-center gap-2"
                     >
-                        <span>TimeIO</span>
+                        <span>Analytics</span>
                         <ArrowUpRight size={16} />
                     </a>
                     <button
@@ -300,13 +314,10 @@ export default function ProjectDataPage({ params }: PageProps) {
                         ↻ Refresh
                     </button>
                     <button
-                        onClick={() => {
-                            if (activeTab === "sensors") setIsLinkModalOpen(true);
-                            else setIsAddModalOpen(true);
-                        }}
+                        onClick={() => setIsLinkModalOpen(true)}
                         className="px-4 py-2 bg-hydro-primary text-black font-semibold rounded-lg hover:bg-hydro-accent transition-colors"
                     >
-                        {activeTab === "sensors" ? "+ Add Sensor" : "+ New Dataset"}
+                        + Link Datasource
                     </button>
                 </div>
             </div>
@@ -322,8 +333,6 @@ export default function ProjectDataPage({ params }: PageProps) {
                         setEditingSensor(sensor);
                     }}
                     onDelete={handleDeleteSensor}
-                    activeTab={activeTab}
-                    onTabChange={setActiveTab}
                 />
             )}
 
@@ -366,7 +375,6 @@ export default function ProjectDataPage({ params }: PageProps) {
                 onClose={() => setIsAddModalOpen(false)}
                 onSubmit={handleAddSensor}
                 mode="create"
-                defaultType={activeTab === "datasets" ? "dataset" : undefined}
                 projectId={id}
             />
 

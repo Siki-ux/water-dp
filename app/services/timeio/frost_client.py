@@ -83,8 +83,8 @@ class FrostClient:
         data = self._request("GET", path, params=params)
         if not data:
             logger.error(f"No datastream found for datastream {datastream_id}")
-            return []
-        return data.get("value", [])
+            return None
+        return data
 
     def get_thing(self, thing_id: Any, expand: str = None) -> Optional[Dict]:
         """Get Thing details."""

@@ -34,6 +34,10 @@ class SensorCreate(BaseModel):
     parser_id: Optional[int] = Field(
         None, description="ID of the CSV Parser to associate"
     )
+    mqtt_username: Optional[str] = Field(None, description="Custom MQTT Username")
+    mqtt_password: Optional[str] = Field(None, description="Custom MQTT Password")
+    mqtt_topic: Optional[str] = Field(None, description="Custom MQTT Topic")
+    ingest_type: str = Field("mqtt", description="Ingest type (mqtt, sftp, etc.)")
 
     model_config = {
         "json_schema_extra": {
@@ -112,3 +116,41 @@ class IngestionResponse(BaseModel):
     status: str
     bucket: str
     file: str
+
+
+class MQTTPublishGeneric(BaseModel):
+    username: str = Field(..., description="MQTT Username")
+    password: str = Field(..., description="MQTT Password")
+    topic: str = Field(..., description="MQTT Topic")
+    data: Dict[str, Any] = Field(..., description="Payload data (object)")
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "username": "u_z9fxpvh2",
+                "password": "my_secret_password",
+                "topic": "mqtt_ingest/u_z9fxpvh2/data",
+                "data": {
+                    "time": "2026-02-17T22:15:27Z",
+                    "object": {"temperature": 22.5, "humidity": 45.0},
+                },
+            }
+        }
+    }
+
+
+class MQTTPublishSensor(BaseModel):
+    data: Dict[str, Any] = Field(..., description="Payload data (object)")
+    topic_suffix: Optional[str] = Field("data", description="Topic suffix (e.g. 'data')")
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "data": {
+                    "time": "2026-02-17T22:15:27Z",
+                    "object": {"temperature": 22.5, "humidity": 45.0},
+                },
+                "topic_suffix": "data",
+            }
+        }
+    }

@@ -31,7 +31,7 @@ def run_simulation_step():
         # 1. Fetch active simulations from Local DB
         logger.info("Fetching active simulations from Local DB")
         active_sims = (
-            db_session.query(Simulation).filter(Simulation.is_enabled is True).all()
+            db_session.query(Simulation).filter(Simulation.is_enabled == True).all()
         )
 
         if not active_sims:
@@ -77,6 +77,7 @@ def run_simulation_step():
 
         try:
             client.connect(settings.mqtt_broker_host, 1883, 60)
+            client.loop_start()
         except Exception as e:
             logger.error(f"Failed to connect to MQTT broker: {e}")
             return
@@ -111,6 +112,7 @@ def run_simulation_step():
                 logger.error(f"Error processing simulation {sim.id}: {e}")
 
         db_session.commit()
+        client.loop_stop()
         client.disconnect()
 
         if count > 0:

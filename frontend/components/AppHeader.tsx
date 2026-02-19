@@ -16,7 +16,7 @@ export function AppHeader() {
                 <div className="hidden md:flex h-6 w-px bg-white/10 mx-2"></div>
                 <nav className="hidden md:flex gap-4 text-sm font-medium text-white/60">
                     <Link href="/projects" className="hover:text-white transition-colors">Projects</Link>
-                    <Link href="/groups" className="hover:text-white transition-colors">Groups</Link>
+                    <Link href="/sms/sensors" className="hover:text-white transition-colors">Sensor Management System</Link>
                 </nav>
             </div>
 

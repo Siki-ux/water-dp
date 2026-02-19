@@ -22,6 +22,7 @@ class ThingService:
     def __init__(self, schema_name: str):
         self.schema_name = schema_name
         self.timeio_db = TimeIODatabase()
+        self._mqtt_client = None
         self.frost_client = get_cached_frost_client(
             base_url=settings.frost_url,
             project_name=self.schema_name,
@@ -31,7 +32,7 @@ class ThingService:
 
     @property
     def mqtt(self) -> MQTTClient:
-        if not self._mqtt_client:
+        if self._mqtt_client is None:
             self._mqtt_client = MQTTClient()
         return self._mqtt_client
 

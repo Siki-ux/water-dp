@@ -19,12 +19,15 @@ services:
       - MINIO_ACCESS_KEY=${OBJECT_STORAGE_ROOT_USER:-minioadmin}
       - MINIO_SECRET_KEY=${OBJECT_STORAGE_ROOT_PASSWORD:-minioadmin}
       - MINIO_SECURE=false
+      - ROOT_PATH=/water-api
     depends_on:
       postgres-app:
         condition: service_started
         required: false
     networks:
       - tsm_network
+    volumes:
+      - ../tsm-orchestration/src/timeio/parser/mqtt_devices:/app/hardcoded_parsers:ro
 
   worker:
     environment:

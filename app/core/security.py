@@ -79,6 +79,9 @@ async def verify_token(token: str) -> Dict[str, Any]:
             f"http://keycloak:8080/realms/{settings.keycloak_realm}",
             f"http://localhost:8081/realms/{settings.keycloak_realm}",
             f"http://localhost:8080/realms/{settings.keycloak_realm}",
+            # Proxy-based URLs (nginx routes /keycloak/ to keycloak:8081)
+            f"http://localhost/keycloak/realms/{settings.keycloak_realm}",
+            f"http://hydro-portal.westeurope.cloudapp.azure.com/keycloak/realms/{settings.keycloak_realm}",
             f"http://hydro-portal.westeurope.cloudapp.azure.com:8081/realms/{settings.keycloak_realm}",
             f"http://hydro-portal.westeurope.cloudapp.azure.com:8080/realms/{settings.keycloak_realm}",
         ]

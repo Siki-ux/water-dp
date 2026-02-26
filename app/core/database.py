@@ -74,7 +74,6 @@ def init_db() -> None:
                 GeoFeature,
                 GeoLayer,
                 Project,
-                ProjectMember,
                 Simulation,
             )
 

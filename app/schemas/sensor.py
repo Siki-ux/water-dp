@@ -4,7 +4,7 @@ Sensor (Thing) schemas.
 
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class SensorProperty(BaseModel):
@@ -16,9 +16,14 @@ class SensorProperty(BaseModel):
 
 
 class SensorCreate(BaseModel):
-    project_uuid: str = Field(
-        ...,
-        description="Project UUID from water_dp-api",
+    group_id: Optional[str] = Field(
+        None,
+        description="Keycloak group ID. The sensor will be created under this group's schema.",
+        example="a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    )
+    project_uuid: Optional[str] = Field(
+        None,
+        description="(Legacy) Project UUID. If provided, takes precedence over group_id.",
         example="1bfde64c-a785-416a-a513-6be718055ce1",
     )
     sensor_name: str = Field(
@@ -39,10 +44,16 @@ class SensorCreate(BaseModel):
     mqtt_topic: Optional[str] = Field(None, description="Custom MQTT Topic")
     ingest_type: str = Field("mqtt", description="Ingest type (mqtt, sftp, etc.)")
 
+    @model_validator(mode="after")
+    def require_group_or_project(self):
+        if not self.group_id and not self.project_uuid:
+            raise ValueError("Either group_id or project_uuid is required.")
+        return self
+
     model_config = {
         "json_schema_extra": {
             "example": {
-                "project_uuid": "1bfde64c-a785-416a-a513-6be718055ce1",
+                "group_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
                 "sensor_name": "Station 01",
                 "description": "Main monitoring station at the river",
                 "device_type": "chirpstack_generic",

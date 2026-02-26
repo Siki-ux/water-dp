@@ -15,8 +15,9 @@ interface AlertDefinition {
     station_id?: string;
     script_id?: string;
     is_active: boolean;
-    // definition fields might be accessed dynamically or need explicit typing for 'target_id'
     target_id?: string;
+    sensor_id?: string;
+    datastream_id?: string;
 }
 
 interface TriggeredAlert {
@@ -40,41 +41,60 @@ export default function AlertsClient({ token }: AlertsClientProps) {
     const [isCreateOpen, setIsCreateOpen] = useState(false);
 
     return (
-        <div className="flex h-full flex-col p-6 gap-6">
-            <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-                    <Bell className="text-hydro-secondary" />
-                    Alerts & Monitoring
-                </h1>
-                <div className="flex gap-2">
+        <div className="flex h-full flex-col p-6 gap-6 bg-hydro-dark/50 overflow-hidden">
+            {/* Header Section */}
+            <div className="flex flex-col gap-6">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+                            <div className="p-2 bg-hydro-primary/10 rounded-xl border border-hydro-primary/20">
+                                <Bell className="text-hydro-secondary w-6 h-6" />
+                            </div>
+                            Alerts & Monitoring
+                        </h1>
+                        <p className="text-white/40 text-sm mt-1 ml-12">
+                            Manage your project thresholds and view alert history.
+                        </p>
+                    </div>
+
+                    <button
+                        onClick={() => setIsCreateOpen(true)}
+                        className="px-5 py-2.5 bg-hydro-primary hover:bg-hydro-primary/90 text-white rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-hydro-primary/20 transition-all active:scale-95"
+                    >
+                        <Plus size={18} /> New Rule
+                    </button>
+                </div>
+
+                {/* Tabs Navigation */}
+                <div className="flex items-center gap-8 border-b border-white/10 px-2">
                     <button
                         onClick={() => setActiveTab('rules')}
-                        className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${activeTab === 'rules'
-                            ? 'bg-hydro-primary text-white shadow-lg shadow-hydro-primary/20'
-                            : 'bg-white/5 text-white/50 hover:bg-white/10'
+                        className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'rules'
+                            ? 'text-white'
+                            : 'text-white/40 hover:text-white/60'
                             }`}
                     >
                         Alert Rules
+                        {activeTab === 'rules' && (
+                            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-hydro-primary shadow-[0_0_8px_rgba(0,112,243,0.5)]" />
+                        )}
                     </button>
                     <button
                         onClick={() => setActiveTab('history')}
-                        className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${activeTab === 'history'
-                            ? 'bg-hydro-primary text-white shadow-lg shadow-hydro-primary/20'
-                            : 'bg-white/5 text-white/50 hover:bg-white/10'
+                        className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'history'
+                            ? 'text-white'
+                            : 'text-white/40 hover:text-white/60'
                             }`}
                     >
                         History
-                    </button>
-                    <button
-                        onClick={() => setIsCreateOpen(true)}
-                        className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg shadow-emerald-500/20 ml-4"
-                    >
-                        <Plus size={16} /> New Rule
+                        {activeTab === 'history' && (
+                            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-hydro-primary shadow-[0_0_8px_rgba(0,112,243,0.5)]" />
+                        )}
                     </button>
                 </div>
             </div>
 
-            <div className="flex-1 min-h-0 bg-slate-900/50 border border-white/10 rounded-xl overflow-hidden shadow-2xl">
+            <div className="flex-1 min-h-0 bg-black/20 backdrop-blur-sm border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
                 {activeTab === 'rules' ? (
                     <RulesList projectId={projectId} token={token} queryClient={queryClient} />
                 ) : (
@@ -192,14 +212,21 @@ function RulesList({ projectId, token, queryClient }: { projectId: string, token
                                 <tr key={rule.id} className="hover:bg-white/5">
                                     <td className="px-6 py-4">
                                         <div className="font-semibold text-white">{rule.name}</div>
-                                        <div className="text-xs text-white/40">{rule.description}</div>
+                                        <div className="text-[10px] text-white/40">
+                                            {rule.sensor_id ? `Sensor: ${rule.sensor_id}` : rule.description}
+                                        </div>
                                     </td>
                                     <td className="px-6 py-4 font-mono text-xs">{rule.alert_type}</td>
                                     <td className="px-6 py-4 font-mono">
                                         {/* Display logic for complex conditions */}
                                         {rule.alert_type === 'computation_result'
                                             ? `${(rule as any).conditions?.field ?? '?'} ${(rule as any).conditions?.operator} ${(rule as any).conditions?.value}`
-                                            : rule.threshold
+                                            : (
+                                                <div className="flex flex-col">
+                                                    <span>{(rule as any).conditions?.operator} {(rule as any).conditions?.value}</span>
+                                                    {rule.datastream_id && <span className="text-[10px] text-white/30">DS ID: {rule.datastream_id}</span>}
+                                                </div>
+                                            )
                                         }
                                     </td>
                                     <td className="px-6 py-4">
@@ -398,6 +425,7 @@ function RuleModal({ projectId, token, onClose, onSuccess, initialData }: RuleMo
 
     // For sensor
     const [stationId, setStationId] = useState(initTargetId);
+    const [datastreamId, setDatastreamId] = useState((initialData as any)?.datastream_id || '');
     const [condition, setCondition] = useState(initCondition);
     const [threshold, setThreshold] = useState(String(initThreshold));
 
@@ -452,6 +480,8 @@ function RuleModal({ projectId, token, onClose, onSuccess, initialData }: RuleMo
 
             if (targetType === 'sensor') {
                 body.target_id = stationId;
+                body.sensor_id = stationId;
+                body.datastream_id = datastreamId;
                 body.alert_type = condition; // threshold_gt etc
                 body.conditions = {
                     operator: condition === 'threshold_gt' ? '>' : '<',
@@ -534,10 +564,25 @@ function RuleModal({ projectId, token, onClose, onSuccess, initialData }: RuleMo
                                 >
                                     <option value="">-- Choose Sensor --</option>
                                     {sensors.map((s: any) => (
-                                        <option key={s.id} value={s.id}>{s.name}</option>
+                                        <option key={s.thing_id} value={s.thing_id}>{s.name}</option>
                                     ))}
                                 </select>
                             </div>
+
+                            {stationId && (
+                                <div>
+                                    <label className="block text-xs font-semibold text-white/70 mb-1">Select Datastream</label>
+                                    <select
+                                        value={datastreamId} onChange={e => setDatastreamId(e.target.value)}
+                                        className="w-full bg-black/20 border border-white/10 rounded px-3 py-2 text-white text-sm focus:border-hydro-primary focus:outline-none"
+                                    >
+                                        <option value="">-- Choose Datastream --</option>
+                                        {sensors.find((s: any) => s.thing_id === stationId)?.datastreams?.map((ds: any) => (
+                                            <option key={ds.datastream_id} value={ds.datastream_id}>{ds.name} ({ds.unit_of_measurement.symbol})</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
                             <div>
                                 <label className="block text-xs font-semibold text-white/70 mb-1">Condition</label>
                                 <select
@@ -595,7 +640,7 @@ function RuleModal({ projectId, token, onClose, onSuccess, initialData }: RuleMo
                     <button onClick={onClose} className="px-4 py-2 text-sm font-semibold text-white/60 hover:text-white">Cancel</button>
                     <button
                         onClick={() => mutation.mutate()}
-                        disabled={mutation.isPending || (targetType === 'sensor' && !stationId) || (targetType === 'script' && !scriptId)}
+                        disabled={mutation.isPending || (targetType === 'sensor' && (!stationId || !datastreamId)) || (targetType === 'script' && !scriptId)}
                         className="px-4 py-2 bg-hydro-primary hover:bg-hydro-primary/90 text-white rounded-lg text-sm font-bold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {mutation.isPending && <Loader2 size={16} className="animate-spin" />}

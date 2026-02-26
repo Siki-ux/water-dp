@@ -70,6 +70,10 @@ class Thing(BaseModel):
     last_activity: Optional[str] = Field(
         default=None, description="Timestamp of the latest observation"
     )
+    status: Optional[str] = Field(
+        default="inactive", description="Status of the Thing (active/inactive)"
+    )
+
 
     # Relations
     datastreams: List[Datastream] = Field(
@@ -133,5 +137,9 @@ class Thing(BaseModel):
             description=data.get("description", ""),
             location=location_obj,
             properties=props,
+            last_activity=None,  # This needs to be populated if observations are expanded
+            status=props.get("status", "inactive"),
             datastreams=parsed_datastreams,
         )
+
+

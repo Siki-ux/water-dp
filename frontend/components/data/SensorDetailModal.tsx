@@ -80,9 +80,6 @@ export default function SensorDetailModal({
                 .then(res => res.ok ? res.json() : null)
                 .then(data => {
                     if (data) {
-                        // Force active status as requested
-                        data.properties = { ...data.properties, status: 'active' };
-                        data.status = 'active';
                         setFullSensor(data);
 
                         // 2. Determine Datastreams

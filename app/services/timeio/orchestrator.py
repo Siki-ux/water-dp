@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import secrets
 import string
 import time
@@ -13,6 +14,32 @@ from app.services.timeio.mqtt_client import MQTTClient
 from app.services.timeio.timeio_db import TimeIODatabase
 
 logger = logging.getLogger("timeio.orchestrator")
+
+
+def _sanitize_schema_name(raw_name: str) -> str:
+    """
+    Derive a valid PostgreSQL schema name from a Keycloak group name.
+
+    Examples:
+        'UFZ-TSM:MyProject2'  -> 'myproject2'
+        'ufz-tsm:my project'  -> 'my_project'
+        'My-Project'          -> 'my_project'
+    """
+    name = raw_name
+    # Strip common Keycloak group prefixes
+    for prefix in ("UFZ-TSM:", "ufz-tsm:"):
+        if name.startswith(prefix):
+            name = name[len(prefix):]
+            break
+    # Also handle path-style groups
+    if "/" in name:
+        name = name.rsplit("/", 1)[-1]
+    # Lowercase and replace invalid identifier chars with underscores
+    name = name.lower().strip()
+    name = re.sub(r"[^a-z0-9_]", "_", name)
+    # Collapse multiple underscores and strip leading/trailing
+    name = re.sub(r"_+", "_", name).strip("_")
+    return name
 
 
 class TimeIOOrchestrator:
@@ -84,8 +111,11 @@ class TimeIOOrchestrator:
                     f"Resolved Project via Schema '{project_schema}': {project_name} ({project_uuid})"
                 )
             else:
-                logger.warning(
-                    f"Provided schema '{project_schema}' not found in DB. Falling back to derivation."
+                # Schema not in config_db yet (new group) — trust the provided schema anyway.
+                # TSM worker will create the actual DB schema after receiving the MQTT message.
+                target_schema = project_schema
+                logger.info(
+                    f"Provided schema '{project_schema}' not in config_db yet, using it as target_schema (will be created by TSM)."
                 )
 
         # Fallback / Default Derivation
@@ -93,8 +123,8 @@ class TimeIOOrchestrator:
             project_uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS, project_name))
 
         if not target_schema:
-            # Logic matches TSM's default behavior: user_<project_slug>
-            project_slug = project_name.lower().replace(" ", "_")
+            # Sanitize group/project name into a valid PostgreSQL schema identifier
+            project_slug = _sanitize_schema_name(project_name)
             target_schema = f"user_{project_slug}"
             logger.info(f"Derived Target Schema: {target_schema}")
 
@@ -416,7 +446,7 @@ class TimeIOOrchestrator:
             project_uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS, project_name))
 
         if not target_schema:
-            project_slug = project_name.lower().replace(" ", "_")
+            project_slug = _sanitize_schema_name(project_name)
             target_schema = f"user_{project_slug}"
             logger.info(f"Derived Target Schema: {target_schema}")
 

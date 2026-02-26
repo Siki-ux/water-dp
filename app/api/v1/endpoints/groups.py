@@ -35,67 +35,19 @@ async def list_groups(user: dict = Depends(get_current_user)):
 @router.get("/my-authorization-groups", response_model=List[Any])
 async def list_my_authorization_groups(user: dict = Depends(get_current_user)):
     """
-    List groups where the user has specific authorization (e.g. is in /Editor or /Admin subgroup).
-    Returns the distinct PARENT groups.
+    List groups the user belongs to (Keycloak-centric model).
+    Membership = authorization. No subgroup parsing needed.
     """
     user_id = user.get("sub")
     user_groups = KeycloakService.get_user_groups(user_id)
 
-    unique_parents = {}
-
-    for group_item in user_groups:
-        path = group_item.get("path", "")
-        if not path:
-            continue
-
-        # Normalize path
-        if path.startswith("/"):
-            # Check for /Editor or /Admin suffix
-            lower_path = path.lower()
-            parent_path = None
-
-            if lower_path.endswith("/editor"):
-                parent_path = path[:-7]  # remove /editor
-            elif lower_path.endswith("/admin"):
-                parent_path = path[:-6]  # remove /admin
-
-            if parent_path:
-                parent_name = parent_path.split("/")[-1]
-
-                # Deduplicate by parent path
-                if parent_path not in unique_parents:
-                    unique_parents[parent_path] = {
-                        "name": parent_name,
-                        "path": parent_path,
-                        "id": None,  # ID is hard to get without extra query
-                    }
-
-    # Map path -> group for lookup
-    path_map = {user_group.get("path"): user_group for user_group in user_groups}
-
-    final_list = []
-    for parent_path, parent_group_obj in unique_parents.items():
-        if parent_path in path_map:
-            # Great, user is direct member of parent appparently?
-            # Or we just use the ID from there if it matches.
-            final_list.append(
-                {
-                    "id": path_map[parent_path].get("id"),
-                    "name": path_map[parent_path].get("name"),
-                    "path": path_map[parent_path].get("path"),
-                }
-            )
-        else:
-            # User is in /Group/Editor but not /Group?
-            # Optimization:
-            found = KeycloakService.get_group_by_name(parent_group_obj["name"])
-            if found:
-                final_list.append(found)
-            else:
-                # Fallback
-                final_list.append(parent_group_obj)
-
-    return final_list
+    # Return all groups the user is a member of
+    # (the frontend uses this as "which projects can I create?")
+    return [
+        {"id": g.get("id"), "name": g.get("name"), "path": g.get("path")}
+        for g in user_groups
+        if g.get("name", "").startswith("UFZ-TSM:")
+    ]
 
 
 @router.post("/", status_code=201)
@@ -103,20 +55,19 @@ async def create_group(
     name: str = Body(..., embed=True), user: dict = Depends(get_current_user)
 ):
     """
-    Create a new Keycloak group.
-    Prefixes the name with 'UFZ-TSM:' if not already present for Thing Management compatibility.
-    Adds the creator to the group.
+    Create a new Keycloak group (Keycloak-centric model).
+    - Prefixes with 'UFZ-TSM:' if not present
+    - Adds creator to the group
+    - Assigns 'admin' client role on timeIO-client to the group
+    - Sets empty group attributes for schema linking
     """
     # Enforce UFZ-TSM prefix
     group_name = name
     if not group_name.startswith("UFZ-TSM:"):
         group_name = f"UFZ-TSM:{group_name}"
 
-    # Check validity (Keycloak might reject duplicates)
     existing = KeycloakService.get_group_by_name(group_name)
     if existing:
-        # If existing, user might just want to join? Or error?
-        # For now, error if it exists.
         raise HTTPException(
             status_code=400, detail="Group with this name already exists"
         )
@@ -129,22 +80,28 @@ async def create_group(
     user_id = user.get("sub")
     KeycloakService.add_user_to_group(user_id, group_id)
 
-    # Assign 'user' role of 'timeIO-client' to the group
+    # Set empty attributes for future schema linking
+    try:
+        KeycloakService.set_group_attributes(group_id, {
+            "schema_name": "",
+        })
+    except Exception as error:
+        print(f"Warning: Could not set group attributes: {error}")
+
+    # Assign 'admin' client role to the group (all members inherit)
     try:
         timeio_client_uuid = KeycloakService.get_client_id("timeIO-client")
         if timeio_client_uuid:
-            user_role = KeycloakService.get_client_role(timeio_client_uuid, "user")
-            if user_role:
+            admin_role = KeycloakService.get_client_role(timeio_client_uuid, "admin")
+            if admin_role:
                 KeycloakService.assign_group_client_roles(
-                    group_id, timeio_client_uuid, [user_role]
+                    group_id, timeio_client_uuid, [admin_role]
                 )
             else:
-                # Log but don't fail the request significantly
-                print("Warning: 'user' role not found for timeIO-client")
+                print("Warning: 'admin' role not found for timeIO-client")
         else:
             print("Warning: timeIO-client not found")
     except Exception as error:
-        # Just log error, don't break creation flow if possible
         print(f"Failed to assign client role: {error}")
 
     return {"id": group_id, "name": group_name, "status": "created"}
@@ -164,34 +121,13 @@ async def get_group_details(group_id: str, user: dict = Depends(get_current_user
 @router.get("/{group_id}/members", response_model=List[Any])
 async def get_group_members(
     group_id: str,
-    exclude_admins: bool = True,
     user: dict = Depends(get_current_user),
 ):
     """
     Get members of a specific Keycloak group.
-
-    - **exclude_admins**: If True (default), members of the 'Admin' subgroup will be excluded from the response.
+    In Keycloak-centric model, all members are returned (no subgroup filtering).
     """
     members = KeycloakService.get_group_members(group_id)
-
-    if exclude_admins:
-        # Filter out members of 'Admin' subgroup
-        try:
-            admin_subgroup = KeycloakService.get_child_group(group_id, "Admin")
-            if admin_subgroup:
-                admin_members = KeycloakService.get_group_members(admin_subgroup["id"])
-                admin_ids = {user_item["id"] for user_item in admin_members}
-
-                # Filter members
-                filtered_members = [
-                    member for member in members if member["id"] not in admin_ids
-                ]
-                return filtered_members
-        except Exception as error:
-            print(f"Error filtering admin members: {error}")
-            # Fallback to returning all members if filtering fails to avoid empty UI.
-            pass
-
     return members
 
 

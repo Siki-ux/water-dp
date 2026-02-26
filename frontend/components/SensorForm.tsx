@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Loader2, Save } from "lucide-react";
 
-interface Project {
+interface Group {
     id: string;
     name: string;
-    schema_name?: string;
+    path?: string;
 }
 
 interface DeviceType {
@@ -22,13 +22,13 @@ export function SensorForm() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const [projects, setProjects] = useState<Project[]>([]);
+    const [groups, setGroups] = useState<Group[]>([]);
     const [deviceTypes, setDeviceTypes] = useState<DeviceType[]>([]);
 
     const [formData, setFormData] = useState({
         name: "",
         description: "",
-        project_uuid: "",
+        group_id: "",
         device_type: "chirpstack_generic",
         latitude: "",
         longitude: "",
@@ -39,13 +39,13 @@ export function SensorForm() {
         if (session?.accessToken) {
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
-            // Fetch Projects
-            fetch(`${apiUrl}/projects/`, {
+            // Fetch Keycloak Groups
+            fetch(`${apiUrl}/groups/my-authorization-groups`, {
                 headers: { Authorization: `Bearer ${session.accessToken}` }
             })
                 .then(res => res.json())
-                .then(data => setProjects(Array.isArray(data) ? data : []))
-                .catch(err => console.error("Failed to fetch projects", err));
+                .then(data => setGroups(Array.isArray(data) ? data : []))
+                .catch(err => console.error("Failed to fetch groups", err));
 
             // Fetch Device Types (from new SMS endpoint)
             fetch(`${apiUrl}/sms/attributes/device-types?page=1&page_size=100`, {
@@ -70,8 +70,8 @@ export function SensorForm() {
         setLoading(true);
         setError(null);
 
-        if (!formData.project_uuid) {
-            setError("Please select an Owner Project");
+        if (!formData.group_id) {
+            setError("Please select an Owner Group");
             setLoading(false);
             return;
         }
@@ -79,11 +79,11 @@ export function SensorForm() {
         try {
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
-            // Payload
+            // Payload — group_id based (Keycloak-centric)
             const payload = {
                 sensor_name: formData.name,
                 description: formData.description,
-                project_uuid: formData.project_uuid,
+                group_id: formData.group_id,
                 device_type: formData.device_type,
                 latitude: formData.latitude ? parseFloat(formData.latitude) : null,
                 longitude: formData.longitude ? parseFloat(formData.longitude) : null,
@@ -115,6 +115,10 @@ export function SensorForm() {
         }
     };
 
+    /** Strip "UFZ-TSM:" prefix for display */
+    const displayGroupName = (name: string) =>
+        name.startsWith("UFZ-TSM:") ? name.slice(8) : name;
+
     return (
         <form onSubmit={handleSubmit} className="max-w-2xl mx-auto bg-black/20 backdrop-blur-md rounded-xl p-6 border border-white/10 space-y-6">
             <div>
@@ -129,25 +133,25 @@ export function SensorForm() {
             )}
 
             <div className="space-y-4">
-                {/* Project Selection */}
+                {/* Group Selection */}
                 <div>
                     <label className="block text-sm font-medium text-white/80 mb-1">
-                        Owner Project <span className="text-red-400">*</span>
+                        Owner Group <span className="text-red-400">*</span>
                     </label>
                     <p className="text-xs text-white/40 mb-2">
-                        The project that will own this sensor's data and schema.
+                        The Keycloak group that will own this sensor's data and schema.
                     </p>
                     <select
-                        name="project_uuid"
-                        value={formData.project_uuid}
+                        name="group_id"
+                        value={formData.group_id}
                         onChange={handleChange}
                         required
                         className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                     >
-                        <option value="">Select a Project...</option>
-                        {projects.map(p => (
-                            <option key={p.id} value={p.id}>
-                                {p.name} {p.schema_name ? `(${p.schema_name})` : "(No Schema)"}
+                        <option value="">Select a Group...</option>
+                        {groups.map(g => (
+                            <option key={g.id} value={g.id}>
+                                {displayGroupName(g.name)}
                             </option>
                         ))}
                     </select>

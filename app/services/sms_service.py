@@ -10,7 +10,7 @@ from app.services.async_thing_service import AsyncThingService
 # from app.services.timeio.timeio_db import TimeIODatabase  # Moved locally to break circularity
 from app.services.timeio.crypto_utils import decrypt_password
 from app.schemas.sms import SensorSMS
-from app.services.project_service import ProjectService
+from app.services.project_service import ProjectService, _sanitize_user_groups
 from app.core.database import SessionLocal
 
 logger = logging.getLogger(__name__)
@@ -18,29 +18,57 @@ logger = logging.getLogger(__name__)
 
 class SMSService:
     @staticmethod
+    def _get_accessible_schemas(user: dict) -> list:
+        """
+        Get list of schemas the user can access based on their Keycloak groups.
+        Returns all schemas if user is realm admin.
+        """
+        from app.models.user_context import Project
+
+        # Realm admin sees everything
+        if ProjectService._is_admin(user):
+            return None  # None = no filter
+
+        user_groups = _sanitize_user_groups(user)
+        if not user_groups:
+            return []  # No groups = no access
+
+        with SessionLocal() as session:
+            projects = (
+                session.query(Project.schema_name)
+                .filter(Project.authorization_provider_group_id.in_(user_groups))
+                .all()
+            )
+            return [p.schema_name for p in projects if p.schema_name]
+
+    @staticmethod
     async def get_all_sensors_extended(
         page: int = 1,
         page_size: int = 20,
+        user: dict = None,
     ) -> Dict[str, Any]:
         """
-        Get all sensors across ALL projects with extended metadata.
-        
-        Args:
-            page: Page number (1-based)
-            page_size: Items per page
-            
-        Returns:
-            Dict with "items" (List[SensorSMS]) and "total" (int)
+        Get sensors across projects with extended metadata.
+        If user is provided, filters to only schemas accessible via their Keycloak groups.
         """
         from app.services.timeio.timeio_db import TimeIODatabase
         db = TimeIODatabase()
         offset = (page - 1) * page_size
-        
-        # 1. Fetch Page from ConfigDB (Central Source of Truth)
-        db_result = db.get_all_sensors_paginated(limit=page_size, offset=offset)
+
+        # Determine accessible schemas for filtering
+        accessible_schemas = None
+        if user:
+            accessible_schemas = SMSService._get_accessible_schemas(user)
+            if accessible_schemas is not None and not accessible_schemas:
+                return {"items": [], "total": 0}  # User has no project access
+
+        # Fetch from ConfigDB with optional schema filter
+        db_result = db.get_all_sensors_paginated(
+            limit=page_size, offset=offset, schemas=accessible_schemas
+        )
         items_db = db_result["items"]
         total = db_result["total"]
-        
+
         if not items_db:
              return {"items": [], "total": total}
 

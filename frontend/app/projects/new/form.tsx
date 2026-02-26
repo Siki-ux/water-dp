@@ -6,18 +6,18 @@ import { useRouter } from "next/navigation";
 import { Loader2, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
-export default function NewProjectForm({ token, groups = [] }: { token: string, groups: string[] }) {
+export default function NewProjectForm({ token, groups = [] }: { token: string, groups: { id: string, name: string }[] }) {
     const router = useRouter();
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
 
-    function toggleGroup(group: string) {
-        if (selectedGroups.includes(group)) {
-            setSelectedGroups(selectedGroups.filter(g => g !== group));
+    function toggleGroup(groupId: string) {
+        if (selectedGroups.includes(groupId)) {
+            setSelectedGroups(selectedGroups.filter(id => id !== groupId));
         } else {
-            setSelectedGroups([...selectedGroups, group]);
+            setSelectedGroups([...selectedGroups, groupId]);
         }
     }
 
@@ -117,18 +117,18 @@ export default function NewProjectForm({ token, groups = [] }: { token: string, 
                             <p className="text-sm text-white/30 italic">No groups found available for assignment.</p>
                         )}
                         {groups.map((group) => {
-                            const isSelected = selectedGroups.includes(group);
+                            const isSelected = selectedGroups.includes(group.id);
                             return (
                                 <button
-                                    key={group}
+                                    key={group.id}
                                     type="button"
-                                    onClick={() => toggleGroup(group)}
+                                    onClick={() => toggleGroup(group.id)}
                                     className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all border ${isSelected
                                         ? "bg-hydro-primary/20 border-hydro-primary text-hydro-primary shadow-[0_0_10px_rgba(0,183,255,0.3)]"
                                         : "bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white"
                                         }`}
                                 >
-                                    {group}
+                                    {group.name}
                                 </button>
                             );
                         })}

@@ -97,10 +97,8 @@ def seed_data(db: Session) -> None:
             db.flush()
 
             # 2. Generate Grid Regions (GeoFeatures)
-            data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
-            geojson_path = os.path.join(data_dir, "czech_regions.json")
-            if not os.path.exists(geojson_path):
-                geojson_path = os.path.join(data_dir, "czech_regions.geojson")
+            data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "geoserver", "data")
+            geojson_path = os.path.join(data_dir, "czech_regions.geojson")
 
             if os.path.exists(geojson_path):
                 try:
@@ -180,6 +178,56 @@ def seed_data(db: Session) -> None:
                         f"Could not parse geometry for feature {f.feature_id}: {e}"
                     )
 
+        # -------------------------------------------------------------------------
+        # Seed Watershed Layers (e.g. Morava)
+        # -------------------------------------------------------------------------
+        data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "geoserver", "data")
+        watershed_files = ["morava_river_watershed.geojson", "orava_river_watershed.geojson"]
+        
+        for ws_file in watershed_files:
+            ws_path = os.path.join(data_dir, ws_file)
+            layer_name = os.path.splitext(ws_file)[0]
+            
+            if os.path.exists(ws_path):
+                if not db.query(GeoLayer).filter(GeoLayer.layer_name == layer_name).first():
+                    logger.info(f"Seeding {layer_name} layer...")
+                    ws_layer = GeoLayer(
+                        layer_name=layer_name,
+                        title=layer_name.replace("_", " ").title(),
+                        description=f"Watershed boundary for {layer_name}.",
+                        store_name="water_data_store",
+                        layer_type="vector",
+                        geometry_type="polygon",
+                        is_published="true",
+                        is_public="true",
+                    )
+                    db.add(ws_layer)
+                    db.flush()
+                    
+                    try:
+                        with open(ws_path, "r", encoding="utf-8") as f:
+                            data = json.load(f)
+                        fs = data.get("features", [])
+                        if not fs and data.get("type") == "Feature":
+                            fs = [data]
+                        for idx, fd in enumerate(fs):
+                            props = fd.get("properties", {})
+                            fid = props.get("id") or fd.get("id") or f"{layer_name}_{idx}"
+                            gs = shape(fd["geometry"])
+                            wkt_geom = from_shape(gs, srid=4326)
+                            feat = GeoFeature(
+                                layer_id=layer_name,
+                                feature_id=fid,
+                                feature_type="watershed",
+                                geometry=wkt_geom,
+                                properties=props,
+                                is_active="true",
+                            )
+                            db.add(feat)
+                    except Exception as e:
+                        logger.error(f"Failed to load watershed GeoJSON {ws_file}: {e}")
+                    db.commit()
+
         # Seed Czech Republic Layer (Independent check)
         if (
             not db.query(GeoLayer)
@@ -202,10 +250,8 @@ def seed_data(db: Session) -> None:
             db.add(cz_rep_layer)
             db.flush()
             # Try load geojson
-            data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
-            cz_path = os.path.join(data_dir, "czech_republic.json")
-            if not os.path.exists(cz_path):
-                cz_path = os.path.join(data_dir, "czech_republic.geojson")
+            data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "geoserver", "data")
+            cz_path = os.path.join(data_dir, "czech_republic.geojson")
 
             if os.path.exists(cz_path):
                 try:
@@ -218,12 +264,12 @@ def seed_data(db: Session) -> None:
                         props = fd.get("properties", {})
                         fid = props.get("id") or fd.get("id") or f"cz_rep_{idx}"
                         gs = shape(fd["geometry"])
-                        wkt = from_shape(gs, srid=4326)
+                        wkt_geom = from_shape(gs, srid=4326)
                         feat = GeoFeature(
                             layer_id="czech_republic",
                             feature_id=fid,
                             feature_type="country",
-                            geometry=wkt,
+                            geometry=wkt_geom,
                             properties=props,
                             is_active="true",
                         )
@@ -231,6 +277,7 @@ def seed_data(db: Session) -> None:
                 except Exception as e:
                     logger.error(f"Failed to load CZ Rep GeoJSON: {e}")
             db.commit()
+
 
         # Seed Czech Regions Praha Layer: SKIP (Managed by GeoServer Stack)
         # We rely on GeoServer WFS for this layer now.
@@ -754,12 +801,12 @@ def seed_advanced_logic(db: Session):
     Creates multiple projects and users to test access control.
     Merged from scripts/seed_advanced.py
     """
-    from app.models.user_context import Project, ProjectMember, project_sensors
+    from app.models.user_context import Project, project_sensors
 
     SIKI_ID = "user-siki-123"
     USER2_ID = "user-2-456"
 
-    # 1. Add Siki to Demo Project
+    # 1. Add Siki to Demo Project (via Keycloak group)
     p1 = db.query(Project).filter(Project.name == "Demo Project").first()
     if p1:
         # Try to find real Siki ID from Keycloak to ensure useful seeding
@@ -774,25 +821,15 @@ def seed_advanced_logic(db: Session):
         except Exception as e:
             logger.warning(f"Failed to lookup real 'siki' user: {e}")
 
-        (
-            db.query(ProjectMember)
-            .filter_by(project_id=p1.id, user_id=target_siki_id)
-            .first()
-        )
-        # [ALWAYS SYNC] Check Keycloak Group Membership
-        # Even if DB member exists, Keycloak group might be missing user
+        # Sync Keycloak Group Membership
         try:
             if p1.authorization_group_ids:
                 for g_name in p1.authorization_group_ids:
                     grp = KeycloakService.get_group_by_name(g_name)
                     if grp:
-                        # Double check if user is already in group?
-                        # KeycloakService.add_user_to_group usually handles idempotency or throws error
-                        # We can just call it and catch exception
                         KeycloakService.add_user_to_group(target_siki_id, grp["id"])
                         logger.info(f"Ensured Siki is in Keycloak group {g_name}")
         except Exception as e:
-            # Ignore if already member (409) or other benign errors
             logger.warning(f"Keycloak sync note for Siki: {e}")
 
     # 2. Create Project 2
@@ -807,10 +844,6 @@ def seed_advanced_logic(db: Session):
         db.add(p2)
         db.commit()
         db.refresh(p2)
-
-        # Add User 2 as Admin
-        db.add(ProjectMember(project_id=p2.id, user_id=USER2_ID, role="admin"))
-        db.commit()
 
     # 3. Link Sensors to Project 2 (IDs 1 and 5 if available)
     # 3. Link Sensors to Project 2 (IDs 1 and 5 if available)

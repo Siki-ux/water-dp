@@ -378,3 +378,57 @@ class KeycloakService:
             )
             cls._admin_client = None
             raise
+
+    # ------------------------------------------------------------------
+    # Group Attributes (Keycloak-centric model)
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def set_group_attributes(cls, group_id: str, attributes: dict):
+        """
+        Set/update attributes on a Keycloak group.
+        Keycloak stores attributes as lists of strings.
+        """
+        try:
+            admin = cls.get_admin_client()
+            group = admin.get_group(group_id=group_id)
+            existing_attrs = group.get("attributes", {})
+
+            for k, v in attributes.items():
+                existing_attrs[k] = [str(v)] if not isinstance(v, list) else v
+
+            admin.update_group(group_id=group_id, payload={"attributes": existing_attrs})
+            logger.info(f"Set attributes on group {group_id}: {list(attributes.keys())}")
+        except Exception as e:
+            logger.error(f"Error setting attributes on group {group_id}: {e}")
+            cls._admin_client = None
+            raise
+
+    @classmethod
+    def get_group_attributes(cls, group_id: str) -> dict:
+        """
+        Get attributes from a Keycloak group, unwrapping single-value lists.
+        Returns: {"schema_name": "my_schema", ...}
+        """
+        try:
+            admin = cls.get_admin_client()
+            group = admin.get_group(group_id=group_id)
+            attrs = group.get("attributes", {})
+            # Unwrap single-value lists for convenience
+            return {
+                k: v[0] if isinstance(v, list) and len(v) == 1 else v
+                for k, v in attrs.items()
+            }
+        except Exception as e:
+            logger.error(f"Error getting attributes for group {group_id}: {e}")
+            cls._admin_client = None
+            return {}
+
+    @classmethod
+    def get_group_schema_name(cls, group_id: str) -> Optional[str]:
+        """Get the schema_name attribute from a group (shorthand)."""
+        attrs = cls.get_group_attributes(group_id)
+        schema = attrs.get("schema_name")
+        if schema and schema.strip():
+            return schema
+        return None

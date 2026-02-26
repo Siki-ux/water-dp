@@ -19,12 +19,10 @@ from app.core.exceptions import (
     ResourceNotFoundException,
     ValidationException,
 )
-from app.models.user_context import Project, ProjectMember, project_sensors
+from app.models.user_context import Project, project_sensors
 from app.schemas.frost.thing import Thing
 from app.schemas.user_context import (
     ProjectCreate,
-    ProjectMemberCreate,
-    ProjectMemberResponse,
     ProjectUpdate,
 )
 from app.services.keycloak_service import KeycloakService
@@ -36,6 +34,64 @@ from app.services.timeio import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# ------------------------------------------------------------------
+# Keycloak-centric access helpers
+# ------------------------------------------------------------------
+
+def _sanitize_user_groups(user: Dict[str, Any]) -> list:
+    """Extract and normalize group names from JWT claims."""
+    raw_groups = user.get("groups", [])
+    if not isinstance(raw_groups, list):
+        raw_groups = [raw_groups]
+
+    # Also include entitlements (Keycloak groups sometimes mapped here)
+    entitlements = user.get("eduperson_entitlement", [])
+    if isinstance(entitlements, list):
+        raw_groups.extend(entitlements)
+    elif entitlements:
+        raw_groups.append(entitlements)
+
+    sanitized = set()
+    for group_name in raw_groups:
+        if not group_name:
+            continue
+        group_str = str(group_name)
+
+        # Remove URN prefix
+        if group_str.startswith("urn:geant:params:group:"):
+            group_str = group_str.replace("urn:geant:params:group:", "")
+        # Strip leading slash
+        if group_str.startswith("/"):
+            group_str = group_str[1:]
+
+        sanitized.add(group_str)
+
+        # Also add colon↔slash variants for flexible matching
+        if "/" in group_str:
+            sanitized.add(group_str.replace("/", ":"))
+        if ":" in group_str:
+            sanitized.add(group_str.replace(":", "/"))
+
+    return list(sanitized)
+
+
+def _has_project_access(user: Dict[str, Any], group_id: str) -> bool:
+    """Check if user is member of the project's Keycloak group (from JWT)."""
+    if not group_id:
+        return False
+    return group_id in _sanitize_user_groups(user)
+
+
+def _is_project_admin(user: Dict[str, Any]) -> bool:
+    """Check if user has 'admin' client role on timeIO-client."""
+    client_roles = (
+        user.get("resource_access", {})
+        .get("timeIO-client", {})
+        .get("roles", [])
+    )
+    return "admin" in client_roles
 
 
 class ProjectService:
@@ -69,102 +125,51 @@ class ProjectService:
         required_role: str = "viewer",
     ) -> Project:
         """
-        Check if user has access to project.
-        Returns project if allowed, raises HTTPException otherwise.
-        Roles hierarchy: admin > owner > editor > viewer.
+        Keycloak-centric access check.
+        1. Realm admin → full access
+        2. Group membership (from JWT) → access
+        3. For admin-required ops, check timeIO-client admin role
         """
         project = db.query(Project).filter(Project.id == project_id).first()
         if not project:
             raise ResourceNotFoundException(message="Project not found")
 
+        # 1. Realm admin bypass
         if ProjectService._is_admin(user):
             logger.info(f"Admin access granted for project {project_id}")
             return project
 
         user_id = user.get("sub")
-        logger.info(
-            f"Checking access for user {user_id} on project {project_id}. Owner: {project.owner_id}"
-        )
 
-        # 1. Owner Access
+        # 2. Owner always has access
         if str(project.owner_id) == str(user_id):
             logger.info("Access granted as owner")
             return project
 
-        # 2. Group Access (Keycloak Groups)
-        user_groups = user.get("groups", [])
-        if not isinstance(user_groups, list):
-            user_groups = [user_groups]
-
-        # Add entitlements and roles as fallback (matching list_projects logic)
-        user_groups.extend(
-            user.get("eduperson_entitlement", [])
-            if isinstance(user.get("eduperson_entitlement"), list)
-            else (
-                [user.get("eduperson_entitlement")]
-                if user.get("eduperson_entitlement")
-                else []
-            )
-        )
-        user_groups.extend(user.get("realm_access", {}).get("roles", []))
-
-        # Sanitize
-        sanitized_groups = []
-        for group_name in user_groups:
-            if group_name:
-                group_str = str(group_name)
-                if group_str.startswith("urn:geant:params:group:"):
-                    group_str = group_str.replace("urn:geant:params:group:", "")
-                if group_str.startswith("/"):
-                    group_str = group_str[1:]
-                sanitized_groups.append(group_str)
-
-        if (
-            project.authorization_provider_group_id
-            and project.authorization_provider_group_id in sanitized_groups
-        ):
+        # 3. Group membership check (Keycloak-centric)
+        if _has_project_access(user, project.authorization_provider_group_id):
             logger.info(
-                f"Access granted via group match. User groups: {sanitized_groups}, "
-                f"Project group: {project.authorization_provider_group_id}"
+                f"Access granted via group membership for project {project_id}"
             )
+            
+            # Ensure project has a schema name (Lazy Resolution)
+            ProjectService._ensure_schema_name(db, project)
+
+            # For admin-required operations, check client role
+            if required_role == "editor" and not _is_project_admin(user):
+                raise AuthorizationException(
+                    message="Admin client role required for this operation"
+                )
             return project
 
+
+
         logger.warning(
-            f"Group access failed. User sanitized groups: {sanitized_groups}. "
-            f"Project group: {project.authorization_provider_group_id}"
+            f"Access denied for user {user_id} on project {project_id}"
         )
-
-        # 3. Member Access
-        member = (
-            db.query(ProjectMember)
-            .filter(
-                ProjectMember.project_id == project_id,
-                ProjectMember.user_id == str(user_id),
-            )
-            .first()
+        raise AuthorizationException(
+            message="Not authorized to access this project"
         )
-
-        if not member:
-            logger.warning(f"User {user_id} is not a member of project {project_id}")
-            raise AuthorizationException(
-                message="Not authorized to access this project"
-            )
-
-        logger.info(f"User {user_id} access granted as member with role {member.role}")
-
-        # Check Role Hierarchy
-        # viewer allowed: viewer, editor
-        # editor allowed: editor
-        allowed_roles = ["editor"]
-        if required_role == "viewer":
-            allowed_roles.append("viewer")
-
-        if member.role not in allowed_roles:
-            raise AuthorizationException(
-                message=f"Insufficient permissions ({required_role} required)",
-            )
-
-        return project
 
     @staticmethod
     def create_project(
@@ -172,96 +177,169 @@ class ProjectService:
     ) -> Project:
         user_id = user.get("sub")
 
-        # Validate Group Membership
-        # Use resolved_group_id to support both array (frontend) and single string formats
-        auth_group_id = project_in.resolved_group_id
+        # Require a Keycloak group
+        input_group_id = project_in.resolved_group_id
+        if not input_group_id:
+            raise ValidationException(
+                message="Authorization Group is required. Please select an existing group."
+            )
+
+        # Validate group membership (unless realm admin)
+        if not ProjectService._is_admin(user):
+            if not _has_project_access(user, input_group_id):
+                logger.warning(
+                    f"User {user_id} attempted to create project with unauthorized group {input_group_id}"
+                )
+                raise AuthorizationException(
+                    message=f"You are not a member of the authorization group: {input_group_id}"
+                )
+
+        # Resolve schema AND definitive Group ID (ensure we store UUID if possible)
+        # We need a new internal version of resolve_schema_for_group that returns both
+        schema, resolved_group_id = ProjectService._resolve_schema_and_id_for_group(input_group_id)
+
+        # Default to input if resolution fails (backward compatibility)
+        final_group_id = resolved_group_id or input_group_id
+
+        logger.info(
+            f"Creating project. Input Group: {input_group_id}, Resolved Group: {final_group_id}, Schema: {schema}"
+        )
+
+        db_project = Project(
+            name=project_in.name,
+            description=project_in.description,
+            owner_id=user_id,
+            authorization_provider_group_id=final_group_id,
+            schema_name=schema,
+        )
+        db.add(db_project)
+        db.flush()
+        db.commit()
+        db.refresh(db_project)
+        return db_project
+
+    @staticmethod
+    def _resolve_schema_and_id_for_group(group_id: str) -> tuple[Optional[str], Optional[str]]:
+        """
+        Resolve schema name AND definitive Keycloak ID for a Keycloak group.
+        Returns: (schema_name, resolved_group_uuid)
+        """
+        # 1. Detection: Is it a UUID?
+        import re
+        is_uuid = bool(re.match(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", group_id.lower()))
+
         schema = None
-        if auth_group_id:
-            # Validate: User must be a member of the group (unless admin)
-            if not ProjectService._is_admin(user):
-                # Extract and sanitize user groups
-                raw_groups = user.get("groups", [])
-                if not isinstance(raw_groups, list):
-                    raw_groups = [raw_groups]
+        keycloak_group_data = None
 
-                entitlements = user.get("eduperson_entitlement", [])
-                if isinstance(entitlements, list):
-                    raw_groups.extend(entitlements)
-                elif entitlements:
-                    raw_groups.append(entitlements)
+        if is_uuid:
+            # Try group attribute first (Keycloak-centric)
+            schema = KeycloakService.get_group_schema_name(group_id)
+            if not schema:
+                keycloak_group_data = KeycloakService.get_group(group_id)
+        else:
+            # It's likely a name or path string
+            clean_name = group_id.split(":")[-1].split("/")[-1]
+            logger.info(f"Resolution: Input '{group_id}' looks like a name/path. Searching by '{clean_name}'...")
+            keycloak_group_data = KeycloakService.get_group_by_name(clean_name)
+            if keycloak_group_data:
+                # Update schema from attribute if it exists on the found group
+                schema = keycloak_group_data.get("attributes", {}).get("schema_name")
+                if isinstance(schema, list) and len(schema) > 0:
+                    schema = schema[0]
 
-                raw_groups.extend(user.get("realm_access", {}).get("roles", []))
-
-                sanitized_user_groups = []
-                for group_name in raw_groups:
-                    if group_name:
-                        group_str = str(group_name)
-                        if group_str.startswith("urn:geant:params:group:"):
-                            group_str = group_str.replace("urn:geant:params:group:", "")
-                        if group_str.startswith("/"):
-                            group_str = group_str[1:]
-                        sanitized_user_groups.append(group_str)
-
-                if auth_group_id not in sanitized_user_groups:
-                    logger.warning(
-                        f"User {user_id} attempted to create project with unauthorized group {auth_group_id}"
-                    )
-                    raise AuthorizationException(
-                        message=f"You are not a member of the authorization group: {auth_group_id}"
-                    )
-            # Resolve schema
-            keycloak_group_data = KeycloakService().get_group(auth_group_id)
+        # 2. Fallback: resolve from group name → config_db
+        if not schema:
             if keycloak_group_data and keycloak_group_data.get("name"):
                 raw_name = keycloak_group_data["name"]
-                # Extract "MyProject" from "UFZ-TSM:MyProject"
                 if ":" in raw_name:
                     schema_name = raw_name.split(":")[-1]
                 elif "/" in raw_name:
                     schema_name = raw_name.split("/")[-1]
                 else:
                     schema_name = raw_name
-                logger.info(f"Resolved project name from Keycloak: {schema_name}")
 
-                # TODO: Wont exists on first creation.
+                logger.info(f"Resolved project context from Keycloak group: {schema_name}")
+
                 timeio_db = TimeIODatabase()
                 config_project = timeio_db.get_config_project_by_name(schema_name)
-                logger.info(f"Resolved config project: {config_project}")
                 if config_project and "db_schema" in config_project:
                     schema = config_project["db_schema"]
+                    # Store back as group attribute for future lookups (if we have a UUID)
+                    resolved_id = keycloak_group_data.get("id")
+                    if resolved_id:
+                        try:
+                            KeycloakService.set_group_attributes(resolved_id, {
+                                "schema_name": schema,
+                                "config_project_uuid": str(config_project.get("uuid", "")),
+                            })
+                            logger.info(
+                                f"Stored schema_name '{schema}' as group attribute on {resolved_id}"
+                            )
+                        except Exception as e:
+                            logger.warning(f"Could not store schema as group attribute: {e}")
                 else:
-                    logger.warning(
-                        f"Project {schema_name} not found in TimeIO database"
+                    # No config_db entry — pre-derive a clean schema name
+                    clean = schema_name.lower().strip()
+                    clean = re.sub(r"[^a-z0-9_]", "_", clean)
+                    clean = re.sub(r"_+", "_", clean).strip("_")
+                    schema = f"user_{clean}"
+                    logger.info(
+                        f"Pre-derived schema '{schema}' for new group (no config_db entry)"
                     )
-                    schema = None
+                    resolved_id = keycloak_group_data.get("id")
+                    if resolved_id:
+                        try:
+                            KeycloakService.set_group_attributes(resolved_id, {
+                                "schema_name": schema,
+                            })
+                        except Exception as e:
+                            logger.warning(f"Could not store pre-derived schema: {e}")
+            elif not is_uuid:
+                # If we couldn't even find it in Keycloak but it's a name, use the name directly for derivation
+                schema_name = group_id.split(":")[-1].split("/")[-1]
+                clean = schema_name.lower().strip()
+                clean = re.sub(r"[^a-z0-9_]", "_", clean)
+                clean = re.sub(r"_+", "_", clean).strip("_")
+                schema = f"user_{clean}"
+                logger.info(f"No Keycloak group found for '{group_id}'; derived schema '{schema}' from string.")
+        
+        # Return both
+        resolved_group_uuid = keycloak_group_data.get("id") if keycloak_group_data else (group_id if is_uuid else None)
+        return schema, resolved_group_uuid
 
-            logger.info(
-                f"Creating project for authorization group: {auth_group_id} and schema: {schema}"
-            )
-        else:
-            # [STRICT GROUP MODE]
-            raise ValidationException(
-                message="Authorization Group is required. Please select an existing group."
-            )
+    @staticmethod
+    def _resolve_schema_for_group(group_id: str) -> Optional[str]:
+        """
+        Legacy wrapper/helper. Use _resolve_schema_and_id_for_group instead.
+        """
+        schema, _ = ProjectService._resolve_schema_and_id_for_group(group_id)
+        return schema
 
-        db_project = Project(
-            name=project_in.name,
-            description=project_in.description,
-            owner_id=user_id,
-            authorization_provider_group_id=auth_group_id,
-            schema_name=schema,
-        )
-        db.add(db_project)
-        db.flush()  # Get ID
+    @staticmethod
+    def _ensure_schema_name(db: Session, project: Project) -> Optional[str]:
+        """
+        Ensure the project has a schema_name. Resolves from Keycloak group if missing.
+        Updates the project record in the database if resolved.
+        """
+        if project.schema_name:
+            return project.schema_name
 
-        # External Integrations
-        properties = {}
+        if not project.authorization_provider_group_id:
+            return None
 
-        if properties:
-            db_project.properties = properties
-
-        db.commit()
-        db.refresh(db_project)
-        return db_project
+        logger.info(f"Lazily resolving schema for project {project.id} from group {project.authorization_provider_group_id}")
+        schema = ProjectService._resolve_schema_for_group(project.authorization_provider_group_id)
+        
+        if schema:
+            project.schema_name = schema
+            try:
+                db.commit()
+                logger.info(f"Persisted lazily resolved schema '{schema}' to project {project.id}")
+            except Exception as e:
+                db.rollback()
+                logger.warning(f"Failed to persist lazily resolved schema for project {project.id}: {e}")
+        
+        return schema
 
     @staticmethod
     def get_project(db: Session, project_id: UUID, user: Dict[str, Any]) -> Project:
@@ -279,89 +357,34 @@ class ProjectService:
         )
 
         if is_admin:
-            all_projects = db.query(Project).offset(skip).limit(limit).all()
-            logger.info(f"Admin listing all {len(all_projects)} projects")
-            return all_projects
+            projects = db.query(Project).offset(skip).limit(limit).all()
+            logger.info(f"Admin listing all {len(projects)} projects")
+        else:
+            user_id = str(user.get("sub"))
 
-        user_id = str(user.get("sub"))
+            # Use shared sanitization helper
+            user_groups = _sanitize_user_groups(user)
+            logger.info(f"Sanitized user groups for filtering: {user_groups}")
 
-        # Collect all group/role-like claims
-        raw_groups = user.get("groups", [])
-        if not isinstance(raw_groups, list):
-            raw_groups = [raw_groups]
+            # Match by: owner OR group membership
+            criteria = [
+                Project.owner_id == user_id,
+            ]
 
-        # Add entitlements (Keycloak groups often mapped here)
-        entitlements = user.get("eduperson_entitlement", [])
-        if isinstance(entitlements, list):
-            raw_groups.extend(entitlements)
-        elif entitlements:
-            raw_groups.append(entitlements)
+            if user_groups:
+                criteria.append(Project.authorization_provider_group_id.in_(user_groups))
 
-        # Add realm roles as fallback
-        realm_roles = user.get("realm_access", {}).get("roles", [])
-        raw_groups.extend(realm_roles)
+            projects = (
+                db.query(Project).filter(or_(*criteria)).offset(skip).limit(limit).all()
+            )
 
-        logger.info(f"Raw groups from token: {raw_groups}")
+            logger.info(
+                f"Found {len(projects)} projects for user {user.get('preferred_username')}"
+            )
 
-        # Sanitize and normalize groups - generate multiple formats for matching
-        sanitized_groups = set()
-        for group_name in raw_groups:
-            if not group_name:
-                continue
-            group_str = str(group_name)
-
-            # Remove URN prefix
-            if group_str.startswith("urn:geant:params:group:"):
-                group_str = group_str.replace("urn:geant:params:group:", "")
-
-            # Strip leading slash
-            if group_str.startswith("/"):
-                group_str = group_str[1:]
-
-            # Add the sanitized group as-is
-            sanitized_groups.add(group_str)
-
-            # Also add formats for hierarchical matching:
-            # /UFZ-TSM/MyProject -> UFZ-TSM:MyProject
-            if "/" in group_str:
-                colon_format = group_str.replace("/", ":")
-                sanitized_groups.add(colon_format)
-                # Also add each path component
-                parts = group_str.split("/")
-                for i in range(len(parts)):
-                    partial = "/".join(parts[: i + 1])
-                    sanitized_groups.add(partial)
-                    sanitized_groups.add(partial.replace("/", ":"))
-
-            # UFZ-TSM:MyProject -> UFZ-TSM/MyProject
-            if ":" in group_str:
-                slash_format = group_str.replace(":", "/")
-                sanitized_groups.add(slash_format)
-
-        user_groups = list(sanitized_groups)
-        logger.info(f"Sanitized user groups for filtering: {user_groups}")
-
-        # Subquery for member project IDs
-        member_project_ids = select(ProjectMember.project_id).where(
-            ProjectMember.user_id == user_id
-        )
-
-        # Construct SQLAlchemy filter (use only one group check, not duplicated)
-        criteria = [
-            Project.owner_id == user_id,
-            Project.id.in_(member_project_ids),
-        ]
-
-        if user_groups:
-            criteria.append(Project.authorization_provider_group_id.in_(user_groups))
-
-        projects = (
-            db.query(Project).filter(or_(*criteria)).offset(skip).limit(limit).all()
-        )
-
-        logger.info(
-            f"Found {len(projects)} projects for user {user.get('preferred_username')}"
-        )
+        # Lazy resolve schemas for the list
+        for p in projects:
+            ProjectService._ensure_schema_name(db, p)
 
         return projects
 
@@ -763,84 +786,3 @@ class ProjectService:
             thing for thing in all_sensors if thing.sensor_uuid not in linked_uuids
         ]
         return available_things
-
-    # --- Member Management ---
-
-    @staticmethod
-    def add_member(
-        db: Session,
-        project_id: UUID,
-        member_in: ProjectMemberCreate,
-        user: Dict[str, Any],
-    ) -> ProjectMember:
-        raise ValidationException(
-            message="Direct member management is disabled. Please manage membership via Authorization Groups."
-        )
-
-    @staticmethod
-    def list_members(
-        db: Session, project_id: UUID, user: Dict[str, Any]
-    ) -> List[ProjectMemberResponse]:
-        # Helper to show members based on GROUP, not DB table?
-        # For now, let's keep listing the DB table (legacy) AND potentially fetch Group Members?
-        # User requested: "Project Member management disabled".
-        # But we still want to SEE who has access?
-        # "list_members" usually implies the specific ProjectMember table.
-        # Let's keep this as-is (read-only) for existing members,
-        # BUT we should probably also return Group Members if we want to be helpful.
-        # Ideally, the Frontend should call /groups/{id}/members instead.
-
-        # For strict compliance with "Disable member management", we leave this read-only.
-        # It allows seeing "old" members.
-
-        ProjectService._check_access(db, project_id, user, required_role="viewer")
-        members = (
-            db.query(ProjectMember).filter(ProjectMember.project_id == project_id).all()
-        )
-
-        # Populate usernames
-        from app.services.keycloak_service import KeycloakService
-
-        results = []
-        for member in members:
-            # Convert SQLAlchemy model to Pydantic dict foundation
-            member_dict = {
-                "id": member.id,
-                "project_id": member.project_id,
-                "user_id": member.user_id,
-                "role": member.role,
-                "created_at": member.created_at,
-                "updated_at": member.updated_at,
-                "username": "Unknown",
-            }
-            # Try resolve username
-            try:
-                keycloak_user = KeycloakService.get_user_by_id(str(member.user_id))
-                if keycloak_user:
-                    member_dict["username"] = keycloak_user.get("username")
-            except Exception as error:
-                # Best-effort: on any failure, keep the default "Unknown" username but log the error.
-                logger.warning(
-                    "Failed to resolve username for user_id %s: %s",
-                    member.user_id,
-                    error,
-                )
-            results.append(ProjectMemberResponse(**member_dict))
-
-        return results
-
-    @staticmethod
-    def update_member(
-        db: Session, project_id: UUID, user_id: str, role: str, user: Dict[str, Any]
-    ) -> ProjectMember:
-        raise ValidationException(
-            message="Direct member management is disabled. Please manage membership via Authorization Groups."
-        )
-
-    @staticmethod
-    def remove_member(
-        db: Session, project_id: UUID, user_id: str, user: Dict[str, Any]
-    ):
-        raise ValidationException(
-            message="Direct member management is disabled. Please manage membership via Authorization Groups."
-        )

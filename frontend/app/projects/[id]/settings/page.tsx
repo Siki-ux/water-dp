@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Save } from "lucide-react";
+import { Save, Trash2 } from "lucide-react";
 import axios from "axios";
 
 import { use } from "react";
@@ -68,6 +68,22 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ id: 
         }
     };
 
+    const handleDelete = async () => {
+        if (!confirm("Are you sure you want to delete this project? This action cannot be undone and will permanently remove all associated dashboards and data mappings.")) {
+            return;
+        }
+
+        try {
+            await axios.delete(`${apiUrl}/projects/${id}`, {
+                headers: { Authorization: `Bearer ${session?.accessToken}` }
+            });
+            router.push("/projects");
+        } catch (error) {
+            console.error("Failed to delete project", error);
+            alert("Failed to delete project. You might not have permission.");
+        }
+    };
+
     if (loading) return <div>Loading settings...</div>;
 
     return (
@@ -129,13 +145,19 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ id: 
 
                     <div className="space-y-4">
                         <h3 className="text-sm font-medium text-white/80 uppercase tracking-wider">Authorized Groups</h3>
-                        {project?.authorization_group_ids && project.authorization_group_ids.length > 0 ? (
+                        {(project?.authorization_group_ids && project.authorization_group_ids.length > 0) || project?.authorization_provider_group_id ? (
                             <div className="flex flex-wrap gap-2">
-                                {project.authorization_group_ids.map((groupId: string) => (
-                                    <span key={groupId} className="px-3 py-1.5 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-full text-sm font-medium flex items-center gap-2">
-                                        <span>🛡️ {groupId}</span>
+                                {project.authorization_group_ids && project.authorization_group_ids.length > 0 ? (
+                                    project.authorization_group_ids.map((groupId: string) => (
+                                        <span key={groupId} className="px-3 py-1.5 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-full text-sm font-medium flex items-center gap-2">
+                                            <span>🛡️ {groupId}</span>
+                                        </span>
+                                    ))
+                                ) : (
+                                    <span key={project.authorization_provider_group_id} className="px-3 py-1.5 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-full text-sm font-medium flex items-center gap-2">
+                                        <span>🛡️ {project.authorization_provider_group_id}</span>
                                     </span>
-                                ))}
+                                )}
                             </div>
                         ) : (
                             <p className="text-white/40 italic">No authorization groups linked (Legacy Project).</p>
@@ -149,6 +171,30 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ id: 
                         >
                             Manage Authorization Groups &rarr;
                         </a>
+                    </div>
+                </div>
+            </section>
+
+            {/* Danger Zone */}
+            <section className="space-y-6 pt-6 border-t border-red-500/20">
+                <div>
+                    <h2 className="text-2xl font-bold text-red-500">Danger Zone</h2>
+                    <p className="text-white/60">Destructive actions that cannot be undone.</p>
+                </div>
+
+                <div className="bg-red-500/5 p-6 rounded-xl border border-red-500/20 space-y-4">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <div>
+                            <h3 className="text-white font-medium">Delete this project</h3>
+                            <p className="text-sm text-white/60">Permanently delete the project, all dashboards, and its association with sensors.</p>
+                        </div>
+                        <button
+                            onClick={handleDelete}
+                            className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-white font-medium transition-colors whitespace-nowrap"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                            Delete Project
+                        </button>
                     </div>
                 </div>
             </section>

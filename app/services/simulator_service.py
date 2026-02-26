@@ -242,24 +242,23 @@ class SimulatorService:
                 properties_metadata[ds.get("name")] = ds.get("unit", "Unknown")
 
         # 3. Resolve Project Name for Fallback
-        # If schema is missing OR name is missing, we might need Keycloak
-        # But we only need 'project_group' name if schema is missing or lookup fails.
-
-        final_project_name = project_name
-        if not final_project_name:
-            # Try resolve from Keycloak Group ID (V3 Legacy)
+        # We prioritize the Group name (resolved from group ID) for derivation consistency.
+        final_project_name = None
+        if project_group_id:
             try:
-                # We need to instantiate KeycloakService if not static
-                # SimulatorService didn't use instance before.
                 # KeycloakService methods are classmethods.
                 k_group = KeycloakService.get_group(project_group_id)
                 if k_group and k_group.get("name"):
                     raw = k_group["name"]
                     # "UFZ-TSM:Foo" -> "Foo"
-                    final_project_name = raw.split(":")[-1].split("/")[-1]
+                    # Stripping both prefix and path separators
+                    name_part = raw.split(":")[-1].split("/")[-1]
+                    final_project_name = name_part
             except Exception as e:
                 logger.warning(f"Failed to resolve name from Keycloak: {e}")
-                final_project_name = "unknown_project"
+
+        if not final_project_name:
+            final_project_name = project_name or "unknown_project"
 
         # 4. Create Sensor via New Orchestrator
         try:

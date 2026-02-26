@@ -12,7 +12,6 @@ from sqlalchemy import (
     ForeignKey,
     String,
     Table,
-    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
@@ -70,9 +69,7 @@ class Project(Base, BaseModel):
     dashboards = relationship(
         "Dashboard", back_populates="project", cascade="all, delete-orphan"
     )
-    members = relationship(
-        "ProjectMember", back_populates="project", cascade="all, delete-orphan"
-    )
+
 
     # We can't use a standard relationship for sensors easily because they aren't in this DB (conceptually),
     # but we can store the association. If we want to query them, we'd use the association table.
@@ -89,31 +86,6 @@ class Project(Base, BaseModel):
     # Let's just use the table for joins.
 
 
-class ProjectMember(Base, BaseModel):
-    """
-    Members of a project with specific roles.
-    """
-
-    __tablename__ = "project_members"
-
-    # Override ID to use UUID
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-
-    project_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("water_dp.projects.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    user_id = Column(String(255), nullable=False)  # Keycloak ID
-    role = Column(
-        String(50), nullable=False, default="viewer"
-    )  # 'viewer', 'editor', 'admin'
-
-    project = relationship("Project", back_populates="members")
-
-    __table_args__ = (
-        UniqueConstraint("project_id", "user_id", name="uq_project_member"),
-    )
 
 
 class Dashboard(Base, BaseModel):

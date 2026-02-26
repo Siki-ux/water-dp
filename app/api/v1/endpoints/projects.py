@@ -21,9 +21,6 @@ from app.schemas.user_context import (
     DashboardCreate,
     DashboardResponse,
     ProjectCreate,
-    ProjectMemberCreate,
-    ProjectMemberResponse,
-    ProjectMemberUpdate,
     ProjectResponse,
     ProjectSensorResponse,
     ProjectUpdate,
@@ -106,72 +103,7 @@ async def get_grafana_folder(
     return {"folder_uid": folder_uid}
 
 
-# --- Project Members ---
 
-
-@router.get("/{project_id}/members", response_model=List[ProjectMemberResponse])
-async def list_project_members(
-    project_id: UUID,
-    database: Session = Depends(get_db),
-    user: dict = Depends(deps.get_current_user),
-) -> Any:
-    """List project members."""
-    return ProjectService.list_members(database, project_id, user)
-
-
-@router.post("/{project_id}/members", response_model=ProjectMemberResponse)
-async def add_project_member(
-    project_id: UUID,
-    member_in: ProjectMemberCreate,
-    database: Session = Depends(get_db),
-    user: dict = Depends(deps.get_current_user),
-) -> Any:
-    """
-    Add a member to the project.
-    Can provide `user_id` (UUID) OR `username`.
-    """
-    from app.services.keycloak_service import KeycloakService
-
-    if member_in.username:
-        # Resolve username to ID
-        target_user = KeycloakService.get_user_by_username(member_in.username)
-        if not target_user:
-            raise HTTPException(
-                status_code=404, detail=f"User '{member_in.username}' not found."
-            )
-        member_in.user_id = target_user.get("id")
-
-    if not member_in.user_id:
-        raise HTTPException(
-            status_code=400, detail="Either user_id or username is required."
-        )
-
-    return ProjectService.add_member(database, project_id, member_in, user)
-
-
-@router.put("/{project_id}/members/{user_id}", response_model=ProjectMemberResponse)
-async def update_project_member(
-    project_id: UUID,
-    user_id: str,
-    member_in: ProjectMemberUpdate,
-    database: Session = Depends(get_db),
-    user: dict = Depends(deps.get_current_user),
-) -> Any:
-    """Update a member's role."""
-    return ProjectService.update_member(
-        database, project_id, user_id, member_in.role, user
-    )
-
-
-@router.delete("/{project_id}/members/{user_id}")
-async def remove_project_member(
-    project_id: UUID,
-    user_id: str,
-    database: Session = Depends(get_db),
-    user: dict = Depends(deps.get_current_user),
-) -> Any:
-    """Remove a member from the project."""
-    return ProjectService.remove_member(database, project_id, user_id, user)
 
 
 # --- Project Sensors ---

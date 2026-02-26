@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
@@ -20,6 +21,7 @@ from app.schemas.sensor import (
 
 # Use async service for non-blocking FROST calls
 from app.services.async_thing_service import AsyncThingService
+from app.services.keycloak_service import KeycloakService
 from app.services.timeio.orchestrator import TimeIOOrchestrator
 
 logger = logging.getLogger(__name__)
@@ -30,6 +32,51 @@ router = APIRouter()
 
 
 orchestrator = TimeIOOrchestrator()
+
+
+def _resolve_group_info(group_id: str) -> dict:
+    """
+    Resolve a Keycloak group ID to {name, schema_name}.
+    Does NOT create any Project record.
+    """
+    group_data = KeycloakService.get_group(group_id)
+    if not group_data:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Keycloak group '{group_id}' not found",
+        )
+
+    raw_name = group_data.get("name", group_id)
+
+    # Strip prefix for display
+    display_name = raw_name
+    for prefix in ("UFZ-TSM:", "ufz-tsm:"):
+        if display_name.startswith(prefix):
+            display_name = display_name[len(prefix):]
+            break
+
+    # Resolve or derive schema name
+    schema_name = KeycloakService.get_group_schema_name(group_id)
+    if not schema_name:
+        clean = display_name.lower().strip()
+        clean = re.sub(r"[^a-z0-9_]", "_", clean)
+        clean = re.sub(r"_+", "_", clean).strip("_")
+        schema_name = f"user_{clean}"
+
+        # Store on group for future lookups
+        try:
+            KeycloakService.set_group_attributes(
+                group_id, {"schema_name": schema_name}
+            )
+        except Exception as e:
+            logger.warning(f"Could not store schema on Keycloak group: {e}")
+
+    return {
+        "group_id": group_id,
+        "name": display_name,
+        "raw_name": raw_name,
+        "schema_name": schema_name,
+    }
 
 
 @router.get(
@@ -78,7 +125,7 @@ async def get_thing_details(
     response_model=SensorCreationResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create Sensor (Autonomous v3)",
-    description="Registers a new sensor in ConfigDB and triggers TSM workers via MQTT. Bypasses legacy APIs.",
+    description="Registers a new sensor. Accepts either a Keycloak group_id (preferred) or a legacy project_uuid.",
 )
 async def create_sensor(
     sensor: SensorCreate,
@@ -88,8 +135,9 @@ async def create_sensor(
     """
     Create a new sensor autonomously (v3).
 
-    This bypasses the legacy thing-management-api and works directly with
-    the TimeIO ConfigDB and MQTT bus.
+    Accepts either:
+    - group_id: Keycloak group ID (preferred, Keycloak-centric)
+    - project_uuid: Legacy project ID (backward-compatible)
     """
     try:
         location = None
@@ -99,15 +147,44 @@ async def create_sensor(
                 "coordinates": [sensor.longitude, sensor.latitude],
             }
 
-        # Fetch project details for refined schema naming
-        project = (
-            database.query(Project).filter(Project.id == sensor.project_uuid).first()
-        )
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+        # --- Resolve context ---
+        project = None  # may remain None for group_id path
 
+        if sensor.project_uuid:
+            # Legacy path: lookup by project ID
+            project = (
+                database.query(Project)
+                .filter(Project.id == sensor.project_uuid)
+                .first()
+            )
+            if not project:
+                raise HTTPException(status_code=404, detail="Project not found")
+            if project.authorization_provider_group_id:
+                try:
+                    # Resolve clean name from group ID (strips prefix etc.)
+                    group_info = _resolve_group_info(project.authorization_provider_group_id)
+                    group_name = group_info["name"]
+                except Exception:
+                    group_name = project.name
+            else:
+                group_name = project.name
+            schema_name = project.schema_name
+        else:
+            # Keycloak-centric path: resolve from group_id, no project needed
+            group_info = _resolve_group_info(sensor.group_id)
+            group_name = group_info["name"]
+            schema_name = group_info["schema_name"]
+
+            # If a project already exists for this group, use it for linking
+            project = (
+                database.query(Project)
+                .filter(Project.authorization_provider_group_id == sensor.group_id)
+                .first()
+            )
+
+        # --- Create sensor via orchestrator ---
         result = orchestrator.create_sensor(
-            project_group=project.authorization_provider_group_id or project.name,
+            project_group=group_name,
             sensor_name=sensor.sensor_name,
             description=sensor.description,
             mqtt_device_type=sensor.device_type,
@@ -117,28 +194,41 @@ async def create_sensor(
                 if sensor.properties
                 else None
             ),
-            project_schema=project.schema_name,
+            project_schema=schema_name,
             mqtt_username=sensor.mqtt_username,
             mqtt_password=sensor.mqtt_password,
             mqtt_topic=sensor.mqtt_topic,
-
             ingest_type=sensor.ingest_type,
             parser_id=sensor.parser_id,
         )
 
-        try:
-            # Check permissions implicitly via add_sensor (requires 'editor')
-            # The result['uuid'] is the new Thing UUID
-            ProjectService.add_sensor(
-                database,
-                project_id=sensor.project_uuid,
-                thing_uuid=result["uuid"],
-                user=user,
-            )
-        except Exception as error:
-            # We log but don't fail the whole request because the sensor IS created in TimeIO
-            # The user might just need to link it manually if this failed (e.g. permissions/race condition)
-            print(f"Failed to auto-link sensor to project: {error}")
+        # Back-fill schema on project + Keycloak group if project exists but had no schema
+        resolved_schema = result.get("schema")
+        if project and resolved_schema and not project.schema_name:
+            project.schema_name = resolved_schema
+            database.commit()
+            logger.info(f"Back-filled schema_name '{resolved_schema}' on project {project.id}")
+            if project.authorization_provider_group_id:
+                try:
+                    KeycloakService.set_group_attributes(
+                        project.authorization_provider_group_id,
+                        {"schema_name": resolved_schema},
+                    )
+                except Exception as e:
+                    logger.warning(f"Could not back-fill schema on Keycloak group: {e}")
+
+        # Link sensor to project (only if a project exists)
+        if project:
+            try:
+                from app.services.project_service import ProjectService
+                ProjectService.add_sensor(
+                    database,
+                    project_id=project.id,
+                    thing_uuid=result["uuid"],
+                    user=user,
+                )
+            except Exception as error:
+                logger.warning(f"Failed to auto-link sensor to project: {error}")
 
         if location:
             result["latitude"] = location["coordinates"][1]
@@ -149,6 +239,8 @@ async def create_sensor(
             result["id"] = str(result["id"])
 
         return result
+    except HTTPException:
+        raise
     except Exception as error:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

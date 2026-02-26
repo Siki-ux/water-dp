@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Loader2, Save, X, Plus } from "lucide-react";
 
-interface Project {
+interface Group {
     id: string;
     name: string;
-    schema_name?: string;
+    path?: string;
 }
 
 interface DeviceType {
@@ -37,21 +37,21 @@ export function SensorCreateDialog() {
     const [error, setError] = useState<string | null>(null);
 
     // Data Sources
-    const [projects, setProjects] = useState<Project[]>([]);
+    const [groups, setGroups] = useState<Group[]>([]);
     const [deviceTypes, setDeviceTypes] = useState<DeviceType[]>([]);
     const [ingestTypes, setIngestTypes] = useState<IngestType[]>([]);
     const [parsers, setParsers] = useState<Parser[]>([]);
 
     // Form Data
     const [formData, setFormData] = useState<{
-        name: string; description: string; project_uuid: string;
+        name: string; description: string; group_id: string;
         device_type: string; ingest_type: string; latitude: string;
         longitude: string; auto_mqtt: boolean; mqtt_username: string;
         mqtt_password: string; mqtt_topic: string; parser_id: string;
     }>({
         name: "",
         description: "",
-        project_uuid: "",
+        group_id: "",
         device_type: "chirpstack_generic",
         ingest_type: "mqtt",
         latitude: "",
@@ -70,13 +70,13 @@ export function SensorCreateDialog() {
         if (isOpen && session?.accessToken) {
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
-            // Fetch Projects
-            fetch(`${apiUrl}/projects/`, {
+            // Fetch Keycloak Groups (replaces projects)
+            fetch(`${apiUrl}/groups/my-authorization-groups`, {
                 headers: { Authorization: `Bearer ${session.accessToken}` }
             })
                 .then(res => res.json())
-                .then(data => setProjects(Array.isArray(data) ? data : []))
-                .catch(err => console.error("Failed to fetch projects", err));
+                .then(data => setGroups(Array.isArray(data) ? data : []))
+                .catch(err => console.error("Failed to fetch groups", err));
 
             // Fetch Device Types
             fetch(`${apiUrl}/sms/attributes/device-types?page=1&page_size=100`, {
@@ -132,8 +132,8 @@ export function SensorCreateDialog() {
         setLoading(true);
         setError(null);
 
-        if (!formData.project_uuid) {
-            setError("Please select an Owner Project");
+        if (!formData.group_id) {
+            setError("Please select an Owner Group");
             setLoading(false);
             return;
         }
@@ -147,11 +147,11 @@ export function SensorCreateDialog() {
         try {
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
-            // Payload
+            // Payload — group_id based (Keycloak-centric)
             const payload: any = {
                 sensor_name: formData.name,
                 description: formData.description,
-                project_uuid: formData.project_uuid,
+                group_id: formData.group_id,
                 device_type: formData.device_type,
                 ingest_type: formData.ingest_type,
                 latitude: formData.latitude ? parseFloat(formData.latitude) : null,
@@ -197,7 +197,7 @@ export function SensorCreateDialog() {
         setFormData({
             name: "",
             description: "",
-            project_uuid: "",
+            group_id: "",
             device_type: "chirpstack_generic",
             ingest_type: "mqtt",
             latitude: "",
@@ -210,6 +210,10 @@ export function SensorCreateDialog() {
         });
         setError(null);
     };
+
+    /** Strip "UFZ-TSM:" prefix for display */
+    const displayGroupName = (name: string) =>
+        name.startsWith("UFZ-TSM:") ? name.slice(8) : name;
 
     return (
         <>
@@ -252,20 +256,20 @@ export function SensorCreateDialog() {
                             <div className="space-y-4">
                                 <div>
                                     <label className="block text-sm font-medium text-white/80 mb-1">
-                                        Owner Project <span className="text-red-400">*</span>
+                                        Owner Group <span className="text-red-400">*</span>
                                     </label>
                                     <select
-                                        name="project_uuid"
-                                        value={formData.project_uuid}
+                                        name="group_id"
+                                        value={formData.group_id}
                                         onChange={handleChange}
                                         required
                                         className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 appearance-none"
-                                        style={{ colorScheme: 'dark' }} // Fix dropdown colors
+                                        style={{ colorScheme: 'dark' }}
                                     >
-                                        <option value="" className="bg-[#0A0A0A]">Select a Project...</option>
-                                        {projects.map(p => (
-                                            <option key={p.id} value={p.id} className="bg-[#0A0A0A]">
-                                                {p.name} {p.schema_name ? `(${p.schema_name})` : "(No Schema)"}
+                                        <option value="" className="bg-[#0A0A0A]">Select a Group...</option>
+                                        {groups.map(g => (
+                                            <option key={g.id} value={g.id} className="bg-[#0A0A0A]">
+                                                {displayGroupName(g.name)}
                                             </option>
                                         ))}
                                     </select>

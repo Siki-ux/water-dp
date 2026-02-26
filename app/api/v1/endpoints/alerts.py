@@ -23,6 +23,8 @@ class AlertDefinitionBase(BaseModel):
     description: Optional[str] = None
     alert_type: str  # threshold, nodata, etc.
     target_id: Optional[str] = None
+    sensor_id: Optional[str] = None
+    datastream_id: Optional[str] = None
     conditions: Dict[str, Any] = {}
     severity: str = "warning"
     is_active: bool = True
@@ -97,6 +99,8 @@ async def create_alert_definition(
         project_id=definition.project_id,
         alert_type=definition.alert_type,
         target_id=definition.target_id,
+        sensor_id=definition.sensor_id,
+        datastream_id=definition.datastream_id,
         conditions=definition.conditions,
         severity=definition.severity,
         is_active=definition.is_active,
@@ -114,6 +118,8 @@ class AlertDefinitionUpdate(BaseModel):
     conditions: Optional[Dict[str, Any]] = None
     severity: Optional[str] = None
     is_active: Optional[bool] = None
+    sensor_id: Optional[str] = None
+    datastream_id: Optional[str] = None
 
 
 @router.put("/definitions/{definition_id}", response_model=AlertDefinitionRead)
@@ -148,6 +154,10 @@ async def update_alert_definition(
         db_def.severity = update_data.severity
     if update_data.is_active is not None:
         db_def.is_active = update_data.is_active
+    if update_data.sensor_id is not None:
+        db_def.sensor_id = update_data.sensor_id
+    if update_data.datastream_id is not None:
+        db_def.datastream_id = update_data.datastream_id
 
     database.commit()
     database.refresh(db_def)

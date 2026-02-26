@@ -500,7 +500,32 @@ class TimeIODatabase:
 
     # ========== Parser Management ==========
 
+    def get_mqtt_things(self) -> List[str]:
+        """
+        Get all Thing UUIDs that use MQTT ingest.
+        """
+        connection = self._get_connection()
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT t.uuid 
+                    FROM config_db.thing t
+                    JOIN config_db.ingest_type it ON t.ingest_type_id = it.id
+                    WHERE it.name = 'mqtt'
+                    """
+                )
+                rows = cursor.fetchall()
+                return [str(row[0]) for row in rows]
+
+
+
+
+        finally:
+            connection.close()
+
     def _get_parser_type_id(self, type_name: str) -> int:
+
         """Get parser type ID from config_db."""
         connection = self._get_connection()
         try:
@@ -977,13 +1002,28 @@ class TimeIODatabase:
             return {"mqtt_user": config["mqtt_user"], "mqtt_pass": config["mqtt_pass"]}
         return None
 
-    def get_all_sensors_paginated(self, limit: int = 20, offset: int = 0) -> Dict[str, Any]:
-        """Fetch all sensors across all projects with pagination."""
+    def get_all_sensors_paginated(self, limit: int = 20, offset: int = 0, schemas: list = None) -> Dict[str, Any]:
+        """Fetch sensors with pagination, optionally filtered by accessible schemas."""
         connection = self._get_admin_connection()
         try:
             with connection.cursor(cursor_factory=RealDictCursor) as cursor:
-                # Count total
-                cursor.execute("SELECT COUNT(*) FROM config_db.thing")
+                # Build optional WHERE clause for schema filtering
+                schema_filter = ""
+                params_count = []
+                params_query = []
+
+                if schemas is not None:
+                    schema_filter = " WHERE d.schema = ANY(%s)"
+                    params_count = [schemas]
+                    params_query = [schemas]
+
+                # Count total (with optional filter)
+                count_query = """
+                    SELECT COUNT(*) FROM config_db.thing t
+                    LEFT JOIN config_db.project p ON t.project_id = p.id
+                    LEFT JOIN config_db.database d ON p.database_id = d.id
+                """ + schema_filter
+                cursor.execute(count_query, params_count)
                 total = cursor.fetchone()["count"]
 
                 # Fetch page with ingest_type and schema info
@@ -1004,11 +1044,11 @@ class TimeIODatabase:
                     LEFT JOIN config_db.mqtt_device_type dt ON m.mqtt_device_type_id = dt.id
                     LEFT JOIN config_db.s3_store s ON t.s3_store_id = s.id
                     LEFT JOIN config_db.file_parser pa ON s.file_parser_id = pa.id
-
+                """ + schema_filter + """
                     ORDER BY t.id DESC
                     LIMIT %s OFFSET %s
                 """
-                cursor.execute(query, (limit, offset))
+                cursor.execute(query, params_query + [limit, offset])
                 items = cursor.fetchall()
                 return {"items": [dict(i) for i in items], "total": total}
         except Exception as error:
@@ -2305,6 +2345,9 @@ class TimeIODatabase:
                 )
                 result = cursor.fetchone()
                 return result[0] if result else None
+        except Exception as e:
+            logger.debug(f"Thing lookup failed for {thing_uuid} in {schema}: {e}")
+            return None
         finally:
             connection.close()
 

@@ -55,7 +55,7 @@ async function getProjectSensors(id: string) {
                 description: t.description,
                 latitude: lat,
                 longitude: lng,
-                status: 'active', // Force active as requested
+                status: t.properties?.status || 'inactive',
                 datastreams: t.datastreams || [],
                 properties: t.properties
             } as Sensor;

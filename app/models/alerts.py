@@ -34,6 +34,8 @@ class AlertDefinition(Base, BaseModel):
     # For sensors: 'station_id' or Datastream ID
     # For computations: 'script_id' or 'job_id'
     target_id = Column(String, nullable=True)
+    sensor_id = Column(String, nullable=True)
+    datastream_id = Column(String, nullable=True)
 
     # Thresholds / Conditions (stored as JSON for flexibility)
     # e.g. {"operator": ">", "value": 50.0} or {"duration_minutes": 60}

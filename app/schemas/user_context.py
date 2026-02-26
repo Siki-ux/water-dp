@@ -6,30 +6,6 @@ from pydantic import BaseModel, Field
 
 from app.models.base import PydanticBase
 
-# --- Project Member Schemas ---
-
-
-class ProjectMemberBase(PydanticBase):
-    role: str = Field(default="viewer", pattern="^(viewer|editor)$")
-
-
-class ProjectMemberCreate(ProjectMemberBase):
-    user_id: Optional[str] = None
-    username: Optional[str] = None  # Alternative to user_id
-
-
-class ProjectMemberUpdate(BaseModel):
-    role: str = Field(pattern="^(viewer|editor)$")
-
-
-class ProjectMemberResponse(ProjectMemberBase):
-    id: UUID
-    project_id: UUID
-    user_id: str
-    username: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
-
 
 # --- Dashboard Schemas ---
 
@@ -89,16 +65,52 @@ class ProjectUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     authorization_provider_group_id: Optional[str] = None
+    authorization_group_ids: Optional[List[str]] = None
 
 
 class ProjectResponse(ProjectBase):
     id: UUID
     owner_id: str
     authorization_provider_group_id: Optional[str] = None
-    created_at: datetime
+    authorization_group_ids: Optional[List[str]] = None
     created_at: datetime
     updated_at: datetime
     schema_name: Optional[str] = None
+
+    @classmethod
+    def model_validate(cls, obj: Any, **kwargs: Any) -> "ProjectResponse":
+        """
+        Custom validation to handle field mapping.
+        Frontend expects authorization_group_ids (array).
+        Backend stores authorization_provider_group_id (string).
+        """
+        # If it's already a dict (e.g. from ORM or model_dump)
+        if isinstance(obj, dict):
+            if "authorization_provider_group_id" in obj and not obj.get("authorization_group_ids"):
+                obj["authorization_group_ids"] = (
+                    [obj["authorization_provider_group_id"]]
+                    if obj["authorization_provider_group_id"]
+                    else []
+                )
+            return super().model_validate(obj, **kwargs)
+        
+        # If it's an ORM object
+        data = {
+            "id": obj.id,
+            "name": obj.name,
+            "description": obj.description,
+            "owner_id": obj.owner_id,
+            "authorization_provider_group_id": obj.authorization_provider_group_id,
+            "authorization_group_ids": (
+                [obj.authorization_provider_group_id]
+                if obj.authorization_provider_group_id
+                else []
+            ),
+            "created_at": obj.created_at,
+            "updated_at": obj.updated_at,
+            "schema_name": obj.schema_name,
+        }
+        return cls(**data)
 
     # Optional fields to include linked resources?
     # For now, keep it simple. Members and Dashboards fetched separately or via include param.

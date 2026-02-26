@@ -9,7 +9,7 @@ export default async function NewProjectPage() {
         redirect("/login");
     }
 
-    let userGroups: string[] = [];
+    let userGroups: any[] = [];
     if (session.accessToken) {
         try {
             const apiUrl = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
@@ -22,10 +22,8 @@ export default async function NewProjectPage() {
 
             if (res.ok) {
                 const groups = await res.json();
-                // We expect a list of objects {id, name, path?}. Form expects string[] for now.
-                // We will map to names.
                 if (Array.isArray(groups)) {
-                    userGroups = groups.map((g: any) => g.name || g.path).sort();
+                    userGroups = groups.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
                 }
             } else {
                 console.error("Failed to fetch authorization groups", res.status);

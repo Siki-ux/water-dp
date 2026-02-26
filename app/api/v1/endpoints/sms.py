@@ -19,14 +19,15 @@ router = APIRouter()
 async def list_sensors_extended(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
-    # user: dict = Depends(deps.get_current_user) # Add auth later to filter by user's projects if needed
+    user: dict = Depends(deps.get_current_user),
 ):
     """
-    Fetch all sensors for a project with extended metadata (async).
+    Fetch sensors with extended metadata, filtered by user's accessible projects.
     """
     result = await SMSService.get_all_sensors_extended(
         page=page,
-        page_size=page_size
+        page_size=page_size,
+        user=user,
     )
 
     return {

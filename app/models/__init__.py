@@ -7,7 +7,7 @@ from .base import BaseModel
 from .computations import ComputationJob, ComputationScript
 from .geospatial import GeoFeature, GeoLayer
 from .simulation import Simulation
-from .user_context import Dashboard, Project, ProjectMember, project_sensors
+from .user_context import Dashboard, Project, project_sensors
 
 __all__ = [
     "BaseModel",
@@ -15,7 +15,6 @@ __all__ = [
     "GeoFeature",
     "Project",
     "Dashboard",
-    "ProjectMember",
     "project_sensors",
     "ComputationScript",
     "ComputationJob",

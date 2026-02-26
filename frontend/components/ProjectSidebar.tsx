@@ -62,7 +62,6 @@ export function ProjectSidebar({ projectId, projectName }: ProjectSidebarProps) 
         { label: "Overview", icon: Activity, href: `/projects/${projectId}` },
         { label: "Dashboards", icon: LayoutDashboard, href: `/projects/${projectId}/dashboards` },
         { label: "Data Sources", icon: Database, href: `/projects/${projectId}/data` },
-        { label: "Parsers", icon: FileCode, href: `/projects/${projectId}/parsers` },
 
         { label: "Alerts", icon: Bell, href: `/projects/${projectId}/alerts` },
         { label: "Settings", icon: Settings, href: `/projects/${projectId}/settings` },

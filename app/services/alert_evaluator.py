@@ -2,9 +2,11 @@ import logging
 from typing import Any, Dict
 from uuid import UUID
 
-from sqlalchemy.orm import Session
+from sqlalchemy import or_
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.alerts import Alert, AlertDefinition
+from app.models.user_context import Project
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +18,64 @@ class AlertEvaluator:
 
     def __init__(self, db: Session):
         self.db = db
+
+    def evaluate_all_active_sensor_rules(self):
+        """
+        Periodically evaluate all active sensor-based rules against the latest data.
+        """
+        from app.services.thing_service import ThingService
+
+        try:
+            # Get active rules that have a datastream target
+            # Join with Project to get schema_name
+            definitions = (
+                self.db.query(AlertDefinition)
+                .options(joinedload(AlertDefinition.project))
+                .filter(
+                    AlertDefinition.is_active,
+                    AlertDefinition.sensor_id.isnot(None),
+                    AlertDefinition.datastream_id.isnot(None),
+                )
+                .all()
+            )
+
+            if not definitions:
+                return
+
+            # Group definitions by schema for efficiency
+            schema_map = {}
+            for d in definitions:
+                schema = d.project.schema_name
+                if not schema:
+                    continue
+                if schema not in schema_map:
+                    schema_map[schema] = []
+                schema_map[schema].append(d)
+
+            for schema_name, schema_definitions in schema_map.items():
+                logger.debug(f"Evaluating {len(schema_definitions)} rules for schema {schema_name}")
+                thing_service = ThingService(schema_name)
+
+                for definition in schema_definitions:
+                    try:
+                        # Fetch latest observations for the datastream
+                        # We only need the latest 1
+                        observations = thing_service.get_observations(
+                            datastream_uuid=definition.datastream_id,
+                            limit=1
+                        )
+
+                        if not observations:
+                            continue
+
+                        latest_obs = observations[0]
+                        self._evaluate_sensor_definition(definition, latest_obs.result)
+
+                    except Exception as e:
+                        logger.error(f"Failed to evaluate rule {definition.id} for datastream {definition.datastream_id}: {e}")
+
+        except Exception as e:
+            logger.error(f"Error in periodic alert evaluation: {e}")
 
     def evaluate_result(self, job_id: str, script_id: UUID, result: Dict[str, Any]):
         """
@@ -82,12 +142,16 @@ class AlertEvaluator:
         Evaluate sensor data against threshold rules.
         """
         try:
-            # Find definitions targeting this station
+            # Find definitions targeting this station/datastream
+            # target_id can be station_id (legacy) or we check datastream_id explicitly
             definitions = (
                 self.db.query(AlertDefinition)
                 .filter(
-                    AlertDefinition.target_id == str(station_id),
                     AlertDefinition.is_active,
+                    or_(
+                        AlertDefinition.target_id == str(station_id),
+                        AlertDefinition.datastream_id == str(parameter),
+                    ),
                 )
                 .all()
             )

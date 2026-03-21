@@ -15,12 +15,14 @@ from app.api.v1.endpoints import (
     geospatial,
     groups,
     projects,
+    qaqc,
     simulator,
     things,
     custom_parsers,
     mqtt,
     sms,
 )
+from app.api.v1.endpoints.qaqc import sms_router as qaqc_sms_router
 
 api_router = APIRouter()
 
@@ -43,6 +45,8 @@ api_router.include_router(
 )
 api_router.include_router(mqtt.router, prefix="/mqtt", tags=["mqtt"])
 api_router.include_router(sms.router, prefix="/sms", tags=["sms"])
+api_router.include_router(qaqc.router, prefix="/projects", tags=["qaqc"])
+api_router.include_router(qaqc_sms_router, prefix="/sms", tags=["qaqc"])
 api_router.include_router(
     external_sources.router, prefix="/external-sources", tags=["external-sources"]
 )

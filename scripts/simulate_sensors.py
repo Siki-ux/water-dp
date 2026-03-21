@@ -6,6 +6,9 @@ import time
 
 import requests
 
+# Allow importing from app/ (same pattern as seed_water_dp.py)
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 # Configure Logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -589,6 +592,14 @@ def main():
 
     # --- External API / SFTP test sensors ---
     seed_external_sources(headers)
+
+    # --- QA/QC configurations + custom SaQC functions ---
+    logger.info("Seeding QA/QC configurations and custom SaQC functions...")
+    try:
+        from app.core.seeding import seed_qaqc_configs
+        seed_qaqc_configs()
+    except Exception as exc:
+        logger.warning(f"QA/QC seeding failed (non-fatal): {exc}")
 
     logger.info("=" * 60)
     logger.info("Seed Complete.")

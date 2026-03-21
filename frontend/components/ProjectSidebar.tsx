@@ -10,7 +10,7 @@ import {
     Activity,
     FileCode,
     Bell,
-    Zap
+    Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";

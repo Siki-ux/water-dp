@@ -3,9 +3,20 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Loader2, Save, X, Edit, Globe, Server, MapPin } from "lucide-react";
+import { Loader2, Save, X, Edit, Globe, Server, MapPin, FlaskConical, Play, Trash2, Plus } from "lucide-react";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
+import { useTranslation } from "@/lib/i18n";
 import dynamic from "next/dynamic";
+import {
+    getThingQAQC,
+    createThingQAQC,
+    deleteThingQAQC,
+    triggerThingQAQC,
+    addThingQAQCTest,
+    deleteThingQAQCTest,
+    QAQCConfig,
+} from "@/lib/qaqc-api";
+import { SAQC_FUNCTIONS, getSaQCFunction, CUSTOM_FUNCTION_SENTINEL } from "@/lib/saqc-functions";
 
 const LocationPickerMap = dynamic(() => import("@/components/data/LocationPickerMap"), { ssr: false });
 
@@ -20,13 +31,24 @@ const labelClass = "block text-sm font-medium text-[var(--foreground)]/80 mb-1";
 export function SensorEditDialog({ sensor }: SensorEditDialogProps) {
     const router = useRouter();
     const { data: session } = useSession();
+    const { t } = useTranslation();
     const [isOpen, setIsOpen] = useState(false);
 
     useEscapeKey(() => setIsOpen(false), isOpen);
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<'general' | 'mqtt' | 'external'>('general');
+    const [activeTab, setActiveTab] = useState<'general' | 'mqtt' | 'external' | 'qaqc'>('general');
+    const [thingQAQC, setThingQAQC] = useState<QAQCConfig | null | undefined>(undefined);
+    const [qaqcLoading, setQAQCLoading] = useState(false);
+    const [qaqcError, setQAQCError] = useState<string | null>(null);
+    const [qaqcName, setQAQCName] = useState("");
+    const [qaqcWindow, setQAQCWindow] = useState("5d");
+    const [addingTest, setAddingTest] = useState(false);
+    const [newTestFunc, setNewTestFunc] = useState(SAQC_FUNCTIONS[0].name);
+    const [newTestName, setNewTestName] = useState("");
+    const [newTestArgs, setNewTestArgs] = useState("{}");
+    const [triggerSuccess, setTriggerSuccess] = useState(false);
 
     const [formData, setFormData] = useState({
         name: "",
@@ -112,6 +134,89 @@ export function SensorEditDialog({ sensor }: SensorEditDialogProps) {
             setActiveTab('general');
         }
     }, [showExternalTab, activeTab]);
+
+    // Load per-sensor QA/QC when the qaqc tab is opened
+    useEffect(() => {
+        if (activeTab === 'qaqc' && thingQAQC === undefined && session?.accessToken && sensor?.uuid) {
+            setQAQCLoading(true);
+            getThingQAQC(sensor.uuid, session.accessToken)
+                .then((cfg) => setThingQAQC(cfg))
+                .catch((e) => setQAQCError(e.message))
+                .finally(() => setQAQCLoading(false));
+        }
+    }, [activeTab, sensor?.uuid, session?.accessToken, thingQAQC]);
+
+    const handleAssignQAQC = async () => {
+        if (!session?.accessToken || !sensor?.uuid) return;
+        setQAQCLoading(true);
+        setQAQCError(null);
+        try {
+            const cfg = await createThingQAQC(sensor.uuid, { name: qaqcName, context_window: qaqcWindow }, session.accessToken);
+            setThingQAQC(cfg);
+        } catch (e: any) {
+            setQAQCError(e.message);
+        } finally {
+            setQAQCLoading(false);
+        }
+    };
+
+    const handleUnassignQAQC = async () => {
+        if (!session?.accessToken || !sensor?.uuid) return;
+        if (!confirm("Remove the per-sensor QA/QC override?")) return;
+        setQAQCLoading(true);
+        setQAQCError(null);
+        try {
+            await deleteThingQAQC(sensor.uuid, session.accessToken);
+            setThingQAQC(null);
+        } catch (e: any) {
+            setQAQCError(e.message);
+        } finally {
+            setQAQCLoading(false);
+        }
+    };
+
+    const handleTriggerQAQC = async () => {
+        if (!session?.accessToken || !sensor?.uuid) return;
+        setTriggerSuccess(false);
+        try {
+            await triggerThingQAQC(sensor.uuid, session.accessToken);
+            setTriggerSuccess(true);
+        } catch (e: any) {
+            setQAQCError(e.message);
+        }
+    };
+
+    const handleAddTest = async () => {
+        if (!session?.accessToken || !thingQAQC) return;
+        setQAQCLoading(true);
+        setQAQCError(null);
+        try {
+            let args: Record<string, unknown> | null = null;
+            try { args = JSON.parse(newTestArgs); } catch { args = null; }
+            await addThingQAQCTest(sensor.uuid, { function: newTestFunc, name: newTestName || null, args, position: null, streams: null }, session.accessToken);
+            // Refresh
+            const cfg = await getThingQAQC(sensor.uuid, session.accessToken);
+            setThingQAQC(cfg);
+            setAddingTest(false);
+            setNewTestName("");
+            setNewTestArgs("{}");
+        } catch (e: any) {
+            setQAQCError(e.message);
+        } finally {
+            setQAQCLoading(false);
+        }
+    };
+
+    const handleDeleteTest = async (testId: number) => {
+        if (!session?.accessToken) return;
+        try {
+            await deleteThingQAQCTest(sensor.uuid, testId, session.accessToken);
+            const cfg = await getThingQAQC(sensor.uuid, session.accessToken);
+            setThingQAQC(cfg);
+        } catch (e: any) {
+            setQAQCError(e.message);
+        }
+    };
 
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
     const authHeaders = { Authorization: `Bearer ${session?.accessToken}` };
@@ -285,7 +390,7 @@ export function SensorEditDialog({ sensor }: SensorEditDialogProps) {
                 className="px-4 py-2 bg-background hover:bg-muted border border-border rounded-lg text-[var(--foreground)] text-sm font-medium transition-colors flex items-center gap-2"
             >
                 <Edit className="w-4 h-4" />
-                Edit Sensor
+                {t('sms.sensors.editSensor')}
             </button>
 
             {isOpen && (
@@ -295,7 +400,7 @@ export function SensorEditDialog({ sensor }: SensorEditDialogProps) {
                         {/* Header */}
                         <div className="flex items-center justify-between p-6 pb-0 sticky top-0 bg-card z-10">
                             <div>
-                                <h2 className="text-xl font-bold text-[var(--foreground)]">Edit Sensor</h2>
+                                <h2 className="text-xl font-bold text-[var(--foreground)]">{t('sms.sensors.editSensor')}</h2>
                                 <p className="text-[var(--foreground)]/40 text-sm">{sensor.uuid}</p>
                             </div>
                             <button
@@ -308,13 +413,14 @@ export function SensorEditDialog({ sensor }: SensorEditDialogProps) {
 
                         {/* Tab Bar */}
                         <div className="flex border-b border-border px-6 sticky top-[72px] bg-card z-10">
-                            <TabButton id="general" label="General" />
-                            <TabButton id="mqtt" label="MQTT & Parsing" />
+                            <TabButton id="general" label={t("sms.sensors.tabs.general")} />
+                            <TabButton id="mqtt" label={t("sms.sensors.tabs.mqttParsing")} />
                             {showExternalTab && (
                                 <TabButton id="external" label={
-                                    currentIngestType === 'extapi' ? 'External API' : 'External SFTP'
+                                    currentIngestType === 'extapi' ? t("sms.sensors.tabs.externalApi") : t("sms.sensors.tabs.externalSftp")
                                 } />
                             )}
+                            <TabButton id="qaqc" label="QA/QC" />
                         </div>
 
                         {/* Content */}
@@ -331,26 +437,26 @@ export function SensorEditDialog({ sensor }: SensorEditDialogProps) {
                                 <div className="space-y-4">
                                     <div>
                                         <label className={labelClass}>
-                                            Sensor Name <span className="text-red-400">*</span>
+                                            {t("sms.sensors.sensorName")} <span className="text-red-400">*</span>
                                         </label>
                                         <input type="text" name="name" value={formData.name}
                                             onChange={handleChange} required className={inputClass} />
                                     </div>
 
                                     <div>
-                                        <label className={labelClass}>Description</label>
+                                        <label className={labelClass}>{t("sms.sensors.description")}</label>
                                         <textarea name="description" value={formData.description}
                                             onChange={handleChange} rows={2} className={inputClass} />
                                     </div>
 
                                     <div>
-                                        <label className={labelClass}>Ingestion Type</label>
+                                        <label className={labelClass}>{t("sms.sensors.ingestionType")}</label>
                                         <select
                                             value={formData.ingest_type_id}
                                             onChange={(e) => setFormData(prev => ({ ...prev, ingest_type_id: e.target.value }))}
                                             className={selectClass}
                                         >
-                                            <option value="" className="bg-card">Select Ingest Type</option>
+                                            <option value="" className="bg-card">{t("sms.sensors.selectIngestType")}</option>
                                             {ingestTypes.map((it: any) => (
                                                 <option key={it.id} value={it.id} className="bg-card">
                                                     {it.name?.toUpperCase()}
@@ -358,25 +464,25 @@ export function SensorEditDialog({ sensor }: SensorEditDialogProps) {
                                             ))}
                                         </select>
                                         <p className="text-xs text-[var(--foreground)]/40 mt-1">
-                                            Primary data source. MQTT and file upload are always available regardless of this setting.
+                                            {t('sms.sensors.hints.primaryDataSource')}
                                         </p>
                                     </div>
 
                                     <div>
                                         <label className={`${labelClass} flex items-center gap-2`}>
                                             <MapPin className="w-4 h-4 text-blue-400" />
-                                            Location
+                                            {t("sms.sensors.location")}
                                         </label>
                                         <div className="grid grid-cols-2 gap-4">
                                             <div>
                                                 <input type="number" step="any" name="latitude"
                                                     value={formData.latitude} onChange={handleChange}
-                                                    placeholder="Latitude (e.g. 52.52)" className={inputClass} />
+                                                    placeholder={t("sms.sensors.latPlaceholder", { defaultValue: "Latitude (e.g. 52.52)" })} className={inputClass} />
                                             </div>
                                             <div>
                                                 <input type="number" step="any" name="longitude"
                                                     value={formData.longitude} onChange={handleChange}
-                                                    placeholder="Longitude (e.g. 13.41)" className={inputClass} />
+                                                    placeholder={t("sms.sensors.lonPlaceholder", { defaultValue: "Longitude (e.g. 13.41)" })} className={inputClass} />
                                             </div>
                                         </div>
                                     </div>
@@ -401,16 +507,16 @@ export function SensorEditDialog({ sensor }: SensorEditDialogProps) {
                                 <div className="space-y-6">
                                     {/* MQTT */}
                                     <div className="space-y-4">
-                                        <h3 className="text-[var(--foreground)] font-medium">MQTT Configuration</h3>
+                                        <h3 className="text-[var(--foreground)] font-medium">{t("sms.sensors.mqttConfig")}</h3>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <div>
-                                                <label className={labelClass}>Username</label>
+                                                <label className={labelClass}>{t("sms.sensors.username")}</label>
                                                 <input type="text" name="mqtt_username"
                                                     value={formData.mqtt_username} onChange={handleChange}
                                                     className={inputClass} />
                                             </div>
                                             <div>
-                                                <label className={labelClass}>Topic</label>
+                                                <label className={labelClass}>{t("sms.sensors.topic")}</label>
                                                 <input type="text" name="mqtt_topic"
                                                     value={formData.mqtt_topic} onChange={handleChange}
                                                     className={inputClass} />
@@ -421,16 +527,16 @@ export function SensorEditDialog({ sensor }: SensorEditDialogProps) {
                                                     <input type="checkbox" checked={changePassword}
                                                         onChange={(e) => setChangePassword(e.target.checked)}
                                                         className="w-4 h-4 rounded border-gray-600 text-blue-600 focus:ring-blue-500 bg-gray-700" />
-                                                    <span className="text-sm font-medium text-[var(--foreground)]/80">Change Password</span>
+                                                    <span className="text-sm font-medium text-[var(--foreground)]/80">{t("sms.sensors.changePassword")}</span>
                                                 </label>
                                                 {changePassword && (
                                                     <div className="animate-in fade-in slide-in-from-top-2 duration-200">
-                                                        <label className={labelClass}>New Password</label>
+                                                        <label className={labelClass}>{t("sms.sensors.newPassword")}</label>
                                                         <input type="text" name="mqtt_password"
                                                             value={formData.mqtt_password} onChange={handleChange}
-                                                            placeholder="Enter new password" className={inputClass} />
+                                                            placeholder={t("sms.sensors.enterNewPassword")} className={inputClass} />
                                                         <p className="text-xs text-[var(--foreground)]/40 mt-1">
-                                                            Updating this will require re-configuring your physical device.
+                                                            {t('sms.sensors.hints.updatePasswordWarning')}
                                                         </p>
                                                     </div>
                                                 )}
@@ -443,21 +549,21 @@ export function SensorEditDialog({ sensor }: SensorEditDialogProps) {
                                     {/* Device Type & File Parser */}
                                     <div className="space-y-4">
                                         <div className="flex items-center justify-between">
-                                            <h3 className="text-[var(--foreground)] font-medium">Device Type & Parsing</h3>
+                                            <h3 className="text-[var(--foreground)] font-medium">{t("sms.sensors.deviceTypeParsing")}</h3>
                                             {(fetchingDevices || fetchingParsers) && <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />}
                                         </div>
 
                                         <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
-                                            Changing device type or parser affects how new incoming data is interpreted. Existing data remains unchanged.
+                                            {t('sms.sensors.hints.changeDeviceWarning')}
                                         </p>
 
                                         <div>
-                                            <label className={labelClass}>Device Type (MQTT)</label>
+                                            <label className={labelClass}>{t("sms.sensors.deviceTypeMqtt")}</label>
                                             <select value={formData.mqtt_device_type_id}
                                                 onChange={(e) => setFormData(prev => ({ ...prev, mqtt_device_type_id: e.target.value }))}
                                                 className={selectClass}
                                             >
-                                                <option value="" className="bg-card">Select a Device Type</option>
+                                                <option value="" className="bg-card">{t("sms.sensors.selectDeviceType")}</option>
                                                 {deviceTypes.map((dt) => (
                                                     <option key={dt.id} value={dt.id} className="bg-card">
                                                         {dt.name} {dt.parser_name ? `(${dt.parser_name})` : ""}
@@ -465,17 +571,17 @@ export function SensorEditDialog({ sensor }: SensorEditDialogProps) {
                                                 ))}
                                             </select>
                                             <p className="text-xs text-[var(--foreground)]/40 mt-1">
-                                                Determines how MQTT payloads are translated into observations.
+                                                {t('sms.sensors.hints.mqttPayloadTranslation')}
                                             </p>
                                         </div>
 
                                         <div>
-                                            <label className={labelClass}>File Parser (CSV/S3)</label>
+                                            <label className={labelClass}>{t("sms.sensors.fileParser")}</label>
                                             <select value={formData.file_parser_id}
                                                 onChange={(e) => setFormData(prev => ({ ...prev, file_parser_id: e.target.value }))}
                                                 className={selectClass}
                                             >
-                                                <option value="" className="bg-card">Select a File Parser</option>
+                                                <option value="" className="bg-card">{t("sms.sensors.selectFileParser")}</option>
                                                 {parsers.map((p) => (
                                                     <option key={p.id} value={p.id} className="bg-card">
                                                         {p.name} {p.type_name ? `(${p.type_name})` : ""}
@@ -483,7 +589,7 @@ export function SensorEditDialog({ sensor }: SensorEditDialogProps) {
                                                 ))}
                                             </select>
                                             <p className="text-xs text-[var(--foreground)]/40 mt-1">
-                                                Used for file upload and external SFTP ingestion.
+                                                {t('sms.sensors.hints.fileUploadUsage')}
                                             </p>
                                         </div>
                                     </div>
@@ -498,18 +604,18 @@ export function SensorEditDialog({ sensor }: SensorEditDialogProps) {
                                         <>
                                             <h3 className="text-[var(--foreground)] font-medium flex items-center gap-2">
                                                 <Globe className="w-4 h-4 text-purple-400" />
-                                                External API Configuration
+                                                {t("sms.sensors.tabs.externalApi")}
                                             </h3>
 
                                             <div>
                                                 <label className={labelClass}>
-                                                    API Type <span className="text-red-400">*</span>
+                                                    {t("sms.sensors.apiType")} <span className="text-red-400">*</span>
                                                 </label>
                                                 <select value={formData.ext_api_type}
                                                     onChange={(e) => setFormData(prev => ({ ...prev, ext_api_type: e.target.value }))}
                                                     className={selectClass.replace('blue', 'purple')}
                                                 >
-                                                    <option value="" className="bg-card">Select API Type</option>
+                                                    <option value="" className="bg-card">{t("sms.sensors.selectApiType")}</option>
                                                     {apiTypes.map((at: any) => (
                                                         <option key={at.id} value={at.name} className="bg-card">
                                                             {at.name}
@@ -520,7 +626,7 @@ export function SensorEditDialog({ sensor }: SensorEditDialogProps) {
 
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                 <div>
-                                                    <label className={labelClass}>Sync Interval (minutes)</label>
+                                                    <label className={labelClass}>{t("sms.sensors.extApiSyncInterval")}</label>
                                                     <input type="number" min="1" value={formData.ext_api_sync_interval}
                                                         onChange={(e) => setFormData(prev => ({ ...prev, ext_api_sync_interval: e.target.value }))}
                                                         className={inputClass} />
@@ -530,19 +636,19 @@ export function SensorEditDialog({ sensor }: SensorEditDialogProps) {
                                                         <input type="checkbox" checked={formData.ext_api_enabled}
                                                             onChange={(e) => setFormData(prev => ({ ...prev, ext_api_enabled: e.target.checked }))}
                                                             className="w-4 h-4 rounded border-gray-600 text-purple-600 focus:ring-purple-500 bg-gray-700" />
-                                                        <span className="text-sm font-medium text-[var(--foreground)]/80">Sync Enabled</span>
+                                                        <span className="text-sm font-medium text-[var(--foreground)]/80">{t("sms.sensors.extApiEnabled")}</span>
                                                     </label>
                                                 </div>
                                             </div>
 
                                             <div>
-                                                <label className={labelClass}>Settings (JSON)</label>
+                                                <label className={labelClass}>{t("sms.sensors.settingsJson")}</label>
                                                 <textarea value={formData.ext_api_settings}
                                                     onChange={(e) => setFormData(prev => ({ ...prev, ext_api_settings: e.target.value }))}
                                                     rows={4} placeholder='{"latitude": 52.52, "longitude": 13.41}'
                                                     className={`${inputClass} font-mono text-sm`} />
                                                 <p className="text-xs text-[var(--foreground)]/40 mt-1">
-                                                    Custom settings passed to the API syncer script.
+                                                    {t('sms.sensors.hints.customApiSettings')}
                                                 </p>
                                             </div>
                                         </>
@@ -553,60 +659,60 @@ export function SensorEditDialog({ sensor }: SensorEditDialogProps) {
                                         <>
                                             <h3 className="text-[var(--foreground)] font-medium flex items-center gap-2">
                                                 <Server className="w-4 h-4 text-orange-400" />
-                                                External SFTP Configuration
+                                                {t("sms.sensors.tabs.externalSftp")}
                                             </h3>
 
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                 <div>
                                                     <label className={labelClass}>
-                                                        SFTP URI <span className="text-red-400">*</span>
+                                                        {t("sms.sensors.sftpUri")} <span className="text-red-400">*</span>
                                                     </label>
                                                     <input type="text" value={formData.ext_sftp_uri}
                                                         onChange={(e) => setFormData(prev => ({ ...prev, ext_sftp_uri: e.target.value }))}
-                                                        placeholder="sftp://host:22" className={inputClass} />
+                                                        placeholder={t("sms.sensors.extSftpUriPlaceholder")} className={inputClass} />
                                                 </div>
                                                 <div>
-                                                    <label className={labelClass}>Remote Path</label>
+                                                    <label className={labelClass}>{t("sms.sensors.extSftpPath")}</label>
                                                     <input type="text" value={formData.ext_sftp_path}
                                                         onChange={(e) => setFormData(prev => ({ ...prev, ext_sftp_path: e.target.value }))}
-                                                        placeholder="/data/sensors/" className={inputClass} />
+                                                        placeholder={t("sms.sensors.extSftpPathPlaceholder", { defaultValue: "/data/sensors/" })} className={inputClass} />
                                                 </div>
                                             </div>
 
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                 <div>
-                                                    <label className={labelClass}>Username</label>
+                                                    <label className={labelClass}>{t("sms.sensors.username")}</label>
                                                     <input type="text" value={formData.ext_sftp_username}
                                                         onChange={(e) => setFormData(prev => ({ ...prev, ext_sftp_username: e.target.value }))}
                                                         placeholder="sftp_user" className={inputClass} />
                                                 </div>
                                                 <div>
-                                                    <label className={labelClass}>Password</label>
+                                                    <label className={labelClass}>{t("sms.sensors.extSftpPassword")}</label>
                                                     <input type="password" value={formData.ext_sftp_password}
                                                         onChange={(e) => setFormData(prev => ({ ...prev, ext_sftp_password: e.target.value }))}
-                                                        placeholder="Leave empty to keep current" className={inputClass} />
+                                                        placeholder={t("sms.sensors.leaveEmptyToKeep")} className={inputClass} />
                                                 </div>
                                             </div>
 
                                             <div>
-                                                <label className={labelClass}>SSH Public Key</label>
+                                                <label className={labelClass}>{t("sms.sensors.extSftpPublicKey")}</label>
                                                 <textarea value={formData.ext_sftp_public_key}
                                                     onChange={(e) => setFormData(prev => ({ ...prev, ext_sftp_public_key: e.target.value }))}
-                                                    rows={2} placeholder="Leave empty to keep current"
+                                                    rows={2} placeholder={t("sms.sensors.leaveEmptyToKeep")}
                                                     className={`${inputClass} font-mono text-xs`} />
                                             </div>
 
                                             <div>
-                                                <label className={labelClass}>SSH Private Key</label>
+                                                <label className={labelClass}>{t("sms.sensors.extSftpPrivateKey")}</label>
                                                 <textarea value={formData.ext_sftp_private_key}
                                                     onChange={(e) => setFormData(prev => ({ ...prev, ext_sftp_private_key: e.target.value }))}
-                                                    rows={2} placeholder="Leave empty to keep current"
+                                                    rows={2} placeholder={t("sms.sensors.leaveEmptyToKeep")}
                                                     className={`${inputClass} font-mono text-xs`} />
                                             </div>
 
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                 <div>
-                                                    <label className={labelClass}>Sync Interval (minutes)</label>
+                                                    <label className={labelClass}>{t("sms.sensors.extApiSyncInterval")}</label>
                                                     <input type="number" min="1" value={formData.ext_sftp_sync_interval}
                                                         onChange={(e) => setFormData(prev => ({ ...prev, ext_sftp_sync_interval: e.target.value }))}
                                                         className={inputClass} />
@@ -616,7 +722,7 @@ export function SensorEditDialog({ sensor }: SensorEditDialogProps) {
                                                         <input type="checkbox" checked={formData.ext_sftp_enabled}
                                                             onChange={(e) => setFormData(prev => ({ ...prev, ext_sftp_enabled: e.target.checked }))}
                                                             className="w-4 h-4 rounded border-gray-600 text-orange-600 focus:ring-orange-500 bg-gray-700" />
-                                                        <span className="text-sm font-medium text-[var(--foreground)]/80">Sync Enabled</span>
+                                                        <span className="text-sm font-medium text-[var(--foreground)]/80">{t("sms.sensors.extApiEnabled")}</span>
                                                     </label>
                                                 </div>
                                             </div>
@@ -625,16 +731,169 @@ export function SensorEditDialog({ sensor }: SensorEditDialogProps) {
                                 </div>
                             )}
 
+                            {/* ==================== TAB: QA/QC ==================== */}
+                            {activeTab === 'qaqc' && (
+                                <div className="space-y-4">
+                                    <div className="flex items-center gap-2 text-white/60">
+                                        <FlaskConical className="w-4 h-4 text-hydro-secondary" />
+                                        <span className="text-sm font-medium">Per-sensor QA/QC Override</span>
+                                    </div>
+                                    <p className="text-xs text-white/30">
+                                        Assign a dedicated QA/QC configuration to this sensor that overrides the project default.
+                                    </p>
+
+                                    {qaqcLoading && (
+                                        <div className="flex items-center gap-2 text-white/40 text-sm">
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                            Loading…
+                                        </div>
+                                    )}
+                                    {qaqcError && (
+                                        <p className="text-red-400 text-xs">{qaqcError}</p>
+                                    )}
+                                    {triggerSuccess && (
+                                        <p className="text-green-400 text-xs">QC triggered successfully.</p>
+                                    )}
+
+                                    {thingQAQC === null && !qaqcLoading && (
+                                        <div className="space-y-3 p-4 border border-dashed border-white/10 rounded-lg">
+                                            <p className="text-xs text-white/40">No per-sensor override assigned.</p>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div>
+                                                    <label className="text-xs text-white/40 block mb-1">Config name</label>
+                                                    <input
+                                                        value={qaqcName}
+                                                        onChange={(e) => setQAQCName(e.target.value)}
+                                                        placeholder="e.g. sensor_override_v1"
+                                                        className={inputClass}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs text-white/40 block mb-1">Context window</label>
+                                                    <input
+                                                        value={qaqcWindow}
+                                                        onChange={(e) => setQAQCWindow(e.target.value)}
+                                                        placeholder="5d"
+                                                        className={inputClass}
+                                                    />
+                                                </div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={handleAssignQAQC}
+                                                disabled={!qaqcName || !qaqcWindow}
+                                                className="px-3 py-1.5 text-sm rounded-lg bg-hydro-primary/20 border border-hydro-primary/30 text-hydro-secondary hover:bg-hydro-primary/30 disabled:opacity-40"
+                                            >
+                                                Assign Override
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {thingQAQC && (
+                                        <div className="space-y-3">
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <span className="font-medium text-sm">{thingQAQC.name}</span>
+                                                    <span className="text-xs text-white/30 ml-2">window: {thingQAQC.context_window}</span>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleTriggerQAQC}
+                                                        title="Trigger QC now"
+                                                        className="p-1.5 rounded text-white/40 hover:text-hydro-secondary hover:bg-hydro-primary/10"
+                                                    >
+                                                        <Play className="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleUnassignQAQC}
+                                                        title="Remove override"
+                                                        className="p-1.5 rounded text-white/40 hover:text-red-400 hover:bg-red-500/10"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Tests */}
+                                            <div className="space-y-1">
+                                                {thingQAQC.tests.map((test, i) => (
+                                                    <div key={test.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/3 border border-white/5 text-sm">
+                                                        <span className="text-white/25 text-xs w-4">{i + 1}</span>
+                                                        <span className="font-mono text-hydro-secondary flex-1 truncate">{test.function}</span>
+                                                        {test.name && <span className="text-xs text-white/30">({test.name})</span>}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleDeleteTest(test.id)}
+                                                            className="p-1 text-white/30 hover:text-red-400"
+                                                        >
+                                                            <Trash2 className="w-3 h-3" />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+
+                                            {addingTest ? (
+                                                <div className="space-y-2 p-3 border border-hydro-secondary/20 rounded-lg bg-hydro-secondary/5">
+                                                    <select
+                                                        value={newTestFunc}
+                                                        onChange={(e) => setNewTestFunc(e.target.value)}
+                                                        className={selectClass}
+                                                    >
+                                                        {SAQC_FUNCTIONS.map((f) => (
+                                                            <option key={f.name} value={f.name}>{f.label} ({f.name})</option>
+                                                        ))}
+                                                    </select>
+                                                    <input
+                                                        value={newTestName}
+                                                        onChange={(e) => setNewTestName(e.target.value)}
+                                                        placeholder="Test label (optional)"
+                                                        className={inputClass}
+                                                    />
+                                                    <textarea
+                                                        value={newTestArgs}
+                                                        onChange={(e) => setNewTestArgs(e.target.value)}
+                                                        rows={2}
+                                                        placeholder='{"min": 0, "max": 100}'
+                                                        className={`${inputClass} font-mono text-xs`}
+                                                    />
+                                                    <div className="flex gap-2">
+                                                        <button type="button" onClick={() => setAddingTest(false)}
+                                                            className="px-3 py-1.5 text-xs rounded border border-white/10 hover:bg-white/5">
+                                                            Cancel
+                                                        </button>
+                                                        <button type="button" onClick={handleAddTest}
+                                                            className="px-3 py-1.5 text-xs rounded bg-hydro-secondary/20 border border-hydro-secondary/30 text-hydro-secondary">
+                                                            Add
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setAddingTest(true)}
+                                                    className="w-full flex items-center justify-center gap-2 py-2 rounded-lg border border-dashed border-white/10 text-sm text-white/30 hover:text-white/60"
+                                                >
+                                                    <Plus className="w-4 h-4" />
+                                                    Add QC Test
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             {/* Footer Actions */}
                             <div className="flex justify-end gap-3 pt-4 border-t border-border sticky bottom-0 bg-card -mx-6 px-6 pb-2">
                                 <button type="button" onClick={() => setIsOpen(false)}
                                     className="px-4 py-2 rounded-lg text-[var(--foreground)]/60 hover:text-[var(--foreground)] hover:bg-background transition-colors">
-                                    Cancel
+                                    {t("sms.sensors.cancel")}
                                 </button>
                                 <button type="submit" disabled={loading}
                                     className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium text-[var(--foreground)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                                     {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                                    Save Changes
+                                    {t("sms.sensors.saveChanges")}
                                 </button>
                             </div>
 

@@ -236,6 +236,10 @@ services:
       - KEYCLOAK_URL=${KEYCLOAK_URL:-http://keycloak:8081/keycloak}
       - ADMIN_USERNAME=${SEED_ADMIN_USERNAME:-admin-siki}
       - ADMIN_PASSWORD=${SEED_ADMIN_PASSWORD:-admin-siki}
+      - DATABASE_URL=postgresql://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-postgres}@postgres-app:5432/${POSTGRES_DB:-water_app}
+      - TIMEIO_DB_HOST=postgres-app
+      - TIMEIO_DB_PORT=5432
+      - MQTT_BROKER_HOST=mqtt-broker
     # No local depends_on - uses existing containers from tsm-orchestration
     networks:
       - water_shared_net

@@ -8,6 +8,7 @@ import { PasswordField } from "@/components/PasswordField"; // Assuming we might
 import DatastreamList from "@/components/data/DatastreamList";
 import SensorDetailActions from "@/components/data/SensorDetailActions";
 import { T } from "@/components/T";
+import SensorQAQCSection from "@/components/SensorQAQCSection";
 
 async function getSensor(uuid: string) {
     const session = await auth();
@@ -62,9 +63,9 @@ export default async function SensorDetailPage({ params }: { params: Promise<{ u
                 )}
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Configuration Card */}
-                <div className="bg-black/20 backdrop-blur-sm border border-white/10 rounded-xl p-6 space-y-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Configuration Card — takes 2/3 width */}
+                <div className="lg:col-span-2 bg-black/20 backdrop-blur-sm border border-white/10 rounded-xl p-6 space-y-4">
                     <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-3 text-lg font-semibold text-white">
                             <Terminal className="w-5 h-5 text-blue-400" />
@@ -254,31 +255,42 @@ export default async function SensorDetailPage({ params }: { params: Promise<{ u
                     </dl>
                 </div>
 
-                {/* Context Card */}
-                <div className="bg-black/20 backdrop-blur-sm border border-white/10 rounded-xl p-6 space-y-4">
-                    <div className="flex items-center gap-3 text-lg font-semibold text-white mb-2">
-                        <Database className="w-5 h-5 text-green-400" />
-                        <h2><T path="sms.sensors.contextLocation" /></h2>
-                    </div>
-                    <dl className="grid grid-cols-1 gap-y-4 text-sm">
-                        <div>
-                            <dt className="text-white/50 mb-1"><T path="sms.sensors.ownerProject" /></dt>
-                            <dd className="text-white font-medium">{sensor.project_name}</dd>
+                {/* Right column — Context + Properties stacked */}
+                <div className="flex flex-col gap-4">
+                    {/* Context Card */}
+                    <div className="bg-black/20 backdrop-blur-sm border border-white/10 rounded-xl p-4">
+                        <div className="flex items-center gap-2 text-sm font-semibold text-white mb-3">
+                            <Database className="w-4 h-4 text-green-400" />
+                            <h2><T path="sms.sensors.contextLocation" /></h2>
                         </div>
-                        <div>
-                            <dt className="text-white/50 mb-1"><T path="sms.sensors.dbSchema" /></dt>
-                            <dd className="text-white font-mono text-xs">{sensor.schema_name}</dd>
-                        </div>
-                        {sensor.latitude && sensor.longitude && (
+                        <dl className="grid grid-cols-1 gap-y-3 text-sm">
                             <div>
-                                <dt className="text-white/50 mb-1"><T path="sms.sensors.location" /></dt>
-                                <dd className="flex items-center gap-1 text-white">
-                                    <MapPin className="w-4 h-4 text-white/60" />
-                                    {sensor.latitude}, {sensor.longitude}
-                                </dd>
+                                <dt className="text-white/50 text-xs mb-0.5"><T path="sms.sensors.ownerProject" /></dt>
+                                <dd className="text-white font-medium">{sensor.project_name}</dd>
                             </div>
-                        )}
-                    </dl>
+                            <div>
+                                <dt className="text-white/50 text-xs mb-0.5"><T path="sms.sensors.dbSchema" /></dt>
+                                <dd className="text-white font-mono text-xs">{sensor.schema_name}</dd>
+                            </div>
+                            {sensor.latitude && sensor.longitude && (
+                                <div>
+                                    <dt className="text-white/50 text-xs mb-0.5"><T path="sms.sensors.location" /></dt>
+                                    <dd className="flex items-center gap-1 text-white text-xs">
+                                        <MapPin className="w-3.5 h-3.5 text-white/60" />
+                                        {sensor.latitude}, {sensor.longitude}
+                                    </dd>
+                                </div>
+                            )}
+                        </dl>
+                    </div>
+
+                    {/* Properties Card */}
+                    <div className="bg-black/20 backdrop-blur-sm border border-white/10 rounded-xl p-4 flex-1 min-h-0">
+                        <h2 className="text-sm font-semibold text-white mb-3"><T path="sms.sensors.properties" /></h2>
+                        <pre className="bg-black/40 p-3 rounded-lg overflow-auto text-xs font-mono text-white/70 max-h-64">
+                            {JSON.stringify(sensor.properties, null, 2)}
+                        </pre>
+                    </div>
                 </div>
             </div>
 
@@ -291,13 +303,9 @@ export default async function SensorDetailPage({ params }: { params: Promise<{ u
                 <DatastreamList datastreams={sensor.datastreams} sensorUuid={sensor.uuid} token={session?.accessToken || ''} />
             </div>
 
-            {/* Properties (JSON) */}
-            <div className="bg-black/20 backdrop-blur-sm border border-white/10 rounded-xl p-6">
-                <h2 className="text-lg font-semibold text-white mb-4"><T path="sms.sensors.properties" /></h2>
-                <pre className="bg-black/40 p-4 rounded-lg overflow-x-auto text-xs font-mono text-white/80">
-                    {JSON.stringify(sensor.properties, null, 2)}
-                </pre>
-            </div>
+            {/* QA/QC Override */}
+            <SensorQAQCSection sensorUuid={sensor.uuid} token={session?.accessToken || ''} />
+
         </div >
     );
 }

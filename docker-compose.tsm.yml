@@ -67,3 +67,15 @@ services:
   redis:
     networks:
       - tsm_network
+
+  water-dp-seed:
+    environment:
+      - DATABASE_URL=postgresql://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-postgres}@database:5432/${POSTGRES_DB:-postgres}?options=-csearch_path=water_dp,public
+      - TIMEIO_DB_HOST=database
+      - TIMEIO_DB_NAME=${POSTGRES_DB:-postgres}
+      - MINIO_URL=object-storage:9000
+      - MINIO_ACCESS_KEY=${OBJECT_STORAGE_ROOT_USER:-minioadmin}
+      - MINIO_SECRET_KEY=${OBJECT_STORAGE_ROOT_PASSWORD:-minioadmin}
+      - MINIO_SECURE=false
+    networks:
+      - tsm_network

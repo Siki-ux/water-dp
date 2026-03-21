@@ -790,6 +790,15 @@ def seed_data(db: Session) -> None:
 
         logger.info("Demo Project, Dashboard, and Advanced Scenarios seeded/checked.")
 
+        # -------------------------------------------------------------------------
+        # PART 6: Seed QA/QC Configurations
+        # -------------------------------------------------------------------------
+        logger.info("[SEEDING] Starting Part 6: QA/QC Configurations")
+        try:
+            seed_qaqc_configs()
+        except Exception as e:
+            logger.warning(f"QA/QC seeding failed (non-fatal): {e}")
+
     except Exception as e:
         logger.error(f"Seeding failed: {e}")
         db.rollback()
@@ -941,3 +950,174 @@ def seed_simulator_entities():
                 ],
             }
         )
+
+
+
+def seed_qaqc_configs() -> None:
+    """
+    Seed default QA/QC configurations for all TSM projects that have no QA/QC config yet.
+
+    Creates a 'water_level_default' config with tests appropriate for river water level sensors:
+      1. flagMissing   — mark missing observations
+      2. flagRange     — physically impossible values (< -2 m or > 20 m)
+      3. flagConstants — stuck sensor (same reading for 12 h)
+      4. flagMad       — rolling-median outlier detection (30-day window, z=3.5)
+
+    This is non-fatal: failures are logged and silently skipped.
+    """
+    from app.services.qaqc_service import QAQCService
+
+    svc = QAQCService()
+    schemas = svc.list_schemas_with_configs()
+
+    if not schemas:
+        logger.info("[QA/QC seeding] No TSM schemas found — skipping.")
+        return
+
+    seeded = 0
+    for schema in schemas:
+        tsm_project_id = schema["id"]
+        schema_name = schema.get("schema_name", schema.get("name", "?"))
+
+        # Skip if already has a default config
+        existing = svc.list_configs(tsm_project_id)
+        if any(c.get("is_default") for c in existing):
+            logger.info(f"[QA/QC seeding] Schema '{schema_name}' already has a default config — skipping.")
+            continue
+
+        logger.info(f"[QA/QC seeding] Creating default water-level QA/QC config for schema '{schema_name}'…")
+
+        try:
+            qaqc_id = svc.create_config(
+                tsm_project_id=tsm_project_id,
+                name="water_level_default",
+                context_window="30d",
+                is_default=True,
+            )
+
+            # 1. Flag missing values first so downstream tests see annotated gaps
+            svc.create_test(
+                qaqc_id=qaqc_id,
+                function="flagMissing",
+                name="Missing data",
+                position=1,
+                args=None,
+                streams=None,
+            )
+
+            # 2. Hard physical range check for water level in metres
+            svc.create_test(
+                qaqc_id=qaqc_id,
+                function="flagRange",
+                name="Physical bounds (water level)",
+                position=2,
+                args={"min": -2.0, "max": 20.0},
+                streams=None,
+            )
+
+            # 3. Stuck sensor detection — 12 h constant stretch
+            svc.create_test(
+                qaqc_id=qaqc_id,
+                function="flagConstants",
+                name="Stuck sensor (12 h)",
+                position=3,
+                args={"window": "12h", "thresh": 0.001},
+                streams=None,
+            )
+
+            # 4. Rolling-median outlier detection
+            svc.create_test(
+                qaqc_id=qaqc_id,
+                function="flagMad",
+                name="Outlier (MAD, 30d)",
+                position=4,
+                args={"window": "30d", "z": 3.5},
+                streams=None,
+            )
+
+            logger.info(
+                f"[QA/QC seeding] Created 'water_level_default' config (id={qaqc_id}) "
+                f"with 4 tests for schema '{schema_name}'."
+            )
+            seeded += 1
+
+        except Exception as exc:
+            logger.warning(f"[QA/QC seeding] Failed for schema '{schema_name}': {exc}")
+
+    if seeded:
+        logger.info(f"[QA/QC seeding] Done — seeded default configs for {seeded} schema(s).")
+    else:
+        logger.info("[QA/QC seeding] All schemas already have default QA/QC configs.")
+
+    # Also seed example custom SaQC functions
+    try:
+        seed_custom_saqc_functions()
+    except Exception as exc:
+        logger.warning(f"[QA/QC seeding] Failed to seed custom SaQC functions: {exc}")
+
+
+_CUSTOM_SAQC_EXAMPLE_FUNCTIONS = {
+    "flagSuddenJump": '''\
+"""
+Custom SaQC function: flagSuddenJump
+Flags observations where the value changes abruptly between consecutive measurements.
+Useful for detecting sensor malfunctions, transmission errors, or real flood events
+that need manual review.
+
+Usage in QA/QC config:
+  function: flagSuddenJump
+  args:
+    max_jump: 0.5   # Maximum allowed change between readings (metres)
+    window: "1h"    # Look-back window for computing the previous value
+"""
+import pandas as pd
+from saqc import register
+
+
+@register()
+def flagSuddenJump(saqc, field, max_jump: float = 0.5, window: str = "1h", **kwargs):
+    """Flag values that differ from the preceding value by more than *max_jump*.
+
+    Args:
+        field:    The datastream field to check.
+        max_jump: Maximum allowed absolute change per step (default 0.5 m).
+        window:   Rolling window used to compute the reference (previous) value.
+                  Accepts pandas offset strings like "1h", "30min", "6h".
+    """
+    series = saqc[field].copy()
+    diff = series.diff().abs()
+    flagged = diff > max_jump
+    saqc[field] = saqc[field].where(~flagged)
+    return saqc
+''',
+}
+
+
+def seed_custom_saqc_functions() -> None:
+    """Upload example custom SaQC function scripts to MinIO if not already present."""
+    import io
+    from app.services.minio_service import minio_service
+
+    _BUCKET = "custom-saqc-functions"
+
+    # Ensure bucket exists
+    if not minio_service.bucket_exists(_BUCKET):
+        minio_service.client.make_bucket(_BUCKET)
+        logger.info(f"[QA/QC seeding] Created MinIO bucket '{_BUCKET}'.")
+
+    existing = {obj.object_name for obj in minio_service.client.list_objects(_BUCKET)}
+
+    for func_name, script in _CUSTOM_SAQC_EXAMPLE_FUNCTIONS.items():
+        filename = f"{func_name}.py"
+        if filename in existing:
+            logger.info(f"[QA/QC seeding] Custom function '{func_name}' already exists — skipping.")
+            continue
+        data = script.encode("utf-8")
+        minio_service.upload_file(
+            bucket_name=_BUCKET,
+            object_name=filename,
+            data=io.BytesIO(data),
+            length=len(data),
+            content_type="text/x-python",
+        )
+        logger.info(f"[QA/QC seeding] Uploaded custom SaQC function '{func_name}' to MinIO.")

@@ -484,3 +484,65 @@ async def ingest_csv(
     from app.services.ingestion_service import IngestionService
 
     return await IngestionService.upload_csv(uuid, file)
+
+
+@router.post(
+    "/{thing_uuid}/observations/qaqc",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Store QA/QC quality flags",
+    description="Called by tsm-orchestration after a SaQC run to persist result_quality flags on observations.",
+)
+async def store_qaqc_results(
+    thing_uuid: str,
+    payload: dict,
+):
+    """
+    Accepts qaqc_labels from tsm-orchestration and updates result_quality on observations.
+
+    Payload format:
+        {"qaqc_labels": [{"datastream_id": int, "result_quality": {...}, "result_time": "ISO"}]}
+    """
+    import json
+    import psycopg2
+    from psycopg2 import sql as pgsql
+    from app.core.config import settings
+
+    labels = payload.get("qaqc_labels", [])
+    if not labels:
+        return
+
+    schema_name = await AsyncThingService.get_schema_from_uuid(thing_uuid)
+    if not schema_name:
+        raise HTTPException(status_code=404, detail=f"Schema not found for thing {thing_uuid}")
+
+    try:
+        conn = psycopg2.connect(
+            host=settings.timeio_db_host,
+            port=settings.timeio_db_port,
+            dbname=settings.timeio_db_name,
+            user=settings.timeio_db_user,
+            password=settings.timeio_db_password,
+        )
+        schema_id = pgsql.Identifier(schema_name)
+        updated = 0
+        with conn:
+            with conn.cursor() as cur:
+                for label in labels:
+                    ds_id = label.get("datastream_id")
+                    rq = label.get("result_quality")
+                    rt = label.get("result_time")
+                    if ds_id is None or rq is None or rt is None:
+                        continue
+                    cur.execute(
+                        pgsql.SQL(
+                            "UPDATE {schema}.observation SET result_quality = %s "
+                            "WHERE datastream_id = %s AND result_time = %s"
+                        ).format(schema=schema_id),
+                        (json.dumps(rq), ds_id, rt),
+                    )
+                    updated += cur.rowcount
+        conn.close()
+        logger.info(f"[qaqc] Updated result_quality on {updated} observations for thing {thing_uuid}")
+    except Exception as exc:
+        logger.error(f"[qaqc] Failed to store QC results for {thing_uuid}: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))

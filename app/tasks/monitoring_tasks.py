@@ -25,3 +25,19 @@ def run_periodic_alert_evaluation():
         evaluator.evaluate_all_active_sensor_rules()
     finally:
         db.close()
+
+
+@celery_app.task
+def run_qaqc_alert_evaluation():
+    """
+    Celery task to evaluate QA/QC-based alert rules against flagged observation ratios.
+    """
+    from app.core.database import SessionLocal
+    from app.services.alert_evaluator import AlertEvaluator
+
+    db = SessionLocal()
+    try:
+        evaluator = AlertEvaluator(db)
+        evaluator.evaluate_all_active_qaqc_rules()
+    finally:
+        db.close()

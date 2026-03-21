@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { Upload, X, FileText, Check, AlertCircle } from "lucide-react";
+import { useEscapeKey } from '@/hooks/useEscapeKey';
 
 interface DatasetUploadModalProps {
     isOpen: boolean;
@@ -19,6 +20,8 @@ export default function DatasetUploadModal({
     projectId,
     onSuccess
 }: DatasetUploadModalProps) {
+    useEscapeKey(onClose, isOpen);
+
     const { data: session } = useSession();
     const [file, setFile] = useState<File | null>(null);
     const [uploading, setUploading] = useState(false);
@@ -126,22 +129,22 @@ export default function DatasetUploadModal({
 
     return (
         <div
-            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-background/80 backdrop-blur-md p-4"
             onClick={onClose}
         >
             <div
-                className="bg-[#0a0a0a] border border-white/10 rounded-2xl w-full max-w-lg flex flex-col shadow-2xl"
+                className="bg-card border border-border rounded-2xl w-full max-w-lg flex flex-col shadow-2xl"
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="p-6 border-b border-white/10 flex justify-between items-center">
+                <div className="p-6 border-b border-border flex justify-between items-center">
                     <div>
-                        <h2 className="text-xl font-bold text-white">Upload Data</h2>
-                        <p className="text-sm text-white/50 mt-1">
+                        <h2 className="text-xl font-bold text-[var(--foreground)]">Upload Data</h2>
+                        <p className="text-sm text-[var(--foreground)]/50 mt-1">
                             Upload to: <span className="text-hydro-primary">{dataset?.name}</span>
                         </p>
                     </div>
-                    <button onClick={onClose} className="text-white/50 hover:text-white">
+                    <button onClick={onClose} className="text-[var(--foreground)]/50 hover:text-[var(--foreground)]">
                         <X size={24} />
                     </button>
                 </div>
@@ -189,11 +192,11 @@ export default function DatasetUploadModal({
                                 onChange={handleFileSelect}
                                 className="hidden"
                             />
-                            <Upload className="mx-auto text-white/30 mb-4" size={48} />
-                            <p className="text-white/70 mb-2">
+                            <Upload className="mx-auto text-[var(--foreground)]/30 mb-4" size={48} />
+                            <p className="text-[var(--foreground)]/70 mb-2">
                                 Drag & drop your file here, or click to browse
                             </p>
-                            <p className="text-white/40 text-sm">
+                            <p className="text-[var(--foreground)]/40 text-sm">
                                 Supports CSV, TXT, TSV (max 256MB)
                             </p>
                         </div>
@@ -201,17 +204,17 @@ export default function DatasetUploadModal({
 
                     {/* Selected File */}
                     {file && !success && (
-                        <div className="p-4 bg-white/5 border border-white/10 rounded-lg flex items-center justify-between">
+                        <div className="p-4 bg-muted/50 border border-border rounded-lg flex items-center justify-between">
                             <div className="flex items-center gap-3">
                                 <FileText className="text-hydro-primary" size={24} />
                                 <div>
-                                    <p className="text-white font-medium">{file.name}</p>
-                                    <p className="text-white/50 text-sm">{formatFileSize(file.size)}</p>
+                                    <p className="text-[var(--foreground)] font-medium">{file.name}</p>
+                                    <p className="text-[var(--foreground)]/50 text-sm">{formatFileSize(file.size)}</p>
                                 </div>
                             </div>
                             <button
                                 onClick={() => setFile(null)}
-                                className="text-white/50 hover:text-white"
+                                className="text-[var(--foreground)]/50 hover:text-[var(--foreground)]"
                             >
                                 <X size={20} />
                             </button>
@@ -228,10 +231,10 @@ export default function DatasetUploadModal({
                 </div>
 
                 {/* Footer */}
-                <div className="p-6 border-t border-white/10 flex justify-end gap-3">
+                <div className="p-6 border-t border-border flex justify-end gap-3">
                     <button
                         onClick={onClose}
-                        className="px-4 py-2 text-white/70 hover:text-white transition-colors"
+                        className="px-4 py-2 text-[var(--foreground)]/70 hover:text-[var(--foreground)] transition-colors"
                     >
                         {success ? "Close" : "Cancel"}
                     </button>

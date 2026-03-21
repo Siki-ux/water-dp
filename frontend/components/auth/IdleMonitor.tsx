@@ -59,6 +59,13 @@ export function IdleMonitor() {
         };
     }, [status, resetIdleTimer]);
 
+    // Handle token expiration: NextAuth sets error="RefreshAccessTokenError"
+    useEffect(() => {
+        if (session?.error === "RefreshAccessTokenError") {
+            signOut({ callbackUrl: "/portal/auth/signin" });
+        }
+    }, [session]);
+
     // Auto-referesh token logic (handled by NextAuth internally via 'update' but we can trigger it)
     // Actually, NextAuth's useSession 'update' method can be used to poll/refresh if needed,
     // but our rotation logic in auth.ts handles rotation on *request*. 
@@ -90,16 +97,16 @@ export function IdleMonitor() {
     if (!isIdle) return null;
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-[#1a1a1a] border border-white/10 rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-card border border-border rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
                 <div className="flex flex-col items-center text-center gap-4">
                     <div className="p-3 bg-white/5 rounded-full">
                         <Moon className="w-8 h-8 text-hydro-primary animate-pulse" />
                     </div>
 
                     <div>
-                        <h2 className="text-xl font-bold text-white">Still there?</h2>
-                        <p className="text-white/60 mt-2">
+                        <h2 className="text-xl font-bold text-[var(--foreground)]">Still there?</h2>
+                        <p className="text-[var(--foreground)]/60 mt-2">
                             You've been inactive for a while. For security, your session will time out soon.
                         </p>
                     </div>
@@ -107,7 +114,7 @@ export function IdleMonitor() {
                     <div className="flex gap-3 w-full mt-2">
                         <button
                             onClick={() => signOut({ callbackUrl: "/portal/auth/signin" })}
-                            className="flex-1 py-2.5 px-4 bg-white/5 hover:bg-white/10 text-white/70 hover:text-white rounded-lg transition-colors flex items-center justify-center gap-2 font-medium"
+                            className="flex-1 py-2.5 px-4 bg-muted hover:bg-muted/80 text-[var(--foreground)]/70 hover:text-[var(--foreground)] rounded-lg transition-colors flex items-center justify-center gap-2 font-medium"
                         >
                             <LogOut className="w-4 h-4" />
                             Logout

@@ -19,6 +19,8 @@ router = APIRouter()
 async def list_sensors_extended(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    search: Optional[str] = Query(None, description="Search by name, UUID, project, or MQTT topic"),
+    ingest_type: Optional[str] = Query(None, description="Filter by ingest type (mqtt, sftp, extapi, extsftp)"),
     user: dict = Depends(deps.get_current_user),
 ):
     """
@@ -28,6 +30,8 @@ async def list_sensors_extended(
         page=page,
         page_size=page_size,
         user=user,
+        search=search,
+        ingest_type=ingest_type,
     )
 
     return {
@@ -171,6 +175,29 @@ async def update_parser(uuid: str, parser_update: ParserUpdate):
     if not updated:
         raise ResourceNotFoundException(f"Parser {uuid} not found")
     return updated
+
+@router.delete(
+    "/parsers/{parser_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete Parser",
+    description="Delete a parser. Fails if parser is assigned to sensors.",
+)
+async def delete_parser(parser_id: int):
+    """Delete a parser by its integer ID. Checks for sensor linkage first."""
+    result = SMSService.delete_parser(parser_id)
+    if not result.get("success"):
+        reason = result.get("reason", "Unknown error")
+        linked = result.get("linked_sensors", [])
+        if linked:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "message": reason,
+                    "linked_sensors": linked,
+                },
+            )
+        raise HTTPException(status_code=404, detail=reason)
+    return None
 
 @router.post(
     "/parsers/csv",

@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X, Upload, Loader2, CheckCircle, FileText } from "lucide-react";
 import { getApiUrl } from "@/lib/utils";
+import { useEscapeKey } from '@/hooks/useEscapeKey';
 
 interface FileUploadDialogProps {
     isOpen: boolean;
@@ -20,6 +21,8 @@ export default function FileUploadDialog({
     sensorName,
     token
 }: FileUploadDialogProps) {
+    useEscapeKey(onClose, isOpen);
+
     const [mounted, setMounted] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [result, setResult] = useState<{ status: string; bucket: string; file: string } | null>(null);
@@ -92,14 +95,14 @@ export default function FileUploadDialog({
     };
 
     return createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-            <div className="bg-[#0a0a0a] border border-white/10 rounded-xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh] overflow-y-auto">
-                <div className="flex items-center justify-between p-4 border-b border-white/10 sticky top-0 bg-[#0a0a0a] z-10">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-background/80 backdrop-blur-md p-4">
+            <div className="bg-card border border-border rounded-xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between p-4 border-b border-border sticky top-0 bg-card z-10">
                     <div>
-                        <h3 className="text-lg font-semibold text-white">Upload Data File</h3>
-                        <p className="text-xs text-white/40 mt-0.5">{sensorName}</p>
+                        <h3 className="text-lg font-semibold text-[var(--foreground)]">Upload Data File</h3>
+                        <p className="text-xs text-[var(--foreground)]/40 mt-0.5">{sensorName}</p>
                     </div>
-                    <button onClick={onClose} className="text-white/60 hover:text-white transition-colors">
+                    <button onClick={onClose} className="text-[var(--foreground)]/60 hover:text-[var(--foreground)] transition-colors">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
@@ -113,14 +116,14 @@ export default function FileUploadDialog({
                         onClick={() => fileInputRef.current?.click()}
                         className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${dragOver
                                 ? "border-blue-500 bg-blue-500/10"
-                                : "border-white/10 hover:border-white/30 hover:bg-white/5"
+                                : "border-border hover:border-white/30 hover:bg-muted/50"
                             }`}
                     >
-                        <Upload className="w-8 h-8 text-white/30 mx-auto mb-3" />
-                        <p className="text-sm text-white/70">
+                        <Upload className="w-8 h-8 text-[var(--foreground)]/30 mx-auto mb-3" />
+                        <p className="text-sm text-[var(--foreground)]/70">
                             Drop a file here or <span className="text-blue-400 underline">browse</span>
                         </p>
-                        <p className="text-xs text-white/30 mt-1">CSV, JSON, or any supported format</p>
+                        <p className="text-xs text-[var(--foreground)]/30 mt-1">CSV, JSON, or any supported format</p>
                     </div>
 
                     <input
@@ -135,15 +138,15 @@ export default function FileUploadDialog({
 
                     {/* Selected File */}
                     {selectedFile && (
-                        <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-lg p-3">
+                        <div className="flex items-center gap-3 bg-muted/50 border border-border rounded-lg p-3">
                             <FileText className="w-5 h-5 text-blue-400 flex-shrink-0" />
                             <div className="flex-1 min-w-0">
-                                <p className="text-sm text-white font-medium truncate">{selectedFile.name}</p>
-                                <p className="text-xs text-white/40">{(selectedFile.size / 1024).toFixed(1)} KB</p>
+                                <p className="text-sm text-[var(--foreground)] font-medium truncate">{selectedFile.name}</p>
+                                <p className="text-xs text-[var(--foreground)]/40">{(selectedFile.size / 1024).toFixed(1)} KB</p>
                             </div>
                             <button
                                 onClick={() => setSelectedFile(null)}
-                                className="text-white/40 hover:text-white transition-colors"
+                                className="text-[var(--foreground)]/40 hover:text-[var(--foreground)] transition-colors"
                             >
                                 <X className="w-4 h-4" />
                             </button>
@@ -163,10 +166,10 @@ export default function FileUploadDialog({
                             <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
                             <div>
                                 <p className="text-sm text-green-400 font-medium">Upload successful!</p>
-                                <p className="text-xs text-white/40 mt-1">
-                                    File <span className="text-white/60 font-mono">{result.file}</span> uploaded to bucket <span className="text-white/60 font-mono">{result.bucket}</span>
+                                <p className="text-xs text-[var(--foreground)]/40 mt-1">
+                                    File <span className="text-[var(--foreground)]/60 font-mono">{result.file}</span> uploaded to bucket <span className="text-[var(--foreground)]/60 font-mono">{result.bucket}</span>
                                 </p>
-                                <p className="text-xs text-white/30 mt-0.5">The TSM worker will process this file shortly.</p>
+                                <p className="text-xs text-[var(--foreground)]/30 mt-0.5">The TSM worker will process this file shortly.</p>
                             </div>
                         </div>
                     )}
@@ -176,7 +179,7 @@ export default function FileUploadDialog({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-4 py-2 hover:bg-white/5 text-white/70 hover:text-white rounded-lg text-sm transition-colors"
+                            className="px-4 py-2 hover:bg-muted/50 text-[var(--foreground)]/70 hover:text-[var(--foreground)] rounded-lg text-sm transition-colors"
                         >
                             {result ? "Done" : "Cancel"}
                         </button>
@@ -184,7 +187,7 @@ export default function FileUploadDialog({
                             <button
                                 onClick={handleUpload}
                                 disabled={uploading || !selectedFile}
-                                className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
+                                className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-[var(--foreground)] rounded-lg text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
                             >
                                 {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                                 {uploading ? "Uploading..." : "Upload"}

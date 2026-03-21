@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import TimeSeriesChart from "./TimeSeriesChart";
 import { X, Trash2, Edit, ArrowUpRight, Loader2, Activity } from "lucide-react";
 import { getApiUrl } from "@/lib/utils";
+import { useTranslation } from "@/lib/i18n";
 
 // Helper to fetch data
 async function getDataPoints(sensorUuid: string, token: string, datastream: string) {
@@ -37,6 +38,7 @@ async function getDataPoints(sensorUuid: string, token: string, datastream: stri
 }
 
 import SensorMiniMap from "./SensorMiniMap";
+import { useEscapeKey } from '@/hooks/useEscapeKey';
 
 // ... (getDataPoints implementation remains same) ...
 
@@ -46,7 +48,6 @@ interface SensorDetailModalProps {
     onClose: () => void;
     token: string;
     onDelete: (sensorId: string, deleteFromSource: boolean) => void;
-    onEdit: (sensor: any) => void;
 }
 
 export default function SensorDetailModal({
@@ -55,13 +56,15 @@ export default function SensorDetailModal({
     onClose,
     token,
     onDelete,
-    onEdit,
 }: SensorDetailModalProps) {
+    useEscapeKey(onClose, isOpen);
+
     const [seriesData, setSeriesData] = useState<Record<string, any[]>>({});
     const [loading, setLoading] = useState(false);
     const [deleteMode, setDeleteMode] = useState<"none" | "unlink" | "source">("none");
     const [fullSensor, setFullSensor] = useState<any>(null);
     const [selectedDatastream, setSelectedDatastream] = useState<string>("");
+    const { t } = useTranslation();
 
     const params = useParams();
     const projectId = params?.id;
@@ -186,20 +189,20 @@ export default function SensorDetailModal({
     });
 
     return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-            <div className="bg-[#0a0a0a] border border-white/10 rounded-2xl w-full max-w-6xl max-h-[90vh] overflow-y-auto flex flex-col shadow-2xl">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-background/80 backdrop-blur-md p-4">
+            <div className="bg-card border border-border rounded-2xl w-full max-w-6xl max-h-[90vh] overflow-y-auto flex flex-col shadow-2xl">
                 {/* Header */}
-                <div className="p-6 border-b border-white/10 flex justify-between items-start sticky top-0 bg-[#0a0a0a] z-10">
+                <div className="p-6 border-b border-border flex justify-between items-start sticky top-0 bg-card z-10">
                     <div>
-                        <h2 className="text-2xl font-bold text-white">{displaySensor.name}</h2>
+                        <h2 className="text-2xl font-bold text-[var(--foreground)]">{displaySensor.name}</h2>
                         <div className="flex items-center gap-3 mt-1">
-                            <span className="bg-white/10 px-2 py-0.5 rounded text-xs text-white/70 font-mono">
+                            <span className="bg-muted px-2 py-0.5 rounded text-xs text-[var(--foreground)] opacity-70 font-mono">
                                 {displaySensor.uuid || displaySensor.sensor_uuid}
                             </span>
                             {datastreams.length > 0 && (
                                 <span className="flex items-center gap-1 text-xs text-hydro-primary bg-hydro-primary/10 px-2 py-0.5 rounded border border-hydro-primary/20">
                                     <Activity className="w-3 h-3" />
-                                    {datastreams.length} Datastreams
+                                    {datastreams.length} {t('sms.sensors.datastreams')}
                                 </span>
                             )}
                         </div>
@@ -208,10 +211,10 @@ export default function SensorDetailModal({
                     <div className="flex gap-2">
                         {deleteMode !== 'none' ? (
                             <>
-                                <span className="text-sm self-center mr-2 font-semibold text-white">
+                                <span className="text-sm self-center mr-2 font-semibold text-[var(--foreground)]">
                                     {deleteMode === 'source'
-                                        ? <span className="text-red-500">DANGER: Permanently delete data?</span>
-                                        : <span className="text-yellow-400">Unlink sensor from project?</span>
+                                        ? <span className="text-red-500">{t('sms.sensors.dangerDeleteData')}</span>
+                                        : <span className="text-yellow-400">{t('sms.sensors.unlinkSensorContext')}</span>
                                     }
                                 </span>
                                 <button
@@ -219,9 +222,9 @@ export default function SensorDetailModal({
                                     className={`px-3 py-1 text-white rounded text-sm transition-colors ${deleteMode === 'source' ? 'bg-red-600 hover:bg-red-700' : 'bg-yellow-600 hover:bg-yellow-700'
                                         }`}
                                 >
-                                    Confirm
+                                    {t('sms.sensors.confirm')}
                                 </button>
-                                <button onClick={cancelDelete} className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white rounded text-sm transition-colors">Cancel</button>
+                                <button onClick={cancelDelete} className="px-3 py-1 bg-muted hover:bg-muted/80 text-[var(--foreground)] rounded text-sm transition-colors">{t('sms.sensors.cancel')}</button>
                             </>
                         ) : (
                             <>
@@ -230,69 +233,66 @@ export default function SensorDetailModal({
                                     className="flex items-center gap-1 px-3 py-1 bg-hydro-primary/10 hover:bg-hydro-primary/20 text-hydro-primary rounded text-sm transition-colors border border-hydro-primary/20"
                                 >
                                     <ArrowUpRight className="w-3 h-3" />
-                                    Full History
+                                    {t('sms.sensors.fullHistory')}
                                 </Link>
-                                <button onClick={() => onEdit(sensor)} className="flex items-center gap-1 px-3 py-1 bg-white/10 hover:bg-white/20 rounded text-sm transition-colors text-white">
-                                    <Edit className="w-3 h-3" /> Edit
-                                </button>
                                 <button
                                     onClick={() => setDeleteMode("unlink")}
                                     className="flex items-center gap-1 px-3 py-1 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-500 rounded text-sm transition-colors border border-yellow-500/20"
                                 >
-                                    <Trash2 className="w-3 h-3" /> Unlink
+                                    <Trash2 className="w-3 h-3" /> {t('sms.sensors.unlink')}
                                 </button>
                                 <button
                                     onClick={() => setDeleteMode("source")}
                                     className="flex items-center gap-1 px-3 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded text-sm transition-colors border border-red-500/20 font-bold"
                                 >
-                                    <Trash2 className="w-3 h-3" /> Delete
+                                    <Trash2 className="w-3 h-3" /> {t('sms.sensors.deleteBtn')}
                                 </button>
                             </>
                         )}
-                        <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/70 ml-2">
+                        <button onClick={onClose} className="p-2 hover:bg-muted rounded-full transition-colors text-[var(--foreground)] opacity-70 ml-2">
                             <X className="w-5 h-5" />
                         </button>
                     </div>
                 </div>
 
-                <div className="p-6 flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="p-6 flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6 bg-card">
                     {/* Left Column: Metadata & Map */}
                     <div className="space-y-6 lg:col-span-1">
-                        <h3 className="text-sm font-semibold text-hydro-primary uppercase tracking-wider">Metadata</h3>
+                        <h3 className="text-sm font-semibold text-hydro-primary uppercase tracking-wider">{t('sms.sensors.metadata')}</h3>
 
                         <div className="grid grid-cols-1 gap-4 text-sm">
                             <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-white/5 p-3 rounded-lg border border-white/5">
-                                    <div className="text-white/40 mb-1">Status</div>
-                                    <div className="text-white capitalize">{displaySensor.status || "Active"}</div>
+                                <div className="bg-background p-3 rounded-lg border border-border">
+                                    <div className="opacity-40 mb-1">{t('sms.sensors.statusCol')}</div>
+                                    <div className="text-[var(--foreground)] capitalize">{displaySensor.status || t('sms.sensors.activeStatus')}</div>
                                 </div>
-                                <div className="bg-white/5 p-3 rounded-lg border border-white/5">
-                                    <div className="text-white/40 mb-1">Device Type</div>
-                                    <div className="text-white">{isDataset ? "Dataset" : (displaySensor.device_type || "Generic")}</div>
+                                <div className="bg-background p-3 rounded-lg border border-border">
+                                    <div className="opacity-40 mb-1">{t('sms.sensors.deviceType')}</div>
+                                    <div className="text-[var(--foreground)]">{isDataset ? t('sms.sensors.dataset') : (displaySensor.device_type || t('sms.sensors.generic'))}</div>
                                 </div>
                             </div>
 
-                            <div className="bg-white/5 p-3 rounded-lg border border-white/5">
-                                <div className="text-white/40 mb-1">Description</div>
-                                <div className="text-white">{displaySensor.description || "No description provided."}</div>
+                            <div className="bg-background p-3 rounded-lg border border-border">
+                                <div className="opacity-40 mb-1">{t('sms.sensors.description')}</div>
+                                <div className="text-[var(--foreground)]">{displaySensor.description || t('sms.sensors.noDescProvided')}</div>
                             </div>
 
                             {/* Only show coordinates/map for physical sensors, not datasets */}
                             {!isDataset && (
                                 <>
-                                    <div className="bg-white/5 p-3 rounded-lg border border-white/5">
-                                        <div className="text-white/40 mb-1">Coordinates</div>
-                                        <div className="text-white font-mono flex items-center gap-2">
+                                    <div className="bg-background p-3 rounded-lg border border-border">
+                                        <div className="opacity-40 mb-1">{t('sms.sensors.coordinates')}</div>
+                                        <div className="text-[var(--foreground)] font-mono flex items-center gap-2">
                                             {hasCoordinates
                                                 ? `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`
-                                                : <span className="text-white/30 italic">Not set</span>
+                                                : <span className="opacity-30 italic">{t('sms.sensors.notSet')}</span>
                                             }
                                         </div>
                                     </div>
 
                                     {/* Mini Map */}
                                     {hasCoordinates && (
-                                        <div className="w-full h-48 rounded-xl overflow-hidden border border-white/10 relative">
+                                        <div className="w-full h-48 rounded-xl overflow-hidden border border-border relative">
                                             <SensorMiniMap latitude={latitude} longitude={longitude} />
                                         </div>
                                     )}
@@ -304,15 +304,15 @@ export default function SensorDetailModal({
                     {/* Right Column: Chart */}
                     <div className="space-y-4 lg:col-span-2 flex flex-col">
                         <div className="flex items-center justify-between">
-                            <h3 className="text-sm font-semibold text-hydro-primary uppercase tracking-wider">Recent Data</h3>
+                            <h3 className="text-sm font-semibold text-hydro-primary uppercase tracking-wider">{t('sms.sensors.recentData')}</h3>
                             {datastreams.length > 0 && (
                                 <select
                                     value={selectedDatastream}
                                     onChange={handleDatastreamChange}
-                                    className="bg-white/10 border border-white/10 rounded text-sm text-white px-3 py-1.5 outline-none focus:border-hydro-primary"
+                                    className="bg-muted border border-border rounded text-sm text-[var(--foreground)] px-3 py-1.5 outline-none focus:border-hydro-primary"
                                 >
                                     {datastreams.map((ds: any) => (
-                                        <option key={ds.name} value={ds.name} className="bg-gray-900 text-white">
+                                        <option key={ds.name} value={ds.name} className="bg-background text-[var(--foreground)]">
                                             {ds.label || ds.name} ({ds.unit})
                                         </option>
                                     ))}
@@ -320,7 +320,7 @@ export default function SensorDetailModal({
                             )}
                         </div>
 
-                        <div className="bg-white/5 border border-white/5 rounded-xl p-4 flex-1 min-h-[400px]">
+                        <div className="bg-muted/30 border border-border rounded-xl p-4 flex-1 min-h-[400px]">
                             {loading ? (
                                 <div className="h-full flex items-center justify-center">
                                     <Loader2 className="w-8 h-8 text-hydro-primary animate-spin" />
@@ -332,10 +332,10 @@ export default function SensorDetailModal({
                                     yMax="auto"
                                 />
                             ) : (
-                                <div className="h-full flex flex-col items-center justify-center text-white/30">
+                                <div className="h-full flex flex-col items-center justify-center text-[var(--foreground)] opacity-30">
                                     <Activity className="w-8 h-8 mb-2 opacity-50" />
-                                    <p>No recent data available</p>
-                                    {datastreams.length === 0 && <p className="text-xs mt-1">No datastreams found</p>}
+                                    <p>{t('sms.sensors.noRecentData')}</p>
+                                    {datastreams.length === 0 && <p className="text-xs mt-1">{t('sms.sensors.noDatastreamsFound')}</p>}
                                 </div>
                             )}
                         </div>

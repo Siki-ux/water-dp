@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { Loader2, Plus, X, Save, Upload, Code } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { getApiUrl } from "@/lib/utils";
+import { useTranslation } from "@/lib/i18n";
 
 interface DeviceTypeCreateDialogProps {
     isOpen: boolean;
@@ -25,6 +26,7 @@ export function DeviceTypeCreateDialog({ isOpen, onClose, editMode = false, init
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<"write" | "upload">("write");
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const { t } = useTranslation();
 
     const [formData, setFormData] = useState({
         name: "",
@@ -65,14 +67,14 @@ export function DeviceTypeCreateDialog({ isOpen, onClose, editMode = false, init
 
             if (activeTab === "write") {
                 if (!formData.code.trim()) {
-                    throw new Error("Please enter Python code.");
+                    throw new Error(t('sms.deviceTypes.enterPythonCodeError'));
                 }
                 const blob = new Blob([formData.code], { type: "text/x-python" });
                 const fileName = `${formData.name}.py`;
                 submitData.append("file", blob, fileName);
             } else {
                 if (!formData.file) {
-                    throw new Error("Please select a file to upload.");
+                    throw new Error(t('sms.deviceTypes.selectFileError'));
                 }
                 submitData.append("file", formData.file);
             }
@@ -119,11 +121,11 @@ export function DeviceTypeCreateDialog({ isOpen, onClose, editMode = false, init
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-2xl bg-[#0A0A0A] border-white/10 text-white">
+            <DialogContent className="max-w-2xl bg-card border-border text-[var(--foreground)]">
                 <DialogHeader>
-                    <DialogTitle>{editMode ? "Edit Device Type" : "Create New Device Type"}</DialogTitle>
+                    <DialogTitle>{editMode ? t('sms.deviceTypes.updateTitle') : t('sms.deviceTypes.createTitle')}</DialogTitle>
                     <DialogDescription>
-                        {editMode ? "Modify existing device type code." : "Define a new device type and its Python parser."}
+                        {t('sms.deviceTypes.createDesc')}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -135,47 +137,47 @@ export function DeviceTypeCreateDialog({ isOpen, onClose, editMode = false, init
                     )}
 
                     <div className="space-y-2">
-                        <label htmlFor="name" className="block text-sm font-medium text-white/80">
-                            Device Type Name
+                        <label htmlFor="name" className="block text-sm font-medium text-[var(--foreground)]/80">
+                            {t('sms.deviceTypes.deviceTypeName')}
                         </label>
                         <input
                             id="name"
                             value={formData.name}
                             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                            placeholder="e.g. my_custom_sensor_v1"
+                            placeholder={t('sms.deviceTypes.placeholderName')}
                             disabled={editMode} // Name implies ID, changing it creates new one. Let's disable for edit for now to be safe, or allow "Save As Copy"
-                            className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50"
+                            className="w-full bg-muted/50 border border-border rounded-lg px-4 py-2 text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50"
                             required
                         />
-                        <p className="text-xs text-white/40">Unique identifier for this device type.</p>
+                        <p className="text-xs text-[var(--foreground)]/40">{t('sms.deviceTypes.deviceTypeDesc')}</p>
                     </div>
 
                     <div className="space-y-2">
-                        <label className="block text-sm font-medium text-white/80">Parser Code</label>
+                        <label className="block text-sm font-medium text-[var(--foreground)]/80">{t('sms.deviceTypes.parserCode')}</label>
 
                         {/* Custom Tabs */}
-                        <div className="flex items-center gap-2 mb-2 bg-white/5 p-1 rounded-lg w-fit">
+                        <div className="flex items-center gap-2 mb-2 bg-muted/50 p-1 rounded-lg w-fit">
                             <button
                                 type="button"
                                 onClick={() => setActiveTab("write")}
                                 className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-all ${activeTab === "write"
                                     ? "bg-blue-600 text-white shadow-sm"
-                                    : "text-white/60 hover:text-white hover:bg-white/5"
+                                    : "text-[var(--foreground)]/60 hover:text-[var(--foreground)] hover:bg-muted/50"
                                     }`}
                             >
                                 <Code className="w-4 h-4" />
-                                Write Code
+                                {t('sms.deviceTypes.writeCode')}
                             </button>
                             <button
                                 type="button"
                                 onClick={() => setActiveTab("upload")}
                                 className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-all ${activeTab === "upload"
                                     ? "bg-blue-600 text-white shadow-sm"
-                                    : "text-white/60 hover:text-white hover:bg-white/5"
+                                    : "text-[var(--foreground)]/60 hover:text-[var(--foreground)] hover:bg-muted/50"
                                     }`}
                             >
                                 <Upload className="w-4 h-4" />
-                                Upload File
+                                {t('sms.deviceTypes.uploadFile')}
                             </button>
                         </div>
 
@@ -184,20 +186,20 @@ export function DeviceTypeCreateDialog({ isOpen, onClose, editMode = false, init
                                 value={formData.code}
                                 onChange={(e) => setFormData({ ...formData, code: e.target.value })}
                                 placeholder="def parse(payload): ..."
-                                className="w-full h-64 bg-[#1A1A1A] border border-white/10 rounded-lg p-4 font-mono text-sm text-white/90 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-y"
+                                className="w-full h-64 bg-[#1A1A1A] border border-border rounded-lg p-4 font-mono text-sm text-[var(--foreground)]/90 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-y"
                                 spellCheck={false}
                             />
                         ) : (
                             <div
                                 onClick={() => fileInputRef.current?.click()}
-                                className="w-full h-64 border-2 border-dashed border-white/10 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-blue-500/50 hover:bg-blue-500/5 transition-colors group"
+                                className="w-full h-64 border-2 border-dashed border-border rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-blue-500/50 hover:bg-blue-500/5 transition-colors group"
                             >
-                                <Upload className="w-8 h-8 text-white/40 group-hover:text-blue-400 mb-3 transition-colors" />
-                                <p className="text-sm text-white/60 group-hover:text-white transition-colors">
-                                    Click to select Python file
+                                <Upload className="w-8 h-8 text-[var(--foreground)]/40 group-hover:text-blue-400 mb-3 transition-colors" />
+                                <p className="text-sm text-[var(--foreground)]/60 group-hover:text-[var(--foreground)] transition-colors">
+                                    {t('sms.deviceTypes.clickToSelect')}
                                 </p>
-                                <p className="text-xs text-white/40 mt-1">
-                                    {formData.file ? formData.file.name : "No file selected"}
+                                <p className="text-xs text-[var(--foreground)]/40 mt-1">
+                                    {formData.file ? formData.file.name : t('sms.deviceTypes.noFileSelected')}
                                 </p>
                                 <input
                                     ref={fileInputRef}
@@ -214,9 +216,9 @@ export function DeviceTypeCreateDialog({ isOpen, onClose, editMode = false, init
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-4 py-2 rounded-lg text-white/60 hover:text-white hover:bg-white/5 transition-colors"
+                            className="px-4 py-2 rounded-lg text-[var(--foreground)]/60 hover:text-[var(--foreground)] hover:bg-muted/50 transition-colors"
                         >
-                            Cancel
+                            {t('sms.deviceTypes.cancel')}
                         </button>
                         <button
                             type="submit"
@@ -224,7 +226,7 @@ export function DeviceTypeCreateDialog({ isOpen, onClose, editMode = false, init
                             className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                            {editMode ? "Update Device Type" : "Create Device Type"}
+                            {editMode ? t('sms.deviceTypes.editSubmit') : t('sms.deviceTypes.createSubmit')}
                         </button>
                     </div>
                 </form>

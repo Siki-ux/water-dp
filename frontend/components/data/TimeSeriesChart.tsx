@@ -123,7 +123,7 @@ export default function TimeSeriesChart({
 
     if (series.length === 0 || chartData.length === 0) {
         return (
-            <div className="h-64 flex items-center justify-center text-white/30 bg-white/5 rounded-lg border border-white/5">
+            <div className="h-64 flex items-center justify-center text-[var(--foreground)]/30 bg-muted/50 rounded-lg border border-border">
                 No data available for the selected datastreams.
             </div>
         );
@@ -134,7 +134,7 @@ export default function TimeSeriesChart({
             {left !== "dataMin" && (
                 <button
                     onClick={zoomOut}
-                    className="absolute top-2 right-2 z-10 flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-white bg-hydro-primary rounded-md hover:filter hover:brightness-110 shadow-sm transition-all"
+                    className="absolute top-2 right-2 z-10 flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-[var(--background)] bg-[var(--foreground)] rounded-md hover:filter hover:brightness-110 shadow-sm transition-all"
                 >
                     <ZoomOut className="w-3 h-3" />
                     Reset Zoom
@@ -148,34 +148,37 @@ export default function TimeSeriesChart({
                     onMouseMove={(e: any) => refAreaLeft && e && e.activeLabel && setRefAreaRight(e.activeLabel)}
                     onMouseUp={zoom}
                 >
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                     <XAxis
                         dataKey="time"
                         type="number"
                         domain={[left, right]}
                         tickFormatter={(val) => format(new Date(val), "MM/dd HH:mm")}
-                        stroke="rgba(255,255,255,0.3)"
-                        tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 10 }}
+                        stroke="var(--foreground)"
+                        opacity={0.3}
+                        tick={{ fill: "var(--foreground)", opacity: 0.5, fontSize: 10 }}
                         allowDataOverflow
                     />
                     <YAxis
                         domain={[bottom, top]}
-                        stroke="rgba(255,255,255,0.3)"
-                        tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 10 }}
+                        stroke="var(--foreground)"
+                        opacity={0.3}
+                        tick={{ fill: "var(--foreground)", opacity: 0.5, fontSize: 10 }}
                         tickFormatter={(val) => new Intl.NumberFormat('en-US', { notation: "compact", maximumFractionDigits: 1 }).format(val)}
                         allowDataOverflow
                         width={40}
                     />
                     <Tooltip
                         contentStyle={{
-                            backgroundColor: "#0a0a0a",
-                            border: "1px solid rgba(255,255,255,0.1)",
+                            backgroundColor: "var(--card)",
+                            border: "1px solid var(--border)",
                             borderRadius: "12px",
                             padding: "12px",
-                            boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.5)"
+                            boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.2)",
+                            color: "var(--foreground)"
                         }}
-                        itemStyle={{ fontSize: "12px", padding: "2px 0" }}
-                        labelStyle={{ color: "rgba(255,255,255,0.4)", fontSize: "10px", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em" }}
+                        itemStyle={{ fontSize: "12px", padding: "2px 0", color: "var(--foreground)" }}
+                        labelStyle={{ color: "var(--foreground)", opacity: 0.6, fontSize: "10px", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em" }}
                         labelFormatter={(label) => format(new Date(label), "MMM d, yyyy HH:mm:ss")}
                     />
                     {series.map(s => (
@@ -197,7 +200,8 @@ export default function TimeSeriesChart({
                             x1={refAreaLeft}
                             x2={refAreaRight}
                             strokeOpacity={0.3}
-                            fill="rgba(255,255,255,0.1)"
+                            fill="var(--foreground)"
+                            opacity={0.1}
                         />
                     ) : null}
                 </LineChart>

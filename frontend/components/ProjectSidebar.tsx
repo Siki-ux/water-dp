@@ -15,6 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
+import { useTranslation } from "@/lib/i18n";
 
 interface ProjectSidebarProps {
     projectId: string;
@@ -25,6 +26,7 @@ export function ProjectSidebar({ projectId, projectName }: ProjectSidebarProps) 
     const pathname = usePathname();
     const { data: session } = useSession();
     const [showSimulator, setShowSimulator] = useState(false);
+    const { t } = useTranslation();
 
     useEffect(() => {
         if (session?.accessToken && projectId) {
@@ -59,16 +61,15 @@ export function ProjectSidebar({ projectId, projectName }: ProjectSidebarProps) 
     }, [projectId, session]);
 
     const links = [
-        { label: "Overview", icon: Activity, href: `/projects/${projectId}` },
-        { label: "Dashboards", icon: LayoutDashboard, href: `/projects/${projectId}/dashboards` },
-        { label: "Data Sources", icon: Database, href: `/projects/${projectId}/data` },
+        { label: t('sidebar.overview'), icon: Activity, href: `/projects/${projectId}` },
+        { label: t('sidebar.dataSources'), icon: Database, href: `/projects/${projectId}/data` },
 
-        { label: "Alerts", icon: Bell, href: `/projects/${projectId}/alerts` },
-        { label: "Settings", icon: Settings, href: `/projects/${projectId}/settings` },
+        { label: t('sidebar.alerts'), icon: Bell, href: `/projects/${projectId}/alerts` },
+        { label: t('sidebar.settings'), icon: Settings, href: `/projects/${projectId}/settings` },
     ];
 
     if (showSimulator) {
-        links.splice(5, 0, { label: "Simulator", icon: Zap, href: `/projects/${projectId}/simulator` });
+        links.splice(5, 0, { label: t('sidebar.simulator'), icon: Zap, href: `/projects/${projectId}/simulator` });
     }
 
     return (
@@ -79,12 +80,12 @@ export function ProjectSidebar({ projectId, projectName }: ProjectSidebarProps) 
                     className="flex items-center gap-2 text-sm text-white/50 hover:text-white transition-colors mb-4"
                 >
                     <ChevronLeft className="w-4 h-4" />
-                    Back to Projects
+                    {t('sidebar.backToProjects')}
                 </Link>
                 <div className="font-semibold text-white truncate px-2">
                     {projectName}
                 </div>
-                <div className="text-xs text-white/40 px-2">Project ID: {projectId}</div>
+                <div className="text-xs text-white/40 px-2">{t('sidebar.projectId')}: {projectId}</div>
             </div>
 
             <nav className="flex-1 p-4 space-y-1">

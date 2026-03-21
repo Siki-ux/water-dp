@@ -41,37 +41,37 @@ export default function AlertsClient({ token }: AlertsClientProps) {
     const [isCreateOpen, setIsCreateOpen] = useState(false);
 
     return (
-        <div className="flex h-full flex-col p-6 gap-6 bg-hydro-dark/50 overflow-hidden">
+        <div className="flex h-full flex-col p-6 gap-6 bg-background overflow-hidden">
             {/* Header Section */}
             <div className="flex flex-col gap-6">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+                        <h1 className="text-3xl font-bold text-[var(--foreground)] flex items-center gap-3">
                             <div className="p-2 bg-hydro-primary/10 rounded-xl border border-hydro-primary/20">
                                 <Bell className="text-hydro-secondary w-6 h-6" />
                             </div>
                             Alerts & Monitoring
                         </h1>
-                        <p className="text-white/40 text-sm mt-1 ml-12">
+                        <p className="text-[var(--foreground)]/40 text-sm mt-1 ml-12">
                             Manage your project thresholds and view alert history.
                         </p>
                     </div>
 
                     <button
                         onClick={() => setIsCreateOpen(true)}
-                        className="px-5 py-2.5 bg-hydro-primary hover:bg-hydro-primary/90 text-white rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-hydro-primary/20 transition-all active:scale-95"
+                        className="px-5 py-2.5 bg-hydro-primary hover:bg-hydro-primary/90 text-[var(--foreground)] rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-hydro-primary/20 transition-all active:scale-95"
                     >
                         <Plus size={18} /> New Rule
                     </button>
                 </div>
 
                 {/* Tabs Navigation */}
-                <div className="flex items-center gap-8 border-b border-white/10 px-2">
+                <div className="flex items-center gap-8 border-b border-border px-2">
                     <button
                         onClick={() => setActiveTab('rules')}
                         className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'rules'
-                            ? 'text-white'
-                            : 'text-white/40 hover:text-white/60'
+                            ? 'text-[var(--foreground)]'
+                            : 'text-[var(--foreground)]/40 hover:text-[var(--foreground)]/60'
                             }`}
                     >
                         Alert Rules
@@ -82,8 +82,8 @@ export default function AlertsClient({ token }: AlertsClientProps) {
                     <button
                         onClick={() => setActiveTab('history')}
                         className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'history'
-                            ? 'text-white'
-                            : 'text-white/40 hover:text-white/60'
+                            ? 'text-[var(--foreground)]'
+                            : 'text-[var(--foreground)]/40 hover:text-[var(--foreground)]/60'
                             }`}
                     >
                         History
@@ -94,7 +94,7 @@ export default function AlertsClient({ token }: AlertsClientProps) {
                 </div>
             </div>
 
-            <div className="flex-1 min-h-0 bg-black/20 backdrop-blur-sm border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
+            <div className="flex-1 min-h-0 bg-muted/50 backdrop-blur-sm border border-border rounded-2xl overflow-hidden shadow-2xl">
                 {activeTab === 'rules' ? (
                     <RulesList projectId={projectId} token={token} queryClient={queryClient} />
                 ) : (
@@ -191,14 +191,14 @@ function RulesList({ projectId, token, queryClient }: { projectId: string, token
     return (
         <>
             {rules.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-white/30">
+                <div className="flex flex-col items-center justify-center h-full text-[var(--foreground)]/30">
                     <Bell size={48} className="mb-4 opacity-50" />
                     <p>No alert rules defined.</p>
                 </div>
             ) : (
                 <div className="overflow-auto h-full">
-                    <table className="w-full text-left text-sm text-white/70">
-                        <thead className="bg-white/5 text-white/40 sticky top-0 z-10">
+                    <table className="w-full text-left text-sm text-[var(--foreground)]/70">
+                        <thead className="bg-muted/50 text-[var(--foreground)]/40 sticky top-0 z-10">
                             <tr>
                                 <th className="px-6 py-3 font-medium">Name</th>
                                 <th className="px-6 py-3 font-medium">Condition</th>
@@ -207,12 +207,12 @@ function RulesList({ projectId, token, queryClient }: { projectId: string, token
                                 <th className="px-6 py-3 font-medium text-right">Actions</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-white/5">
+                        <tbody className="divide-y divide-border">
                             {rules.map(rule => (
-                                <tr key={rule.id} className="hover:bg-white/5">
+                                <tr key={rule.id} className="hover:bg-muted/50">
                                     <td className="px-6 py-4">
-                                        <div className="font-semibold text-white">{rule.name}</div>
-                                        <div className="text-[10px] text-white/40">
+                                        <div className="font-semibold text-[var(--foreground)]">{rule.name}</div>
+                                        <div className="text-[10px] text-[var(--foreground)]/40">
                                             {rule.sensor_id ? `Sensor: ${rule.sensor_id}` : rule.description}
                                         </div>
                                     </td>
@@ -224,7 +224,7 @@ function RulesList({ projectId, token, queryClient }: { projectId: string, token
                                             : (
                                                 <div className="flex flex-col">
                                                     <span>{(rule as any).conditions?.operator} {(rule as any).conditions?.value}</span>
-                                                    {rule.datastream_id && <span className="text-[10px] text-white/30">DS ID: {rule.datastream_id}</span>}
+                                                    {rule.datastream_id && <span className="text-[10px] text-[var(--foreground)]/30">DS ID: {rule.datastream_id}</span>}
                                                 </div>
                                             )
                                         }
@@ -242,7 +242,7 @@ function RulesList({ projectId, token, queryClient }: { projectId: string, token
                                             <button
                                                 onClick={() => toggleMutation.mutate(rule)}
                                                 disabled={toggleMutation.isPending}
-                                                className="text-white/30 text-xs font-bold uppercase tracking-wider hover:text-white/60 transition-colors"
+                                                className="text-[var(--foreground)]/30 text-xs font-bold uppercase tracking-wider hover:text-[var(--foreground)]/60 transition-colors"
                                             >
                                                 Disabled
                                             </button>
@@ -324,7 +324,7 @@ function HistoryList({ projectId, token }: { projectId: string, token: string })
     if (isLoading) return <div className="p-8 flex justify-center"><Loader2 className="animate-spin text-hydro-primary" /></div>;
 
     if (alerts.length === 0) return (
-        <div className="flex flex-col items-center justify-center h-full text-white/30">
+        <div className="flex flex-col items-center justify-center h-full text-[var(--foreground)]/30">
             <CheckCircle size={48} className="mb-4 opacity-50" />
             <p>No triggered alerts in history.</p>
         </div>
@@ -332,8 +332,8 @@ function HistoryList({ projectId, token }: { projectId: string, token: string })
 
     return (
         <div className="overflow-auto h-full">
-            <table className="w-full text-left text-sm text-white/70">
-                <thead className="bg-white/5 text-white/40 sticky top-0 z-10">
+            <table className="w-full text-left text-sm text-[var(--foreground)]/70">
+                <thead className="bg-muted/50 text-[var(--foreground)]/40 sticky top-0 z-10">
                     <tr>
                         <th className="px-6 py-3 font-medium">Time</th>
                         <th className="px-6 py-3 font-medium">Source</th>
@@ -342,10 +342,10 @@ function HistoryList({ projectId, token }: { projectId: string, token: string })
                         <th className="px-6 py-3 font-medium text-right">Actions</th>
                     </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5">
+                <tbody className="divide-y divide-border">
                     {alerts.map(alert => (
-                        <tr key={alert.id} className="hover:bg-white/5">
-                            <td className="px-6 py-4 font-mono text-xs text-white/50">
+                        <tr key={alert.id} className="hover:bg-muted/50">
+                            <td className="px-6 py-4 font-mono text-xs text-[var(--foreground)]/50">
                                 {new Date(alert.timestamp).toLocaleString()}
                             </td>
                             <td className="px-6 py-4">
@@ -362,9 +362,9 @@ function HistoryList({ projectId, token }: { projectId: string, token: string })
                                         <ArrowUpRight size={12} />
                                     </Link>
                                 ) : (
-                                    <span className="text-white/50">{alert.definition?.name || "Unknown Rule"}</span>
+                                    <span className="text-[var(--foreground)]/50">{alert.definition?.name || "Unknown Rule"}</span>
                                 )}
-                                <div className="text-[10px] text-white/30 truncate max-w-[150px]">
+                                <div className="text-[10px] text-[var(--foreground)]/30 truncate max-w-[150px]">
                                     {alert.definition?.id}
                                 </div>
                             </td>
@@ -374,7 +374,7 @@ function HistoryList({ projectId, token }: { projectId: string, token: string })
                                     {alert.status}
                                 </span>
                             </td>
-                            <td className="px-6 py-4 text-white/80 font-mono text-xs">
+                            <td className="px-6 py-4 text-[var(--foreground)]/80 font-mono text-xs">
                                 {typeof alert.details === 'string' ? alert.details : JSON.stringify(alert.details, null, 2)}
                             </td>
                             <td className="px-6 py-4 text-right">
@@ -382,7 +382,7 @@ function HistoryList({ projectId, token }: { projectId: string, token: string })
                                     <button
                                         onClick={() => acknowledgeMutation.mutate(alert.id)}
                                         disabled={acknowledgeMutation.isPending}
-                                        className="text-xs bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded transition-colors border border-white/10"
+                                        className="text-xs bg-white/10 hover:bg-white/20 text-[var(--foreground)] px-3 py-1.5 rounded transition-colors border border-border"
                                     >
                                         Acknowledge
                                     </button>
@@ -523,31 +523,31 @@ function RuleModal({ projectId, token, onClose, onSuccess, initialData }: RuleMo
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="w-full max-w-md bg-slate-900 border border-white/10 rounded-xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
-                <h3 className="text-xl font-bold text-white mb-6">{isEdit ? 'Edit Rule' : 'New Alert Rule'}</h3>
+            <div className="w-full max-w-md bg-card border border-border rounded-xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
+                <h3 className="text-xl font-bold text-[var(--foreground)] mb-6">{isEdit ? 'Edit Rule' : 'New Alert Rule'}</h3>
 
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-xs font-semibold text-white/70 mb-1">Rule Name</label>
+                        <label className="block text-xs font-semibold text-[var(--foreground)]/70 mb-1">Rule Name</label>
                         <input
                             value={name} onChange={e => setName(e.target.value)}
-                            className="w-full bg-black/20 border border-white/10 rounded px-3 py-2 text-white text-sm focus:border-hydro-primary focus:outline-none"
+                            className="w-full bg-muted/50 border border-border rounded px-3 py-2 text-[var(--foreground)] text-sm focus:border-hydro-primary focus:outline-none"
                             placeholder="e.g. High Flood Risk"
                         />
                     </div>
 
                     {/* Target Type Toggle */}
-                    <div className="flex bg-black/20 p-1 rounded-lg">
+                    <div className="flex bg-muted/50 p-1 rounded-lg">
                         <button
                             onClick={() => setTargetType('sensor')}
-                            className={`flex-1 py-1 text-xs font-bold rounded-md transition-all ${targetType === 'sensor' ? 'bg-hydro-primary text-white' : 'text-white/50 hover:text-white'
+                            className={`flex-1 py-1 text-xs font-bold rounded-md transition-all ${targetType === 'sensor' ? 'bg-hydro-primary text-[var(--foreground)]' : 'text-[var(--foreground)]/50 hover:text-[var(--foreground)]'
                                 }`}
                         >
                             SENSOR
                         </button>
                         <button
                             onClick={() => setTargetType('script')}
-                            className={`flex-1 py-1 text-xs font-bold rounded-md transition-all ${targetType === 'script' ? 'bg-hydro-primary text-white' : 'text-white/50 hover:text-white'
+                            className={`flex-1 py-1 text-xs font-bold rounded-md transition-all ${targetType === 'script' ? 'bg-hydro-primary text-[var(--foreground)]' : 'text-[var(--foreground)]/50 hover:text-[var(--foreground)]'
                                 }`}
                         >
                             SCRIPT
@@ -557,10 +557,10 @@ function RuleModal({ projectId, token, onClose, onSuccess, initialData }: RuleMo
                     {targetType === 'sensor' && (
                         <>
                             <div>
-                                <label className="block text-xs font-semibold text-white/70 mb-1">Select Sensor</label>
+                                <label className="block text-xs font-semibold text-[var(--foreground)]/70 mb-1">Select Sensor</label>
                                 <select
                                     value={stationId} onChange={e => setStationId(e.target.value)}
-                                    className="w-full bg-black/20 border border-white/10 rounded px-3 py-2 text-white text-sm focus:border-hydro-primary focus:outline-none"
+                                    className="w-full bg-muted/50 border border-border rounded px-3 py-2 text-[var(--foreground)] text-sm focus:border-hydro-primary focus:outline-none"
                                 >
                                     <option value="">-- Choose Sensor --</option>
                                     {sensors.map((s: any) => (
@@ -571,10 +571,10 @@ function RuleModal({ projectId, token, onClose, onSuccess, initialData }: RuleMo
 
                             {stationId && (
                                 <div>
-                                    <label className="block text-xs font-semibold text-white/70 mb-1">Select Datastream</label>
+                                    <label className="block text-xs font-semibold text-[var(--foreground)]/70 mb-1">Select Datastream</label>
                                     <select
                                         value={datastreamId} onChange={e => setDatastreamId(e.target.value)}
-                                        className="w-full bg-black/20 border border-white/10 rounded px-3 py-2 text-white text-sm focus:border-hydro-primary focus:outline-none"
+                                        className="w-full bg-muted/50 border border-border rounded px-3 py-2 text-[var(--foreground)] text-sm focus:border-hydro-primary focus:outline-none"
                                     >
                                         <option value="">-- Choose Datastream --</option>
                                         {sensors.find((s: any) => s.thing_id === stationId)?.datastreams?.map((ds: any) => (
@@ -584,21 +584,21 @@ function RuleModal({ projectId, token, onClose, onSuccess, initialData }: RuleMo
                                 </div>
                             )}
                             <div>
-                                <label className="block text-xs font-semibold text-white/70 mb-1">Condition</label>
+                                <label className="block text-xs font-semibold text-[var(--foreground)]/70 mb-1">Condition</label>
                                 <select
                                     value={condition} onChange={e => setCondition(e.target.value)}
-                                    className="w-full bg-black/20 border border-white/10 rounded px-3 py-2 text-white text-sm focus:border-hydro-primary focus:outline-none"
+                                    className="w-full bg-muted/50 border border-border rounded px-3 py-2 text-[var(--foreground)] text-sm focus:border-hydro-primary focus:outline-none"
                                 >
                                     <option value="threshold_gt">Value &gt; Threshold</option>
                                     <option value="threshold_lt">Value &lt; Threshold</option>
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-semibold text-white/70 mb-1">Threshold Value</label>
+                                <label className="block text-xs font-semibold text-[var(--foreground)]/70 mb-1">Threshold Value</label>
                                 <input
                                     type="number"
                                     value={threshold} onChange={e => setThreshold(e.target.value)}
-                                    className="w-full bg-black/20 border border-white/10 rounded px-3 py-2 text-white text-sm focus:border-hydro-primary focus:outline-none"
+                                    className="w-full bg-muted/50 border border-border rounded px-3 py-2 text-[var(--foreground)] text-sm focus:border-hydro-primary focus:outline-none"
                                 />
                             </div>
                         </>
@@ -611,10 +611,10 @@ function RuleModal({ projectId, token, onClose, onSuccess, initialData }: RuleMo
                                 <br />Format: <code>variable operator value</code>
                             </div>
                             <div>
-                                <label className="block text-xs font-semibold text-white/70 mb-1">Select Script</label>
+                                <label className="block text-xs font-semibold text-[var(--foreground)]/70 mb-1">Select Script</label>
                                 <select
                                     value={scriptId} onChange={e => setScriptId(e.target.value)}
-                                    className="w-full bg-black/20 border border-white/10 rounded px-3 py-2 text-white text-sm focus:border-hydro-primary focus:outline-none"
+                                    className="w-full bg-muted/50 border border-border rounded px-3 py-2 text-[var(--foreground)] text-sm focus:border-hydro-primary focus:outline-none"
                                 >
                                     <option value="">-- Choose Script --</option>
                                     {scripts.map((s: any) => (
@@ -623,13 +623,13 @@ function RuleModal({ projectId, token, onClose, onSuccess, initialData }: RuleMo
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-semibold text-white/70 mb-1">Condition Expression</label>
+                                <label className="block text-xs font-semibold text-[var(--foreground)]/70 mb-1">Condition Expression</label>
                                 <input
                                     value={manualCondition} onChange={e => setManualCondition(e.target.value)}
-                                    className="w-full bg-black/20 border border-white/10 rounded px-3 py-2 text-white text-sm focus:border-hydro-primary focus:outline-none font-mono"
+                                    className="w-full bg-muted/50 border border-border rounded px-3 py-2 text-[var(--foreground)] text-sm focus:border-hydro-primary focus:outline-none font-mono"
                                     placeholder="e.g. risk_score > 50"
                                 />
-                                <p className="text-[10px] text-white/40 mt-1">Supported operators: &gt;, &lt;, ==</p>
+                                <p className="text-[10px] text-[var(--foreground)]/40 mt-1">Supported operators: &gt;, &lt;, ==</p>
                             </div>
                         </>
                     )}
@@ -637,11 +637,11 @@ function RuleModal({ projectId, token, onClose, onSuccess, initialData }: RuleMo
                 </div>
 
                 <div className="mt-8 flex justify-end gap-3">
-                    <button onClick={onClose} className="px-4 py-2 text-sm font-semibold text-white/60 hover:text-white">Cancel</button>
+                    <button onClick={onClose} className="px-4 py-2 text-sm font-semibold text-[var(--foreground)]/60 hover:text-[var(--foreground)]">Cancel</button>
                     <button
                         onClick={() => mutation.mutate()}
                         disabled={mutation.isPending || (targetType === 'sensor' && (!stationId || !datastreamId)) || (targetType === 'script' && !scriptId)}
-                        className="px-4 py-2 bg-hydro-primary hover:bg-hydro-primary/90 text-white rounded-lg text-sm font-bold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-4 py-2 bg-hydro-primary hover:bg-hydro-primary/90 text-[var(--foreground)] rounded-lg text-sm font-bold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {mutation.isPending && <Loader2 size={16} className="animate-spin" />}
                         {isEdit ? 'Update Rule' : 'Create Rule'}

@@ -36,18 +36,18 @@ export default async function ParserDetailsPage({ params }: { params: Promise<{ 
             <div className="flex items-center gap-4">
                 <Link
                     href="/sms/parsers"
-                    className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-colors"
+                    className="p-2 rounded-lg bg-muted/50 hover:bg-muted text-[var(--foreground)]/60 hover:text-[var(--foreground)] transition-colors"
                 >
                     <ArrowLeft className="w-5 h-5" />
                 </Link>
                 <div>
-                    <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-3">
+                    <h1 className="text-2xl font-bold text-[var(--foreground)] tracking-tight flex items-center gap-3">
                         {parser.name}
                         <span className="px-2.5 py-0.5 rounded-md text-sm font-medium bg-purple-500/10 text-purple-400 border border-purple-500/20">
                             ID: #{parser.id}
                         </span>
                     </h1>
-                    <p className="text-white/60 text-sm mt-1 font-mono text-xs">{parser.uuid}</p>
+                    <p className="text-[var(--foreground)]/60 text-sm mt-1 font-mono text-xs">{parser.uuid}</p>
                 </div>
                 <div className="ml-auto">
                     <ParserEditDialog parser={parser} />
@@ -56,16 +56,16 @@ export default async function ParserDetailsPage({ params }: { params: Promise<{ 
 
             <div className="space-y-6">
                 {/* Main Info */}
-                <div className="bg-[#0A0A0A] border border-white/10 rounded-xl p-6 shadow-xl">
-                    <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                <div className="bg-card border border-border rounded-xl p-6 shadow-xl">
+                    <h2 className="text-lg font-semibold text-[var(--foreground)] mb-4 flex items-center gap-2">
                         <Terminal className="w-5 h-5 text-purple-400" />
                         Configuration
                     </h2>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                            <label className="block text-xs uppercase text-white/40 font-semibold mb-1">Type</label>
-                            <div className="flex items-center gap-2 text-white/80 bg-white/5 p-3 rounded-lg border border-white/10">
+                            <label className="block text-xs uppercase text-[var(--foreground)]/40 font-semibold mb-1">Type</label>
+                            <div className="flex items-center gap-2 text-[var(--foreground)]/80 bg-muted/50 p-3 rounded-lg border border-border">
                                 <FileCode className="w-4 h-4 text-blue-400" />
                                 {parser.type}
                             </div>
@@ -73,11 +73,11 @@ export default async function ParserDetailsPage({ params }: { params: Promise<{ 
 
                         {/* Display Settings nicely */}
                         <div className="md:col-span-2">
-                            <label className="block text-xs uppercase text-white/40 font-semibold mb-2 flex items-center gap-2">
+                            <label className="block text-xs uppercase text-[var(--foreground)]/40 font-semibold mb-2 flex items-center gap-2">
                                 <Settings className="w-3 h-3" />
                                 Settings
                             </label>
-                            <div className="bg-black/50 rounded-lg border border-white/5 p-4 font-mono text-sm text-white/70 overflow-x-auto">
+                            <div className="bg-muted/50 rounded-lg border border-border p-4 font-mono text-sm text-[var(--foreground)]/70 overflow-x-auto">
                                 <pre>{JSON.stringify(parser.settings, null, 2)}</pre>
                             </div>
                         </div>

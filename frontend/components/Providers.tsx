@@ -4,6 +4,7 @@ import { SessionProvider } from "next-auth/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { IdleMonitor } from "./auth/IdleMonitor";
+import { ThemeProvider } from "./ThemeContext";
 
 export function Providers({ children }: { children: React.ReactNode }) {
     const [queryClient] = useState(() => new QueryClient({
@@ -18,8 +19,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
     return (
         <QueryClientProvider client={queryClient}>
             <SessionProvider basePath="/portal/api/auth">
-                <IdleMonitor />
-                {children}
+                <ThemeProvider>
+                    <IdleMonitor />
+                    {children}
+                </ThemeProvider>
             </SessionProvider>
         </QueryClientProvider>
     );

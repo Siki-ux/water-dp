@@ -12,6 +12,7 @@ import SensorFormModal from "@/components/data/SensorFormModal";
 import DataUploadModal from "@/components/data/DataUploadModal";
 import DatasetUploadModal from "@/components/data/DatasetUploadModal";
 import SensorLinkModal from "@/components/data/SensorLinkModal";
+import { useTranslation } from "@/lib/i18n";
 
 interface PageProps {
     params: Promise<{ id: string }>;
@@ -20,6 +21,7 @@ interface PageProps {
 export default function ProjectDataPage({ params }: PageProps) {
     const { data: session } = useSession();
     const { id } = React.use(params);
+    const { t } = useTranslation();
 
     const [sensors, setSensors] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -28,7 +30,6 @@ export default function ProjectDataPage({ params }: PageProps) {
     const [selectedSensor, setSelectedSensor] = useState<any | null>(null);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
-    const [editingSensor, setEditingSensor] = useState<any | null>(null);
     const [grafanaFolderUid, setGrafanaFolderUid] = useState<string | null>(null);
 
     const [offset, setOffset] = useState(0);
@@ -200,32 +201,6 @@ export default function ProjectDataPage({ params }: PageProps) {
         setIsLinkModalOpen(false);
     };
 
-    const handleUpdateSensor = async (data: any) => {
-        if (!editingSensor) return;
-        // Use the internal thing ID, not the station_id string
-        const thingId = editingSensor.id;
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
-
-        const res = await fetch(`${apiUrl}/projects/${id}/things/${thingId}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${session?.accessToken}`
-            },
-            body: JSON.stringify(data)
-        });
-
-        if (!res.ok) {
-            const err = await res.json();
-            throw new Error(err.detail || "Failed to update sensor");
-        }
-
-        // Refresh list and update selected sensor detail context
-        await fetchSensors();
-        setEditingSensor(null);
-        setSelectedSensor(null); // Close detail modal to avoid stale data, or verify logic
-    };
-
     const handleDeleteSensor = async (sensorId: string, deleteFromSource: boolean) => {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
         try {
@@ -239,11 +214,11 @@ export default function ProjectDataPage({ params }: PageProps) {
                 await fetchSensors();
                 setSelectedSensor(null);
             } else {
-                alert("Failed to delete sensor");
+                alert(t("projects.dataSources.deleteFail"));
             }
         } catch (e) {
             console.error("Delete failed", e);
-            alert("Error deleting sensor");
+            alert(t("projects.dataSources.deleteError"));
         }
     };
 
@@ -289,49 +264,37 @@ export default function ProjectDataPage({ params }: PageProps) {
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-2xl font-bold text-white">Data Sources</h1>
+                    <h1 className="text-2xl font-bold text-white">{t("projects.dataSources.title")}</h1>
                     <p className="text-white/60 flex items-center gap-2">
-                        Manage sensors and datasets.
+                        {t("projects.dataSources.desc")}
                         <span className="text-xs bg-white/10 px-2 py-0.5 rounded text-white/50">
-                            Auto-refresh active
+                            {t("projects.dataSources.autoRefresh")}
                         </span>
                     </p>
                 </div>
                 <div className="flex gap-2">
-                    <a
-                        href={grafanaFolderUid ? `/visualization/dashboards/f/${grafanaFolderUid}/?orgId=1` : `/visualization/dashboards`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-4 py-2 bg-white/5 hover:bg-white/10 text-hydro-secondary font-semibold rounded-lg transition-colors border border-white/10 flex items-center gap-2"
-                    >
-                        <span>Analytics</span>
-                        <ArrowUpRight size={16} />
-                    </a>
                     <button
                         onClick={() => fetchSensors()}
                         className="px-4 py-2 bg-white/5 hover:bg-white/10 text-white font-semibold rounded-lg transition-colors border border-white/10"
                     >
-                        ↻ Refresh
+                        ↻ {t("projects.dataSources.refresh")}
                     </button>
                     <button
                         onClick={() => setIsLinkModalOpen(true)}
                         className="px-4 py-2 bg-hydro-primary text-black font-semibold rounded-lg hover:bg-hydro-accent transition-colors"
                     >
-                        + Link Datasource
+                        + {t("projects.dataSources.linkDatasource")}
                     </button>
                 </div>
             </div>
 
             {loading && sensors.length === 0 ? (
-                <div className="text-white/50 animate-pulse">Loading data...</div>
+                <div className="text-white/50 animate-pulse">{t("projects.dataSources.loading")}</div>
             ) : (
                 <SensorList
                     sensors={sensors}
                     onSelectSensor={setSelectedSensor}
                     onUpload={setUploadSensor}
-                    onEdit={(sensor) => {
-                        setEditingSensor(sensor);
-                    }}
                     onDelete={handleDeleteSensor}
                 />
             )}
@@ -344,10 +307,6 @@ export default function ProjectDataPage({ params }: PageProps) {
                     onClose={() => setSelectedSensor(null)}
                     token={session?.accessToken || ""}
                     onDelete={handleDeleteSensor}
-                    onEdit={(sensor) => {
-                        setEditingSensor(sensor);
-                        setSelectedSensor(null);
-                    }}
                 />
             )}
 
@@ -385,15 +344,6 @@ export default function ProjectDataPage({ params }: PageProps) {
                 onLink={handleLinkSensor}
                 projectId={id}
                 token={session?.accessToken || ""}
-            />
-
-            {/* Edit Modal */}
-            <SensorFormModal
-                isOpen={!!editingSensor}
-                onClose={() => setEditingSensor(null)}
-                onSubmit={handleUpdateSensor}
-                initialData={editingSensor}
-                mode="edit"
             />
         </div>
     );

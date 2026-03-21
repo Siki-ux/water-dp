@@ -7,6 +7,51 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, model_validator
 
 
+class ExternalSFTPConfig(BaseModel):
+    uri: str = Field(..., description="SFTP server URI (e.g. sftp://host:22)")
+    path: str = Field(..., description="Remote directory path to sync from")
+    username: str = Field(..., description="SFTP username")
+    password: Optional[str] = Field(None, description="SFTP password (plaintext, will be encrypted)")
+    public_key: str = Field("", description="SSH public key")
+    private_key: str = Field("", description="SSH private key (plaintext, will be encrypted)")
+    sync_interval: int = Field(60, description="Sync interval in minutes")
+    sync_enabled: bool = Field(True, description="Whether sync is active")
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "uri": "sftp://data.example.com:22",
+                "path": "/data/sensors",
+                "username": "sftpuser",
+                "password": "secret",
+                "sync_interval": 60,
+                "sync_enabled": True,
+            }
+        }
+    }
+
+
+class ExternalAPIConfig(BaseModel):
+    type: str = Field(..., description="API type name (e.g. 'dwd', 'uba', or custom type)")
+    enabled: bool = Field(True, description="Whether sync is active")
+    sync_interval: int = Field(60, description="Sync interval in minutes")
+    settings: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="API-type-specific settings (e.g. station_id, endpoint, credentials)",
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "type": "dwd",
+                "enabled": True,
+                "sync_interval": 60,
+                "settings": {"station_id": "01766"},
+            }
+        }
+    }
+
+
 class SensorProperty(BaseModel):
     name: str = Field(..., description="Machine-readable name (e.g. 'temp')")
     unit: str = Field("Unknown", description="Unit of measurement (e.g. 'Celsius')")
@@ -42,7 +87,13 @@ class SensorCreate(BaseModel):
     mqtt_username: Optional[str] = Field(None, description="Custom MQTT Username")
     mqtt_password: Optional[str] = Field(None, description="Custom MQTT Password")
     mqtt_topic: Optional[str] = Field(None, description="Custom MQTT Topic")
-    ingest_type: str = Field("mqtt", description="Ingest type (mqtt, sftp, etc.)")
+    ingest_type: str = Field("mqtt", description="Ingest type (mqtt, sftp, extapi, extsftp)")
+    external_sftp: Optional[ExternalSFTPConfig] = Field(
+        None, description="External SFTP source configuration"
+    )
+    external_api: Optional[ExternalAPIConfig] = Field(
+        None, description="External API source configuration"
+    )
 
     @model_validator(mode="after")
     def require_group_or_project(self):
@@ -121,6 +172,8 @@ class SensorCreationResponse(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     properties: Optional[Any] = None
+    external_sftp: Optional[Dict[str, Any]] = None
+    external_api: Optional[Dict[str, Any]] = None
 
 
 class IngestionResponse(BaseModel):

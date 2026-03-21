@@ -4,11 +4,15 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Loader2, Plus, X, Save } from "lucide-react";
+import { useEscapeKey } from "@/hooks/useEscapeKey";
+import { useTranslation } from "@/lib/i18n";
 
 export function ParserCreateDialog() {
     const { data: session } = useSession();
     const router = useRouter();
     const [isOpen, setIsOpen] = useState(false);
+    const { t } = useTranslation();
+    useEscapeKey(() => setIsOpen(false), isOpen);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -57,7 +61,7 @@ export function ParserCreateDialog() {
                     throw new Error(errData.detail || "Failed to create parser");
                 }
             } else {
-                throw new Error("Only CSV parser creation is currently supported.");
+                throw new Error(t('sms.parsers.csvOnlyError'));
             }
 
             setIsOpen(false);
@@ -81,24 +85,24 @@ export function ParserCreateDialog() {
         <>
             <button
                 onClick={() => setIsOpen(true)}
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20 px-4 py-2 rounded-lg font-medium transition-colors"
             >
                 <Plus className="w-4 h-4" />
-                Create Parser
+                {t('sms.parsers.createBtn')}
             </button>
 
             {isOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-[#0A0A0A] border border-white/10 rounded-xl w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-200">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
+                    <div className="bg-card border border-border rounded-xl w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-200">
                         {/* Header */}
-                        <div className="flex items-center justify-between p-6 border-b border-white/10">
+                        <div className="flex items-center justify-between p-6 border-b border-border">
                             <div>
-                                <h2 className="text-xl font-bold text-white">Create New Parser</h2>
-                                <p className="text-white/60 text-sm mt-1">Configure a new data parser.</p>
+                                <h2 className="text-xl font-bold text-[var(--foreground)]">{t('sms.parsers.createTitle')}</h2>
+                                <p className="text-[var(--foreground)]/60 text-sm mt-1">{t('sms.parsers.createDesc')}</p>
                             </div>
                             <button
                                 onClick={() => setIsOpen(false)}
-                                className="text-white/40 hover:text-white transition-colors"
+                                className="text-[var(--foreground)]/40 hover:text-[var(--foreground)] transition-colors"
                             >
                                 <X className="w-6 h-6" />
                             </button>
@@ -113,33 +117,33 @@ export function ParserCreateDialog() {
 
                             <div className="space-y-4">
                                 <div className="space-y-2">
-                                    <label htmlFor="name" className="block text-sm font-medium text-white/80">
-                                        Parser Name
+                                    <label htmlFor="name" className="block text-sm font-medium text-[var(--foreground)]/80">
+                                        {t('sms.parsers.parserName')}
                                     </label>
                                     <input
                                         id="name"
                                         name="name"
-                                        placeholder="e.g. Campbell CR6 CSV"
+                                        placeholder={t('sms.parsers.placeholderName')}
                                         value={formData.name}
                                         onChange={handleChange}
                                         required
-                                        className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                                        className="w-full bg-background border border-border rounded-lg px-4 py-2 text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                                     />
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label htmlFor="parserType" className="block text-sm font-medium text-white/80">
-                                        Parser Type
+                                    <label htmlFor="parserType" className="block text-sm font-medium text-[var(--foreground)]/80">
+                                        {t('sms.parsers.parserType')}
                                     </label>
                                     <select
                                         name="parserType"
                                         value={formData.parserType}
                                         onChange={handleChange}
-                                        className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 appearance-none"
+                                        className="w-full bg-background border border-border rounded-lg px-4 py-2 text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-blue-500/50 appearance-none"
                                     >
-                                        <option value="csv" className="bg-[#1A1A1A]">CSV (Delimited)</option>
-                                        <option value="json" disabled className="bg-[#1A1A1A]">JSON (Coming Soon)</option>
-                                        <option value="custom" disabled className="bg-[#1A1A1A]">Custom Python (See Admin)</option>
+                                        <option value="csv" className="bg-card text-[var(--foreground)]">{t('sms.parsers.csvDelimited')}</option>
+                                        <option value="json" disabled className="bg-card text-[var(--foreground)]">{t('sms.parsers.jsonComingSoon')}</option>
+                                        <option value="custom" disabled className="bg-card text-[var(--foreground)]">{t('sms.parsers.customPython')}</option>
                                     </select>
                                 </div>
 
@@ -147,51 +151,51 @@ export function ParserCreateDialog() {
                                     <>
                                         <div className="grid grid-cols-2 gap-4">
                                             <div className="space-y-2">
-                                                <label htmlFor="delimiter" className="block text-sm font-medium text-white/80">Delimiter</label>
+                                                <label htmlFor="delimiter" className="block text-sm font-medium text-[var(--foreground)]/80">{t('sms.parsers.delimiter')}</label>
                                                 <input
                                                     id="delimiter"
                                                     name="delimiter"
                                                     value={formData.delimiter}
                                                     onChange={handleChange}
-                                                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                                                    className="w-full bg-background border border-border rounded-lg px-4 py-2 text-[var(--foreground)] font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                                                 />
                                             </div>
                                             <div className="space-y-2">
-                                                <label htmlFor="headerLine" className="block text-sm font-medium text-white/80">Header Line Index</label>
+                                                <label htmlFor="headerLine" className="block text-sm font-medium text-[var(--foreground)]/80">{t('sms.parsers.headerLineIndex')}</label>
                                                 <input
                                                     id="headerLine"
                                                     name="headerLine"
                                                     type="number"
                                                     value={formData.headerLine}
                                                     onChange={handleChange}
-                                                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                                                    className="w-full bg-background border border-border rounded-lg px-4 py-2 text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                                                 />
                                             </div>
                                         </div>
 
                                         <div className="grid grid-cols-2 gap-4">
                                             <div className="space-y-2">
-                                                <label htmlFor="timestampColumn" className="block text-sm font-medium text-white/80">Time Column Index</label>
+                                                <label htmlFor="timestampColumn" className="block text-sm font-medium text-[var(--foreground)]/80">{t('sms.parsers.timestampColumnIndex')}</label>
                                                 <input
                                                     id="timestampColumn"
                                                     name="timestampColumn"
                                                     type="number"
                                                     value={formData.timestampColumn}
                                                     onChange={handleChange}
-                                                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                                                    className="w-full bg-background border border-border rounded-lg px-4 py-2 text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                                                 />
                                             </div>
                                             <div className="space-y-2">
-                                                <label htmlFor="timestampFormat" className="block text-sm font-medium text-white/80">Time Format</label>
+                                                <label htmlFor="timestampFormat" className="block text-sm font-medium text-[var(--foreground)]/80">{t('sms.parsers.timestampFormat')}</label>
                                                 <input
                                                     id="timestampFormat"
                                                     name="timestampFormat"
                                                     placeholder="%Y-%m-%d %H:%M:%S"
                                                     value={formData.timestampFormat}
                                                     onChange={handleChange}
-                                                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                                                    className="w-full bg-background border border-border rounded-lg px-4 py-2 text-[var(--foreground)] font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 placeholder:opacity-20"
                                                 />
-                                                <p className="text-[10px] text-white/40">Python strftime format</p>
+                                                <p className="text-[10px] text-[var(--foreground)]/40">{t('sms.parsers.pythonStrftime')}</p>
                                             </div>
                                         </div>
                                     </>
@@ -202,9 +206,9 @@ export function ParserCreateDialog() {
                                 <button
                                     type="button"
                                     onClick={() => setIsOpen(false)}
-                                    className="px-4 py-2 rounded-lg text-white/60 hover:text-white hover:bg-white/5 transition-colors"
+                                    className="px-4 py-2 rounded-lg text-[var(--foreground)]/60 hover:text-[var(--foreground)] hover:bg-background transition-colors"
                                 >
-                                    Cancel
+                                    {t('sms.parsers.cancel')}
                                 </button>
                                 <button
                                     type="submit"
@@ -212,7 +216,7 @@ export function ParserCreateDialog() {
                                     className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                                    Create Parser
+                                    {t('sms.parsers.createSubmit')}
                                 </button>
                             </div>
                         </form>

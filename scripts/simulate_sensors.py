@@ -51,6 +51,152 @@ LOCATIONS_MORAVA = [
     {"name": "Morava - Kroměříž ","lat": 49.30344147051559, "lon": 17.39851656181459}
 ]
 
+# --------------------------------------------------------------------------
+# External Source test sensors
+# --------------------------------------------------------------------------
+
+# Open-Meteo syncer script (uploaded as custom API type)
+OPEN_METEO_SYNCER_CODE = '''\
+"""
+Open-Meteo Weather API Syncer
+Fetches hourly weather data for a station defined by latitude/longitude.
+"""
+import json
+import requests
+from datetime import datetime
+
+
+class OpenMeteoSyncer(ExtApiSyncer):
+    BASE_URL = "https://api.open-meteo.com/v1/forecast"
+
+    def fetch_api_data(self, thing, content):
+        settings = thing.ext_api.settings
+        dt_from = datetime.strptime(content["datetime_from"], "%Y-%m-%d %H:%M:%S")
+        dt_to = datetime.strptime(content["datetime_to"], "%Y-%m-%d %H:%M:%S")
+        hourly_params = settings.get(
+            "parameters",
+            "temperature_2m,relative_humidity_2m,wind_speed_10m,precipitation"
+        )
+        params = {
+            "latitude": settings["latitude"],
+            "longitude": settings["longitude"],
+            "hourly": hourly_params,
+            "start_date": dt_from.strftime("%Y-%m-%d"),
+            "end_date": dt_to.strftime("%Y-%m-%d"),
+            "timezone": "UTC",
+        }
+        response = requests.get(self.BASE_URL, params=params, timeout=(10, 60))
+        response.raise_for_status()
+        return {
+            "data": response.json(),
+            "latitude": settings["latitude"],
+            "longitude": settings["longitude"],
+        }
+
+    def do_parse(self, api_response):
+        data = api_response["data"]
+        hourly = data.get("hourly", {})
+        timestamps = hourly.get("time", [])
+        source_meta = {
+            "latitude": api_response["latitude"],
+            "longitude": api_response["longitude"],
+        }
+        bodies = []
+        param_names = [k for k in hourly.keys() if k != "time"]
+        for i, timestamp in enumerate(timestamps):
+            for param in param_names:
+                values = hourly[param]
+                if i < len(values) and values[i] is not None:
+                    body = {
+                        "result_time": timestamp,
+                        "result_type": 0,
+                        "result_number": float(values[i]),
+                        "datastream_pos": param,
+                        "parameters": json.dumps({
+                            "origin": "open_meteo",
+                            "column_header": source_meta,
+                        }),
+                    }
+                    bodies.append(body)
+        return {"observations": bodies}
+'''
+
+EXTERNAL_SOURCES_SENSORS = [
+    {
+        "name": "Berlin Weather (Open-Meteo API)",
+        "description": "Hourly weather data from Open-Meteo free API for Berlin, Germany. "
+                       "Uses custom uploaded syncer script.",
+        "lat": 52.52,
+        "lon": 13.41,
+        "ingest_type": "extapi",
+        "device_type": "chirpstack_generic",
+        "external_api": {
+            "type": "open_meteo",
+            "enabled": True,
+            "sync_interval": 60,
+            "settings": {
+                "latitude": 52.52,
+                "longitude": 13.41,
+                "parameters": "temperature_2m,relative_humidity_2m,wind_speed_10m,precipitation",
+            },
+        },
+        "properties": [
+            {"name": "temperature_2m", "unit": "°C", "label": "Temperature 2m"},
+            {"name": "relative_humidity_2m", "unit": "%", "label": "Relative Humidity"},
+            {"name": "wind_speed_10m", "unit": "km/h", "label": "Wind Speed 10m"},
+            {"name": "precipitation", "unit": "mm", "label": "Precipitation"},
+        ],
+    },
+    {
+        "name": "Prague Weather (DWD/BrightSky)",
+        "description": "Weather data for Prague-Libus via built-in DWD syncer (BrightSky API).",
+        "lat": 50.0755,
+        "lon": 14.4378,
+        "ingest_type": "extapi",
+        "device_type": "chirpstack_generic",
+        "external_api": {
+            "type": "dwd",
+            "enabled": True,
+            "sync_interval": 60,
+            "settings": {
+                "station_id": "01766",
+            },
+        },
+        "properties": [
+            {"name": "temperature", "unit": "°C", "label": "Temperature"},
+            {"name": "wind_speed", "unit": "km/h", "label": "Wind Speed"},
+            {"name": "precipitation", "unit": "mm", "label": "Precipitation"},
+        ],
+    },
+    {
+        "name": "Local Water Quality SFTP",
+        "description": "Demo sensor pulling CSV water quality data from the local test SFTP server. "
+                       "Data is parsed with a CSV parser to extract pH, dissolved oxygen, temperature, "
+                       "and conductivity measurements.",
+        "lat": 51.3397,
+        "lon": 12.3731,
+        "ingest_type": "extsftp",
+        "device_type": "chirpstack_generic",
+        "external_sftp": {
+            "uri": "sftp://test-sftp-server:22",
+            "path": "/data",
+            "username": "testuser",
+            "password": "testpass",
+            "public_key": "",
+            "private_key": "",
+            "sync_interval": 2,
+            "sync_enabled": True,
+        },
+        "properties": [
+            {"name": "pH", "unit": "pH", "label": "pH"},
+            {"name": "dissolved_oxygen_mg_l", "unit": "mg/L", "label": "Dissolved Oxygen"},
+            {"name": "temperature_c", "unit": "°C", "label": "Water Temperature"},
+            {"name": "conductivity_us_cm", "unit": "µS/cm", "label": "Conductivity"},
+        ],
+        "needs_parser": True,
+    },
+]
+
 PROJECTS_CONFIG = [
     {
         "target_group_name": "UFZ-TSM:MyProject",
@@ -65,6 +211,13 @@ PROJECTS_CONFIG = [
         "locations": LOCATIONS_MORAVA,
     },
 ]
+
+# The external source sensors will be added to this project/group
+EXTERNAL_SOURCES_PROJECT = {
+    "target_group_name": "UFZ-TSM:MyProject",
+    "project_name": "External Sources Testing",
+    "description": "Test sensors for external API and external SFTP data ingestion.",
+}
 
 
 def get_access_token():
@@ -96,7 +249,7 @@ def wait_for_api():
     health_url = f"{base_url}/health"
 
     logger.info(f"Waiting for API at {health_url}...")
-    for _ in range(30): # Reduced wait time for development context if needed
+    for _ in range(30):
         try:
             if requests.get(health_url, timeout=5).status_code == 200:
                 logger.info("API is Up.")
@@ -104,7 +257,7 @@ def wait_for_api():
         except Exception:
             pass
         time.sleep(2)
-    logger.warning("API unreachable, but proceeding with script generation as requested (offline mode simulation).")
+    logger.warning("API unreachable, but proceeding anyway.")
 
 
 def get_group_id_by_name(headers, name):
@@ -196,7 +349,6 @@ def create_simulated_sensor(headers, project_id, location_info, index):
         },
     }
 
-    # Add retries for the first sensor (or all) because TSM setup can take a moment
     max_retries = 3
     for attempt in range(max_retries):
         try:
@@ -221,18 +373,188 @@ def create_simulated_sensor(headers, project_id, location_info, index):
             logger.error(f"Error on attempt {attempt + 1}/{max_retries} for {name}: {e}")
             if attempt < max_retries - 1:
                 time.sleep(5)
-    
+
     logger.error(f"Failed to create sensor {name} after {max_retries} attempts.")
+
+
+def register_open_meteo_api_type(headers):
+    """Upload the Open-Meteo syncer script as a custom API type."""
+    logger.info("Registering 'open_meteo' API type with syncer script...")
+
+    # Check if it already exists
+    try:
+        res = requests.get(
+            f"{API_URL}/external-sources/api-types/open_meteo",
+            headers=headers,
+        )
+        if res.status_code == 200:
+            logger.info("API type 'open_meteo' already exists.")
+            return True
+    except Exception:
+        pass
+
+    # Upload the syncer script
+    try:
+        blob = OPEN_METEO_SYNCER_CODE.encode("utf-8")
+        files = {"file": ("open_meteo.py", blob, "text/x-python")}
+        data = {"api_type_name": "open_meteo"}
+        upload_headers = {"Authorization": headers["Authorization"]}
+
+        res = requests.post(
+            f"{API_URL}/external-sources/api-types/upload",
+            headers=upload_headers,
+            files=files,
+            data=data,
+        )
+        if res.status_code in [200, 201]:
+            logger.info("Registered 'open_meteo' API type with syncer script.")
+            return True
+        else:
+            logger.warning(f"Failed to upload syncer: {res.status_code} - {res.text}")
+            # Fall back to creating type without script
+            res2 = requests.post(
+                f"{API_URL}/external-sources/api-types?name=open_meteo",
+                headers=headers,
+            )
+            if res2.status_code in [200, 201]:
+                logger.info("Created 'open_meteo' API type (without syncer script).")
+                return True
+            logger.error(f"Failed to create API type: {res2.status_code} - {res2.text}")
+            return False
+    except Exception as e:
+        logger.error(f"Error registering API type: {e}")
+        return False
+
+
+def create_csv_parser(headers, name, delimiter=",", timestamp_column=0,
+                      timestamp_format="%Y-%m-%d %H:%M:%S", header_line=0):
+    """Create a CSV parser via the SMS API and return its ID."""
+    payload = {
+        "name": name,
+        "delimiter": delimiter,
+        "timestamp_column": timestamp_column,
+        "timestamp_format": timestamp_format,
+        "header_line": header_line,
+    }
+    try:
+        res = requests.post(f"{API_URL}/sms/parsers/csv", headers=headers, json=payload)
+        if res.status_code in [200, 201]:
+            result = res.json()
+            logger.info(f"Created CSV parser '{name}' (id={result.get('id')})")
+            return result.get("id")
+        elif res.status_code == 409:
+            logger.info(f"Parser '{name}' already exists.")
+            return None
+        else:
+            logger.error(f"Failed to create parser '{name}': {res.status_code} - {res.text}")
+            return None
+    except Exception as e:
+        logger.error(f"Error creating CSV parser '{name}': {e}")
+        return None
+
+
+def create_external_source_sensor(headers, project_id, sensor_config):
+    """Create a sensor with external API or external SFTP configuration."""
+    name = sensor_config["name"]
+    logger.info(f"Creating external source sensor: {name}...")
+
+    payload = {
+        "project_uuid": project_id,
+        "sensor_name": name,
+        "description": sensor_config["description"],
+        "device_type": sensor_config["device_type"],
+        "latitude": sensor_config["lat"],
+        "longitude": sensor_config["lon"],
+        "ingest_type": sensor_config["ingest_type"],
+        "properties": sensor_config.get("properties", []),
+    }
+
+    if "external_api" in sensor_config:
+        payload["external_api"] = sensor_config["external_api"]
+    if "external_sftp" in sensor_config:
+        payload["external_sftp"] = sensor_config["external_sftp"]
+    if sensor_config.get("parser_id"):
+        payload["parser_id"] = sensor_config["parser_id"]
+
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            res = requests.post(
+                f"{API_URL}/things/",
+                headers=headers,
+                json=payload,
+            )
+            if res.status_code in [200, 201]:
+                result = res.json()
+                logger.info(
+                    f"Created external source sensor: {name} "
+                    f"(uuid={result.get('thing_uuid', 'N/A')})"
+                )
+                return True
+            elif res.status_code == 409:
+                logger.info(f"Sensor '{name}' likely already exists.")
+                return True
+            else:
+                logger.warning(
+                    f"Attempt {attempt + 1}/{max_retries} for '{name}': "
+                    f"{res.status_code} - {res.text}"
+                )
+                if attempt < max_retries - 1:
+                    time.sleep(5)
+        except Exception as e:
+            logger.error(f"Error on attempt {attempt + 1}/{max_retries} for '{name}': {e}")
+            if attempt < max_retries - 1:
+                time.sleep(5)
+
+    logger.error(f"Failed to create sensor '{name}' after {max_retries} attempts.")
+    return False
+
+
+def seed_external_sources(headers):
+    """Set up the External Sources Testing project with ext_api and ext_sftp sensors."""
+    logger.info("=" * 60)
+    logger.info("Setting up External Sources test sensors...")
+    logger.info("=" * 60)
+
+    cfg = EXTERNAL_SOURCES_PROJECT
+    group_id = get_group_id_by_name(headers, cfg["target_group_name"])
+    if not group_id:
+        logger.error(f"Could not find group '{cfg['target_group_name']}'. Skipping external sources.")
+        return
+
+    project_id = create_project(headers, group_id, cfg["project_name"], cfg["description"])
+    if not project_id:
+        logger.error("Could not create/find external sources project. Skipping.")
+        return
+
+    # Step 1: Register custom API types
+    register_open_meteo_api_type(headers)
+
+    # Step 2: Create CSV parser for SFTP sensor
+    parser_id = create_csv_parser(
+        headers, "Water Quality CSV",
+        delimiter=",", timestamp_column=0,
+        timestamp_format="%Y-%m-%d %H:%M:%S", header_line=0,
+    )
+
+    # Give TSM a moment to process
+    logger.info("Waiting 5s for TSM orchestration...")
+    time.sleep(5)
+
+    # Step 3: Create the external source sensors
+    for sensor_cfg in EXTERNAL_SOURCES_SENSORS:
+        if sensor_cfg.get("needs_parser") and parser_id:
+            sensor_cfg["parser_id"] = parser_id
+        create_external_source_sensor(headers, project_id, sensor_cfg)
+        time.sleep(3)  # Small delay between sensor creations for TSM processing
+
+    logger.info("External Sources setup complete.")
 
 
 def main():
     logger.info("Starting Water DP Simulation Script...")
     wait_for_api()
 
-    # The following steps require the API to be up. 
-    # Since the user requested "don't try connecting to application it is turned off",
-    # I have refactored the logic so it can be executed when the API is back.
-    
     try:
         token = get_access_token()
         headers = get_headers(token)
@@ -240,10 +562,11 @@ def main():
         logger.error("Could not authenticate. API is likely offline.")
         return
 
+    # --- Simulated MQTT sensors ---
     for config in PROJECTS_CONFIG:
         target_group_name = config["target_group_name"]
         logger.info(f"Processing project: {config['project_name']} for group: {target_group_name}")
-        
+
         group_id = get_group_id_by_name(headers, target_group_name)
 
         if not group_id:
@@ -251,7 +574,7 @@ def main():
             continue
 
         project_id = create_project(headers, group_id, config["project_name"], config["description"])
-        
+
         if not project_id:
             logger.error(f"Could not create/find project for '{config['project_name']}'. Skipping.")
             continue
@@ -264,7 +587,12 @@ def main():
         for i, loc in enumerate(config["locations"]):
             create_simulated_sensor(headers, project_id, loc, i)
 
-    logger.info("Simulation Setup Complete.")
+    # --- External API / SFTP test sensors ---
+    seed_external_sources(headers)
+
+    logger.info("=" * 60)
+    logger.info("Seed Complete.")
+    logger.info("=" * 60)
 
 
 if __name__ == "__main__":

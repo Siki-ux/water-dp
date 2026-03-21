@@ -46,6 +46,11 @@ class SensorSMS(BaseModel):
     s3_password: Optional[str] = None
     filename_pattern: Optional[str] = None
     
+    # External API Source
+    external_api: Optional[Dict[str, Any]] = None
+    # External SFTP Source
+    external_sftp: Optional[Dict[str, Any]] = None
+
     # Context
     project_name: Optional[str] = None
     schema_name: Optional[str] = None

@@ -140,6 +140,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             session.refreshToken = token.refreshToken as string | undefined
             session.expiresAt = token.expiresAt as number | undefined
             session.error = token.error as string | undefined
+            // Copy user name from JWT token to session
+            const tokenUser = token.user as any;
+            if (tokenUser?.name && session.user) {
+                session.user.name = tokenUser.name;
+            }
             return session
         }
     },

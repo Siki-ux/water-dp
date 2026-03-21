@@ -2,9 +2,10 @@
 "use client";
 
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { format } from "date-fns";
 import { Eye, Edit, Trash2 } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 interface Sensor {
     id: string | number;
@@ -21,7 +22,6 @@ interface SensorListProps {
     sensors: Sensor[];
     onSelectSensor: (sensor: Sensor) => void;
     onUpload?: (sensor: Sensor) => void;
-    onEdit?: (sensor: Sensor) => void;
     onDelete?: (sensorId: string, deleteFromSource: boolean) => void;
     onLoadMore?: () => void;
     hasMore?: boolean;
@@ -32,13 +32,13 @@ export default function SensorList({
     sensors,
     onSelectSensor,
     onUpload,
-    onEdit,
     onDelete,
     onLoadMore,
     hasMore,
     isLoadingMore
 }: SensorListProps) {
     const observerTarget = useRef(null);
+    const { t } = useTranslation();
 
     useEffect(() => {
         const observer = new IntersectionObserver(
@@ -65,18 +65,18 @@ export default function SensorList({
         <div className="space-y-4">
             {sensors.length === 0 ? (
                 <div className="text-white/50 text-center py-10 bg-white/5 rounded-xl border border-white/10">
-                    No data sources found.
+                    {t('sms.sensors.noDataSources')}
                 </div>
             ) : (
                 <div className="max-h-[70vh] overflow-y-auto rounded-xl border border-white/10 bg-white/5 custom-scrollbar">
                     <table className="w-full text-left text-sm text-white/70">
                         <thead className="bg-white/10 text-white uppercase font-semibold">
                             <tr>
-                                <th className="px-6 py-4">Name</th>
-                                <th className="px-6 py-4">ID</th>
-                                <th className="px-6 py-4">Status</th>
-                                <th className="px-6 py-4">Last Update</th>
-                                <th className="px-6 py-4 text-right">Actions</th>
+                                <th className="px-6 py-4">{t('sms.sensors.name')}</th>
+                                <th className="px-6 py-4">{t('sms.sensors.idCol')}</th>
+                                <th className="px-6 py-4">{t('sms.sensors.statusCol')}</th>
+                                <th className="px-6 py-4">{t('sms.sensors.lastUpdateCol')}</th>
+                                <th className="px-6 py-4 text-right">{t('sms.sensors.actions')}</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-white/10">
@@ -104,7 +104,7 @@ export default function SensorList({
                                                     : "bg-gray-400/10 text-gray-400"
                                                     }`}
                                             >
-                                                {sensor.status || "Unknown"}
+                                                {sensor.status || t('sms.sensors.unknown')}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4">
@@ -121,9 +121,9 @@ export default function SensorList({
                                                             onUpload(sensor);
                                                         }}
                                                         className="text-hydro-primary hover:text-white px-2 py-1 bg-hydro-primary/10 rounded text-xs transition-colors"
-                                                        title="Upload Data"
+                                                        title={t('sms.sensors.uploadData')}
                                                     >
-                                                        Upload
+                                                        {t('sms.sensors.upload')}
                                                     </button>
                                                 )}
 
@@ -133,34 +133,21 @@ export default function SensorList({
                                                         onSelectSensor(sensor);
                                                     }}
                                                     className="text-white/50 hover:text-white transition-colors"
-                                                    title="View Details"
+                                                    title={t('sms.sensors.viewDetails')}
                                                 >
                                                     <Eye size={16} />
                                                 </button>
-
-                                                {onEdit && (
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            onEdit(sensor);
-                                                        }}
-                                                        className="text-white/50 hover:text-white transition-colors"
-                                                        title="Edit"
-                                                    >
-                                                        <Edit size={16} />
-                                                    </button>
-                                                )}
 
                                                 {onDelete && (
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            if (confirm("Unlink this sensor? Details will remain in database.")) {
+                                                            if (confirm(t('sms.sensors.unlinkConfirmList'))) {
                                                                 onDelete(sensor.id as string, false); // False = Unlink only (safer default)
                                                             }
                                                         }}
                                                         className="text-white/50 hover:text-red-400 transition-colors"
-                                                        title="Unlink"
+                                                        title={t('sms.sensors.unlink')}
                                                     >
                                                         <Trash2 size={16} />
                                                     </button>

@@ -77,12 +77,12 @@ export function ParserEditDialog({ parser }: { parser: Parser }) {
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button variant="outline" className="gap-2 bg-white/5 border-white/10 text-white hover:bg-white/10">
+                <Button variant="outline" className="gap-2 bg-muted/50 border-border text-[var(--foreground)] hover:bg-muted">
                     <Edit2 className="w-4 h-4" />
                     Edit Parser
                 </Button>
             </DialogTrigger>
-            <DialogContent className="bg-[#0A0A0A] border-white/10 text-white sm:max-w-[600px]">
+            <DialogContent className="bg-card border-border text-[var(--foreground)] sm:max-w-[600px]">
                 <DialogHeader>
                     <DialogTitle>Edit Parser</DialogTitle>
                     <DialogDescription>
@@ -97,7 +97,7 @@ export function ParserEditDialog({ parser }: { parser: Parser }) {
                             id="name"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
-                            className="bg-white/5 border-white/10 text-white focus:border-purple-500/50"
+                            className="bg-muted/50 border-border text-[var(--foreground)] focus:border-purple-500/50"
                         />
                     </div>
 
@@ -107,19 +107,19 @@ export function ParserEditDialog({ parser }: { parser: Parser }) {
                             id="settings"
                             value={settingsJson}
                             onChange={(e) => setSettingsJson(e.target.value)}
-                            className="bg-white/5 border-white/10 text-white font-mono text-xs focus:border-purple-500/50 min-h-[200px]"
+                            className="bg-muted/50 border-border text-[var(--foreground)] font-mono text-xs focus:border-purple-500/50 min-h-[200px]"
                         />
-                        <p className="text-xs text-white/40">
+                        <p className="text-xs text-[var(--foreground)]/40">
                             Edit the raw JSON configuration. Validate format before saving.
                         </p>
                     </div>
                 </div>
 
                 <DialogFooter>
-                    <Button variant="ghost" onClick={() => setOpen(false)} disabled={loading} className="text-white/60 hover:text-white hover:bg-white/5">
+                    <Button variant="ghost" onClick={() => setOpen(false)} disabled={loading} className="text-[var(--foreground)]/60 hover:text-[var(--foreground)] hover:bg-muted/50">
                         Cancel
                     </Button>
-                    <Button onClick={handleSave} disabled={loading} className="bg-purple-600 hover:bg-purple-700 text-white gap-2">
+                    <Button onClick={handleSave} disabled={loading} className="bg-purple-600 hover:bg-purple-700 text-[var(--foreground)] gap-2">
                         {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                         Save Changes
                     </Button>

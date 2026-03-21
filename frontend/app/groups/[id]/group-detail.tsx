@@ -5,6 +5,7 @@ import { Loader2, UserPlus, Trash2, ArrowLeft, Users } from "lucide-react";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
+import { useTranslation } from "@/lib/i18n";
 
 interface GroupDetailProps {
     groupId: string;
@@ -14,6 +15,7 @@ interface GroupDetailProps {
 export default function GroupDetail({ groupId, token }: GroupDetailProps) {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
     const queryClient = useQueryClient();
+    const { t } = useTranslation();
     const [newUsername, setNewUsername] = useState("");
     const [addError, setAddError] = useState<string | null>(null);
 
@@ -112,7 +114,7 @@ export default function GroupDetail({ groupId, token }: GroupDetailProps) {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Members List */}
                 <div className="lg:col-span-2 space-y-4">
-                    <h2 className="text-xl font-bold text-white mb-4">Members ({members?.length || 0})</h2>
+                    <h2 className="text-xl font-bold text-white mb-4">{t("groups.members")} ({members?.length || 0})</h2>
 
                     {isMembersLoading ? (
                         <div className="flex justify-center py-10"><Loader2 className="animate-spin text-white/20" /></div>
@@ -126,7 +128,7 @@ export default function GroupDetail({ groupId, token }: GroupDetailProps) {
                                         </div>
                                         <div>
                                             <div className="text-white font-medium">{member.username}</div>
-                                            <div className="text-white/40 text-xs">{member.email || "No email"}</div>
+                                            <div className="text-white/40 text-xs">{member.email || t("groups.noEmail")}</div>
                                         </div>
                                     </div>
 
@@ -134,14 +136,14 @@ export default function GroupDetail({ groupId, token }: GroupDetailProps) {
                                         onClick={() => removeMemberMutation.mutate(member.id)}
                                         disabled={removeMemberMutation.isPending}
                                         className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-50"
-                                        title="Remove member"
+                                        title={t("groups.removeMember")}
                                     >
                                         {removeMemberMutation.isPending ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
                                     </button>
                                 </div>
                             ))}
                             {members?.length === 0 && (
-                                <div className="p-8 text-center text-white/40 italic">No members found.</div>
+                                <div className="p-8 text-center text-white/40 italic">{t("groups.noMembersFound")}</div>
                             )}
                         </div>
                     )}
@@ -152,16 +154,16 @@ export default function GroupDetail({ groupId, token }: GroupDetailProps) {
                     <div className="bg-slate-900/50 border border-white/10 rounded-xl p-6 sticky top-4">
                         <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                             <UserPlus size={20} className="text-hydro-primary" />
-                            Add Member
+                            {t("groups.addMemberTitle")}
                         </h3>
 
                         <form onSubmit={handleAddMember} className="space-y-4">
                             <div>
-                                <label className="block text-xs font-semibold text-white/50 mb-1.5 uppercase tracking-wider">Username</label>
+                                <label className="block text-xs font-semibold text-white/50 mb-1.5 uppercase tracking-wider">{t("groups.username")}</label>
                                 <input
                                     value={newUsername}
                                     onChange={(e) => setNewUsername(e.target.value)}
-                                    placeholder="Enter username..."
+                                    placeholder={t("groups.enterUsername")}
                                     className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-white focus:border-hydro-primary focus:outline-none transition-all text-sm"
                                 />
                             </div>
@@ -177,7 +179,7 @@ export default function GroupDetail({ groupId, token }: GroupDetailProps) {
                                 disabled={addMemberMutation.isPending || !newUsername.trim()}
                                 className="w-full py-2 bg-hydro-primary hover:bg-blue-600 text-white rounded-lg font-bold text-sm shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex justify-center items-center gap-2"
                             >
-                                {addMemberMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : "Add User"}
+                                {addMemberMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : t("groups.addUserBtn")}
                             </button>
                         </form>
                     </div>

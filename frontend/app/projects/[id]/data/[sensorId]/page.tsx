@@ -8,12 +8,14 @@ import TimeSeriesChart from "@/components/data/TimeSeriesChart";
 import { DataTable, Column } from "@/components/data/DataTable";
 import { format, subHours } from "date-fns";
 import { getApiUrl } from "@/lib/utils";
+import { useTranslation } from "@/lib/i18n";
 
 interface PageProps {
     params: Promise<{ id: string; sensorId: string }>;
 }
 
 export default function SensorDataPage({ params }: PageProps) {
+    const { t, language } = useTranslation();
     const { data: session } = useSession();
     const { id, sensorId } = React.use(params);
 
@@ -205,23 +207,23 @@ export default function SensorDataPage({ params }: PageProps) {
     // Columns
     const columns: Column<any>[] = useMemo(() => [
         {
-            header: "Time",
+            header: t("projects.sensorData.time"),
             accessorKey: "timestamp",
             cell: (item) => <span className="text-gray-300 font-mono">{format(new Date(item.timestamp), "yyyy-MM-dd HH:mm:ss")}</span>,
             sortable: true
         },
         {
-            header: "Value",
+            header: t("projects.sensorData.value"),
             accessorKey: "value",
             cell: (item) => <span className="font-semibold text-white">{item.value?.toFixed(2)}</span>,
             sortable: true
         },
         {
-            header: "Unit",
+            header: t("projects.sensorData.unit"),
             accessorKey: "unit",
             cell: () => <span className="text-white/50">{datastreams.find(d => d.name === selectedDatastream)?.unit_of_measurement?.symbol || datastreams.find(d => d.name === selectedDatastream)?.unit || '-'}</span>
         }
-    ], [datastreams, selectedDatastream]);
+    ], [datastreams, selectedDatastream, language]);
 
     if (!session) return null;
 
@@ -238,28 +240,28 @@ export default function SensorDataPage({ params }: PageProps) {
                     </Link>
                     <div>
                         <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-                            {sensor?.name || "Loading..."}
+                            {sensor?.name || t("projects.sensorData.loading")}
                             <span className={`text-xs px-2 py-0.5 rounded-full border ${sensor?.properties?.status === 'active'
                                 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                                 : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
                                 }`}>
-                                {sensor?.properties?.status || "Active"}
+                                {sensor?.properties?.status || t("projects.sensorData.active")}
                             </span>
                         </h1>
-                        <p className="text-white/60 text-sm">{sensor?.description || "Sensor Data History"}</p>
+                        <p className="text-white/60 text-sm">{sensor?.description || t("projects.sensorData.historyDesc")}</p>
                     </div>
                 </div>
                 <div className="flex gap-2">
                     <button
                         onClick={handleRefresh}
                         className="p-2 bg-white/5 hover:bg-white/10 text-white rounded-lg border border-white/10 transition-colors"
-                        title="Refresh Data"
+                        title={t("projects.sensorData.refresh")}
                     >
                         <RefreshCw className={`w-5 h-5 ${chartLoading ? "animate-spin" : ""}`} />
                     </button>
                     <button className="flex items-center gap-2 px-4 py-2 bg-hydro-primary text-black font-semibold rounded-lg hover:bg-hydro-accent transition-colors">
                         <Download className="w-4 h-4" />
-                        Export CSV
+                        {t("projects.sensorData.exportCsv")}
                     </button>
                 </div>
             </div>
@@ -271,16 +273,16 @@ export default function SensorDataPage({ params }: PageProps) {
                 <div className="bg-white/5 border border-white/10 rounded-xl p-6 shadow-xl backdrop-blur-sm relative shrink-0">
                     <div className="flex flex-wrap justify-between items-end mb-4 gap-4">
                         <div className="flex flex-col">
-                            <h2 className="text-lg font-semibold text-white">Historical Trends</h2>
+                            <h2 className="text-lg font-semibold text-white">{t("projects.sensorData.historicalTrends")}</h2>
                             <div className="flex items-center gap-2 mt-1">
                                 {datastreams.length > 0 && (
                                     <select
                                         value={selectedDatastream}
                                         onChange={(e) => setSelectedDatastream(e.target.value)}
-                                        className="bg-black/20 border border-white/10 rounded text-xs text-white px-2 py-1 outline-none focus:border-hydro-primary"
+                                        className="bg-card border border-border rounded text-xs text-[var(--foreground)] px-2 py-1 outline-none focus:border-hydro-primary"
                                     >
                                         {datastreams.map((ds: any) => (
-                                            <option key={ds.name} value={ds.name} className="bg-gray-900 text-white">
+                                            <option key={ds.name} value={ds.name} className="bg-card text-[var(--foreground)]">
                                                 {ds.label || ds.name} ({ds.unit_of_measurement?.symbol || ds.unit || '-'})
                                             </option>
                                         ))}
@@ -293,23 +295,23 @@ export default function SensorDataPage({ params }: PageProps) {
                         <div className="flex flex-wrap items-center gap-2 text-sm bg-black/20 p-2 rounded-lg border border-white/5">
                             {/* Resolution Control */}
                             <div className="flex flex-col gap-1 w-24">
-                                <label className="text-xs text-white/50 px-1 flex items-center gap-1"><Layers className="w-3 h-3" /> Res</label>
+                                <label className="text-xs text-white/50 px-1 flex items-center gap-1"><Layers className="w-3 h-3" /> {t("projects.sensorData.resolution")}</label>
                                 <select
                                     value={decimationLevel}
                                     onChange={(e) => setDecimationLevel(Number(e.target.value))}
-                                    className="bg-white/5 border border-white/10 rounded px-2 py-1 text-white text-xs focus:ring-1 focus:ring-hydro-primary outline-none"
+                                    className="bg-card border border-border rounded px-2 py-1 text-[var(--foreground)] text-xs focus:ring-1 focus:ring-hydro-primary outline-none"
                                 >
-                                    <option value={1} className="bg-gray-900">Native</option>
-                                    <option value={5} className="bg-gray-900">1:5</option>
-                                    <option value={10} className="bg-gray-900">1:10</option>
-                                    <option value={60} className="bg-gray-900">1:60</option>
+                                    <option value={1} className="bg-card">{t("projects.sensorData.native")}</option>
+                                    <option value={5} className="bg-card">1:5</option>
+                                    <option value={10} className="bg-card">1:10</option>
+                                    <option value={60} className="bg-card">1:60</option>
                                 </select>
                             </div>
 
                             <div className="h-8 w-px bg-white/10 mx-2"></div>
 
                             <div className="flex flex-col gap-1">
-                                <label className="text-xs text-white/50 px-1 flex items-center gap-1"><Calendar className="w-3 h-3" /> From</label>
+                                <label className="text-xs text-white/50 px-1 flex items-center gap-1"><Calendar className="w-3 h-3" /> {t("projects.sensorData.from")}</label>
                                 <input
                                     type="datetime-local"
                                     value={startDate}
@@ -318,7 +320,7 @@ export default function SensorDataPage({ params }: PageProps) {
                                 />
                             </div>
                             <div className="flex flex-col gap-1">
-                                <label className="text-xs text-white/50 px-1 flex items-center gap-1"><Calendar className="w-3 h-3" /> To</label>
+                                <label className="text-xs text-white/50 px-1 flex items-center gap-1"><Calendar className="w-3 h-3" /> {t("projects.sensorData.to")}</label>
                                 <input
                                     type="datetime-local"
                                     value={endDate}
@@ -329,10 +331,10 @@ export default function SensorDataPage({ params }: PageProps) {
                             <div className="h-8 w-px bg-white/10 mx-2"></div>
                             <div className="flex items-end gap-2">
                                 <div className="flex flex-col gap-1 w-16">
-                                    <label className="text-xs text-white/50 px-1">Y Min</label>
+                                    <label className="text-xs text-white/50 px-1">{t("projects.sensorData.yMin")}</label>
                                     <input
                                         type="number"
-                                        placeholder="Auto"
+                                        placeholder={t("projects.sensorData.auto")}
                                         value={yMinInput}
                                         onChange={(e) => {
                                             setYMinInput(e.target.value);
@@ -343,10 +345,10 @@ export default function SensorDataPage({ params }: PageProps) {
                                     />
                                 </div>
                                 <div className="flex flex-col gap-1 w-16">
-                                    <label className="text-xs text-white/50 px-1">Y Max</label>
+                                    <label className="text-xs text-white/50 px-1">{t("projects.sensorData.yMax")}</label>
                                     <input
                                         type="number"
-                                        placeholder="Auto"
+                                        placeholder={t("projects.sensorData.auto")}
                                         value={yMaxInput}
                                         onChange={(e) => {
                                             setYMaxInput(e.target.value);

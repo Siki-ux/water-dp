@@ -267,6 +267,17 @@ def seed_layers(auth, headers, db_schema="public"):
                 )
                 if r.status_code == 201:
                     logger.info(f"Layer {table_name} published successfully.")
+                    # Force recalculate bounds after publish
+                    import time
+                    time.sleep(1)
+                    requests.put(
+                        f"{GS_URL}/rest/workspaces/{ws_name}/datastores/{store_name}/featuretypes/{table_name}",
+                        json=ft_payload,
+                        auth=auth,
+                        headers=headers,
+                        params=params,
+                    )
+                    logger.info(f"Bounds recalculated for {table_name}.")
                 else:
                     logger.error(f"Failed to publish layer {table_name}: {r.text}")
 

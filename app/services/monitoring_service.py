@@ -158,9 +158,9 @@ class MonitoringService:
         filter_str = f"properties/uuid eq '{thing_uuid}'"
 
         # Expansion: Datastreams -> Observations (Top 1 desc)
-        # $expand=Datastreams($expand=Observations($top=1;$orderby=phenomenonTime desc))
+        # $expand=Datastreams($expand=Observations($top=1;$orderby=resultTime desc))
         expand_str = (
-            "Datastreams($expand=Observations($top=1;$orderby=phenomenonTime desc))"
+            "Datastreams($expand=Observations($top=1;$orderby=resultTime desc))"
         )
 
         things = frost.get_things(filter=filter_str, expand=expand_str)
@@ -182,9 +182,8 @@ class MonitoringService:
         datastreams = thing_data.get("Datastreams", [])
         for ds in datastreams:
             observations = ds.get("Observations", [])
-            if hasattr(observations, "get"): # Handle dict/list confusion if any
-                # Should be list from FROST
-                pass
+            if isinstance(observations, dict):
+                observations = observations.get("value", [])
             
             if isinstance(observations, list) and observations:
                 obs = observations[0]

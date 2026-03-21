@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Search, Link as LinkIcon, Info } from "lucide-react";
+import { useEscapeKey } from '@/hooks/useEscapeKey';
 
 interface SensorLinkModalProps {
     isOpen: boolean;
@@ -18,6 +19,8 @@ export default function SensorLinkModal({
     projectId,
     token
 }: SensorLinkModalProps) {
+    useEscapeKey(onClose, isOpen);
+
     const [availableSensors, setAvailableSensors] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [linkingId, setLinkingId] = useState<string | null>(null);
@@ -69,27 +72,27 @@ export default function SensorLinkModal({
     );
 
     return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={onClose}>
-            <div className="bg-[#0a0a0a] border border-white/10 rounded-2xl w-full max-w-3xl h-[80vh] flex flex-col shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-background/80 backdrop-blur-md p-4" onClick={onClose}>
+            <div className="bg-card border border-border rounded-2xl w-full max-w-3xl h-[80vh] flex flex-col shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
                 {/* Header */}
-                <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/5">
+                <div className="p-6 border-b border-border flex justify-between items-center bg-muted/30">
                     <div>
-                        <h2 className="text-xl font-bold text-white">Link Existing Sensors</h2>
-                        <p className="text-sm text-white/50">Select a sensor from TimeIO to link to this project</p>
+                        <h2 className="text-xl font-bold text-[var(--foreground)]">Link Existing Sensors</h2>
+                        <p className="text-sm opacity-50 text-[var(--foreground)]">Select a sensor from TimeIO to link to this project</p>
                     </div>
-                    <button onClick={onClose} className="text-white/50 hover:text-white p-2">✕</button>
+                    <button onClick={onClose} className="opacity-50 text-[var(--foreground)] hover:opacity-100 p-2">✕</button>
                 </div>
 
                 {/* Search & Feedback */}
-                <div className="p-4 border-b border-white/10 space-y-3">
+                <div className="p-4 border-b border-border space-y-3">
                     <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 w-4 h-4" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 opacity-30 text-[var(--foreground)] w-4 h-4" />
                         <input
                             type="text"
                             placeholder="Search by name or ID..."
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
-                            className="w-full bg-white/5 border border-white/10 rounded-lg pl-10 pr-4 py-2 text-white focus:outline-none focus:border-hydro-primary transition-colors"
+                            className="w-full bg-muted/50 border border-border rounded-lg pl-10 pr-4 py-2 text-[var(--foreground)] focus:outline-none focus:border-hydro-primary transition-colors"
                         />
                     </div>
                     {error && (
@@ -117,7 +120,7 @@ export default function SensorLinkModal({
                             {filteredSensors.map((s) => (
                                 <div
                                     key={s.sensor_uuid}
-                                    className="p-4 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all group flex items-center justify-between"
+                                    className="p-4 bg-muted/30 border border-border rounded-xl hover:bg-muted/50 transition-all group flex items-center justify-between"
                                 >
                                     <div className="flex items-center gap-4">
                                         <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${s.station_type === 'dataset' ? 'bg-blue-500/20 text-blue-400' : 'bg-hydro-primary/20 text-hydro-primary'
@@ -125,8 +128,8 @@ export default function SensorLinkModal({
                                             <Database className="w-5 h-5" />
                                         </div>
                                         <div>
-                                            <h3 className="text-white font-semibold group-hover:text-hydro-primary transition-colors">{s.name}</h3>
-                                            <div className="flex items-center gap-3 text-xs text-white/40 mt-0.5">
+                                            <h3 className="text-[var(--foreground)] font-semibold group-hover:text-hydro-primary transition-colors">{s.name}</h3>
+                                            <div className="flex items-center gap-3 text-xs opacity-40 text-[var(--foreground)] mt-0.5">
                                                 <span className="font-mono">ID: {s.sensor_uuid}</span>
                                                 <span>•</span>
                                                 <span className="capitalize">{s.station_type}</span>
@@ -152,7 +155,7 @@ export default function SensorLinkModal({
                 </div>
 
                 {/* Footer */}
-                <div className="p-4 bg-white/5 border-t border-white/10 text-[10px] text-white/30 flex justify-between items-center">
+                <div className="p-4 bg-muted/30 border-t border-border text-[10px] opacity-30 text-[var(--foreground)] flex justify-between items-center">
                     <span>Showing {filteredSensors.length} of {availableSensors.length} total things in FROST</span>
                     <div className="flex gap-4">
                         <span>Shift+Click for multi-select (Not yet)</span>

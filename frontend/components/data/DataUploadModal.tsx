@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useEscapeKey } from '@/hooks/useEscapeKey';
 
 interface DataUploadModalProps {
     isOpen: boolean;
@@ -10,6 +11,8 @@ interface DataUploadModalProps {
 }
 
 export default function DataUploadModal({ isOpen, onClose, onUpload, sensorName }: DataUploadModalProps) {
+    useEscapeKey(onClose, isOpen);
+
     const [file, setFile] = useState<File | null>(null);
     const [parameter, setParameter] = useState("Level");
     const [loading, setLoading] = useState(false);
@@ -53,18 +56,18 @@ export default function DataUploadModal({ isOpen, onClose, onUpload, sensorName 
 
     return (
         <div
-            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-background/80 backdrop-blur-md p-4"
             onClick={onClose}
         >
             <div
-                className="bg-[#0a0a0a] border border-white/10 rounded-2xl w-full max-w-2xl flex flex-col shadow-2xl max-h-[90vh]"
+                className="bg-card border border-border rounded-2xl w-full max-w-2xl flex flex-col shadow-2xl max-h-[90vh]"
                 onClick={e => e.stopPropagation()}
             >
-                <div className="p-6 border-b border-white/10 flex justify-between items-center flex-shrink-0">
-                    <h2 className="text-xl font-bold text-white">
+                <div className="p-6 border-b border-border flex justify-between items-center flex-shrink-0">
+                    <h2 className="text-xl font-bold text-[var(--foreground)]">
                         Upload Data to <span className="text-hydro-primary">{sensorName}</span>
                     </h2>
-                    <button onClick={onClose} className="text-white/50 hover:text-white">✕</button>
+                    <button onClick={onClose} className="text-[var(--foreground)]/50 hover:text-[var(--foreground)]">✕</button>
                 </div>
 
                 <form onSubmit={handleSubmit} className="flex flex-col overflow-hidden min-h-0">
@@ -81,21 +84,21 @@ export default function DataUploadModal({ isOpen, onClose, onUpload, sensorName 
                         )}
 
                         <div className="space-y-2">
-                            <label className="text-xs uppercase text-white/50">Parameter Name (Observed Property)</label>
+                            <label className="text-xs uppercase text-[var(--foreground)]/50">Parameter Name (Observed Property)</label>
                             <input
                                 type="text"
                                 required
                                 value={parameter}
                                 onChange={e => setParameter(e.target.value)}
-                                className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-white focus:outline-none focus:border-hydro-primary"
+                                className="w-full bg-muted/50 border border-border rounded px-3 py-2 text-[var(--foreground)] focus:outline-none focus:border-hydro-primary"
                                 placeholder="e.g. Level, Flow, Temperature"
                             />
-                            <p className="text-xs text-white/40">This identifies the datastream (DS_STATIONID_PARAMETER).</p>
+                            <p className="text-xs text-[var(--foreground)]/40">This identifies the datastream (DS_STATIONID_PARAMETER).</p>
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-xs uppercase text-white/50">Data File (CSV or JSON)</label>
-                            <div className="border-2 border-dashed border-white/10 rounded-xl p-8 text-center hover:border-hydro-primary/50 transition-colors bg-white/5">
+                            <label className="text-xs uppercase text-[var(--foreground)]/50">Data File (CSV or JSON)</label>
+                            <div className="border-2 border-dashed border-border rounded-xl p-8 text-center hover:border-hydro-primary/50 transition-colors bg-muted/50">
                                 <input
                                     type="file"
                                     accept=".csv,.json"
@@ -105,22 +108,22 @@ export default function DataUploadModal({ isOpen, onClose, onUpload, sensorName 
                                 />
                                 <label htmlFor="file-upload" className="cursor-pointer flex flex-col items-center">
                                     <span className="text-2xl mb-2">📄</span>
-                                    <span className="text-white font-medium">
+                                    <span className="text-[var(--foreground)] font-medium">
                                         {file ? file.name : "Click to select file"}
                                     </span>
-                                    <span className="text-white/40 text-sm mt-1">
+                                    <span className="text-[var(--foreground)]/40 text-sm mt-1">
                                         Supports CSV or JSON
                                     </span>
                                 </label>
                             </div>
                         </div>
 
-                        <div className="bg-white/5 rounded-lg p-4 text-xs font-mono space-y-3">
-                            <div className="text-white/50 uppercase font-sans font-semibold">Expected Formats</div>
+                        <div className="bg-muted/50 rounded-lg p-4 text-xs font-mono space-y-3">
+                            <div className="text-[var(--foreground)]/50 uppercase font-sans font-semibold">Expected Formats</div>
 
                             <div>
                                 <div className="text-hydro-primary mb-1">CSV Example</div>
-                                <div className="text-white/70 bg-black/30 p-2 rounded">
+                                <div className="text-[var(--foreground)]/70 bg-black/30 p-2 rounded">
                                     timestamp,value,quality_flag<br />
                                     2026-01-01T10:00:00Z,12.5,good<br />
                                     2026-01-01T11:00:00Z,13.1,good
@@ -129,7 +132,7 @@ export default function DataUploadModal({ isOpen, onClose, onUpload, sensorName 
 
                             <div>
                                 <div className="text-hydro-primary mb-1">JSON Example</div>
-                                <div className="text-white/70 bg-black/30 p-2 rounded whitespace-pre-wrap">
+                                <div className="text-[var(--foreground)]/70 bg-black/30 p-2 rounded whitespace-pre-wrap">
                                     {`[
   { "timestamp": "2026-01-01T10:00:00Z", "value": 12.5, "quality_flag": "good" },
   { "timestamp": "2026-01-01T11:00:00Z", "value": 13.1 }
@@ -139,11 +142,11 @@ export default function DataUploadModal({ isOpen, onClose, onUpload, sensorName 
                         </div>
                     </div>
 
-                    <div className="flex justify-end gap-3 p-6 pt-4 border-t border-white/10 bg-[#0a0a0a] flex-shrink-0">
+                    <div className="flex justify-end gap-3 p-6 pt-4 border-t border-border bg-card flex-shrink-0">
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-4 py-2 text-white/70 hover:text-white transition-colors"
+                            className="px-4 py-2 text-[var(--foreground)]/70 hover:text-[var(--foreground)] transition-colors"
                         >
                             Cancel
                         </button>

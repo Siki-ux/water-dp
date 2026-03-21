@@ -11,6 +11,7 @@ from app.api.v1.endpoints import (
     computations,
     dashboards,
     datasets,
+    external_sources,
     geospatial,
     groups,
     projects,
@@ -42,3 +43,6 @@ api_router.include_router(
 )
 api_router.include_router(mqtt.router, prefix="/mqtt", tags=["mqtt"])
 api_router.include_router(sms.router, prefix="/sms", tags=["sms"])
+api_router.include_router(
+    external_sources.router, prefix="/external-sources", tags=["external-sources"]
+)

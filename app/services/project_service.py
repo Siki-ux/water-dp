@@ -41,7 +41,12 @@ logger = logging.getLogger(__name__)
 # ------------------------------------------------------------------
 
 def _sanitize_user_groups(user: Dict[str, Any]) -> list:
-    """Extract and normalize group names from JWT claims."""
+    """Extract and normalize group names from JWT claims AND Keycloak API.
+
+    Returns both group paths/names (from JWT) and group UUIDs (from Keycloak
+    Admin API) so that matching works regardless of whether
+    authorization_provider_group_id stores a name or UUID.
+    """
     raw_groups = user.get("groups", [])
     if not isinstance(raw_groups, list):
         raw_groups = [raw_groups]
@@ -73,6 +78,25 @@ def _sanitize_user_groups(user: Dict[str, Any]) -> list:
             sanitized.add(group_str.replace("/", ":"))
         if ":" in group_str:
             sanitized.add(group_str.replace(":", "/"))
+
+    # Also fetch group UUIDs from Keycloak Admin API
+    # This handles the case where authorization_provider_group_id is a UUID
+    user_id = user.get("sub")
+    if user_id:
+        try:
+            kc_groups = KeycloakService.get_user_groups(user_id)
+            for g in kc_groups:
+                if g.get("id"):
+                    sanitized.add(g["id"])
+                if g.get("name"):
+                    sanitized.add(g["name"])
+                if g.get("path"):
+                    path = g["path"]
+                    if path.startswith("/"):
+                        path = path[1:]
+                    sanitized.add(path)
+        except Exception as e:
+            logger.warning(f"Failed to fetch user groups from Keycloak: {e}")
 
     return list(sanitized)
 

@@ -73,6 +73,8 @@ class TimeIOOrchestrator:
         mqtt_topic: Optional[str] = None,
         ingest_type: str = "mqtt",
         parser_id: Optional[int] = None,
+        external_sftp: Optional[Dict[str, Any]] = None,
+        external_api: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Create a new sensor (Thing) in the TimeIO ecosystem.
@@ -180,6 +182,40 @@ class TimeIOOrchestrator:
         bucket_user = mqtt_user  # Reuse for simplicity
         bucket_pass = self._generate_password()
 
+        # Auto-set ingest_type based on external source config
+        if external_api and ingest_type == "mqtt":
+            ingest_type = "extapi"
+        elif external_sftp and ingest_type == "mqtt":
+            ingest_type = "extsftp"
+
+        # Build encrypted external source payloads
+        ext_sftp_payload = {}
+        if external_sftp:
+            ext_sftp_payload = {
+                "uri": external_sftp["uri"],
+                "path": external_sftp["path"],
+                "username": external_sftp["username"],
+                "password": encrypt_password(external_sftp["password"]) if external_sftp.get("password") else None,
+                "private_key": encrypt_password(external_sftp["private_key"]) if external_sftp.get("private_key") else "",
+                "public_key": external_sftp.get("public_key", ""),
+                "sync_interval": external_sftp.get("sync_interval", 60),
+                "sync_enabled": external_sftp.get("sync_enabled", True),
+            }
+
+        ext_api_payload = {}
+        if external_api:
+            api_settings = dict(external_api.get("settings", {}))
+            # Encrypt known sensitive fields in settings
+            for key in ("password", "api_key"):
+                if key in api_settings and api_settings[key]:
+                    api_settings[key] = encrypt_password(api_settings[key])
+            ext_api_payload = {
+                "type": external_api["type"],
+                "enabled": external_api.get("enabled", True),
+                "sync_interval": external_api.get("sync_interval", 60),
+                "settings": api_settings,
+            }
+
         # 3. Construct JSON Payload (Version 7)
         payload = {
             "version": 7,
@@ -205,8 +241,8 @@ class TimeIOOrchestrator:
             "parsers": {
                 "parsers": [],
             },
-            "external_sftp": {},
-            "external_api": {},
+            "external_sftp": ext_sftp_payload,
+            "external_api": ext_api_payload,
         }
 
         # 4. Publish to MQTT
@@ -282,6 +318,8 @@ class TimeIOOrchestrator:
                     },
                     "properties": properties,
                     "location": geometry,
+                    "external_sftp": external_sftp,
+                    "external_api": external_api,
                 }
 
             time.sleep(retry_interval)

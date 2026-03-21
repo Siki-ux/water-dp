@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import ProjectMap from "@/components/ProjectMap";
 import { Sensor } from "@/types/sensor";
 import { getApiUrl } from "@/lib/utils";
+import { T } from "@/components/T";
 
 async function getProject(id: string) {
     const session = await auth();
@@ -76,7 +77,7 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
     const { sensors, error: sensorError } = await getProjectSensors(id);
 
     if (!project) {
-        return <div className="text-red-400">Project not found or access denied.</div>;
+        return <div className="text-red-400"><T path="projects.details.notFound" /></div>;
     }
 
     // Basic stats calculation
@@ -112,11 +113,11 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
     return (
         <div className="space-y-6">
             <h1 className="text-2xl font-bold text-white">{project.name}</h1>
-            <p className="text-white/60">{project.description || "No description provided."}</p>
+            <p className="text-white/60">{project.description || <T path="projects.details.noDescProvided" />}</p>
 
             {sensorError && (
                 <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-200 text-sm">
-                    <strong>Warning:</strong> Could not load sensors. {sensorError}
+                    <strong>Warning:</strong> <T path="projects.details.sensorLoadWarning" /> {sensorError}
                     <div className="text-xs opacity-70 mt-1">API URL: {getApiUrl()}</div>
                 </div>
             )}
@@ -124,20 +125,20 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
                 <div className="p-6 rounded-xl bg-white/5 border border-white/10">
                     <div className="text-4xl font-bold text-hydro-secondary mb-2">{sensors.length}</div>
-                    <div className="text-sm text-white/50">Total Sensors</div>
+                    <div className="text-sm text-white/50"><T path="projects.details.totalSensors" /></div>
                 </div>
                 <div className="p-6 rounded-xl bg-white/5 border border-white/10">
                     <div className="text-4xl font-bold text-green-400 mb-2">{activeSensors}</div>
-                    <div className="text-sm text-white/50">Active Sensors</div>
+                    <div className="text-sm text-white/50"><T path="projects.details.activeSensors" /></div>
                 </div>
                 <div className="p-6 rounded-xl bg-white/5 border border-white/10">
                     <div className="text-4xl font-bold text-orange-400 mb-2">{activeAlertsCount}</div>
-                    <div className="text-sm text-white/50">Active Alerts</div>
+                    <div className="text-sm text-white/50"><T path="projects.details.activeAlerts" /></div>
                 </div>
             </div>
 
             <div className="mt-8">
-                <h2 className="text-xl font-semibold text-white mb-4">Sensor Map</h2>
+                <h2 className="text-xl font-semibold text-white mb-4"><T path="projects.details.sensorMap" /></h2>
                 <div className="h-[calc(100vh-500px)] min-h-[400px]">
                     <ProjectMap sensors={sensors} projectId={id} token={session?.accessToken || ""} className="h-full shadow-2xl" />
                 </div>

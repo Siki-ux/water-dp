@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Loader2, Users, Settings } from "lucide-react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "@/lib/i18n";
 
 interface Group {
     id: string;
@@ -13,6 +14,7 @@ interface Group {
 
 export default function GroupsList({ token }: { token: string }) {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+    const { t } = useTranslation();
 
     const { data: groups, isLoading, error } = useQuery({
         queryKey: ['groups'],
@@ -38,7 +40,7 @@ export default function GroupsList({ token }: { token: string }) {
     if (error) {
         return (
             <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-lg">
-                Error loading groups: {error.message}
+                {t("groups.errorLoading")} {error.message}
             </div>
         );
     }
@@ -67,10 +69,10 @@ export default function GroupsList({ token }: { token: string }) {
 
                     <div className="flex items-center justify-between mt-auto">
                         <span className="text-xs text-white/40">
-                            Manage Members
+                            {t("groups.manageMembers")}
                         </span>
                         <div className="flex items-center gap-1 text-sm font-medium text-hydro-primary group-hover:gap-2 transition-all">
-                            Open Group <Settings className="w-4 h-4 ml-1" />
+                            {t("groups.openGroup")} <Settings className="w-4 h-4 ml-1" />
                         </div>
                     </div>
                 </Link>
@@ -78,7 +80,7 @@ export default function GroupsList({ token }: { token: string }) {
 
             {groups?.length === 0 && (
                 <div className="col-span-full text-center py-12 text-white/40">
-                    No authorization groups found for your account.
+                    {t("groups.noGroups")}
                 </div>
             )}
         </div>

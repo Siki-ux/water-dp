@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import { ArrowRight, Folder } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 interface ProjectCardProps {
     id: string;
@@ -10,6 +13,8 @@ interface ProjectCardProps {
 }
 
 export function ProjectCard({ id, name, description, role, sensorCount }: ProjectCardProps) {
+    const { t } = useTranslation();
+
     return (
         <Link
             href={`/projects/${id}`}
@@ -33,10 +38,10 @@ export function ProjectCard({ id, name, description, role, sensorCount }: Projec
 
             <div className="flex items-center justify-between mt-auto">
                 <span className="text-xs text-white/40">
-                    {sensorCount} Sensors linked
+                    {sensorCount} {t('projects.sensorsLinked')}
                 </span>
                 <div className="flex items-center gap-1 text-sm font-medium text-hydro-primary group-hover:gap-2 transition-all">
-                    Open Project <ArrowRight className="w-4 h-4" />
+                    {t('projects.openProject')} <ArrowRight className="w-4 h-4" />
                 </div>
             </div>
         </Link>

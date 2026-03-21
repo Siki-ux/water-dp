@@ -9,27 +9,31 @@ import {
     ChevronLeft,
     Activity,
     FileCode,
-    Cpu
+    Cpu,
+    Globe
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/lib/i18n";
 
 export function SMSSidebar() {
     const pathname = usePathname();
+    const { t } = useTranslation();
 
     const links = [
-        { label: "Sensors", icon: Activity, href: `/sms/sensors` },
-        { label: "Parsers", icon: FileCode, href: `/sms/parsers` },
-        { label: "Device Types", icon: Cpu, href: `/sms/device-types` },
-        { label: "QA/QC", icon: LayoutDashboard, href: `/sms/qa-qc` },
+        { label: t('sidebar.sensors'), icon: Activity, href: `/sms/sensors` },
+        { label: t('sidebar.parsers'), icon: FileCode, href: `/sms/parsers` },
+        { label: t('sidebar.deviceTypes'), icon: Cpu, href: `/sms/device-types` },
+        { label: t('sidebar.apiTypes'), icon: Globe, href: `/sms/api-types` },
+        { label: t('sidebar.qaqc'), icon: LayoutDashboard, href: `/sms/qa-qc` },
     ];
 
     return (
         <aside className="w-64 fixed left-0 top-16 bottom-0 border-r border-white/10 bg-black/20 backdrop-blur-md z-40 hidden md:flex flex-col">
             <div className="p-4 border-b border-white/5">
                 <div className="font-semibold text-white truncate px-2">
-                    Sensor Management
+                    {t('sidebar.sensorManagement')}
                 </div>
-                <div className="text-xs text-white/40 px-2">Global System</div>
+                <div className="text-xs text-white/40 px-2">{t('sidebar.globalSystem')}</div>
             </div>
 
             <nav className="flex-1 p-4 space-y-1">

@@ -345,6 +345,41 @@ if __name__ == "__main__":
     ensure_client_role(token, KEYCLOAK_REALM, CLIENT_ID_NAME, "admin")
 
     # ----------------------------------------------------------------------
+    # 5.5 Ensure 'groups' protocol mapper on timeIO-client
+    #     Without this, JWT tokens won't contain the user's group membership.
+    # ----------------------------------------------------------------------
+    if client_uuid:
+        print("Ensuring 'groups' protocol mapper on timeIO-client...")
+        mapper_name = "group-membership-mapper"
+        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+        # Check if mapper already exists
+        mappers_url = f"{KEYCLOAK_URL}/admin/realms/{KEYCLOAK_REALM}/clients/{client_uuid}/protocol-mappers/models"
+        existing_mappers = requests.get(mappers_url, headers=headers).json()
+        mapper_exists = any(m.get("name") == mapper_name for m in existing_mappers)
+
+        if not mapper_exists:
+            mapper_payload = {
+                "name": mapper_name,
+                "protocol": "openid-connect",
+                "protocolMapper": "oidc-group-membership-mapper",
+                "config": {
+                    "claim.name": "groups",
+                    "full.path": "true",
+                    "id.token.claim": "true",
+                    "access.token.claim": "true",
+                    "userinfo.token.claim": "true",
+                },
+            }
+            resp = requests.post(mappers_url, headers=headers, json=mapper_payload)
+            if resp.status_code == 201:
+                print(f"Created 'groups' protocol mapper on timeIO-client")
+            else:
+                print(f"Failed to create groups mapper: {resp.status_code} {resp.text}")
+        else:
+            print("Groups protocol mapper already exists on timeIO-client.")
+
+    # ----------------------------------------------------------------------
     # 6. Create Additional Users
     # ----------------------------------------------------------------------
     additional_users = ["SikiViewer", "SikiEditor", "Siki3"]

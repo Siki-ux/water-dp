@@ -200,6 +200,8 @@ async def create_sensor(
             mqtt_topic=sensor.mqtt_topic,
             ingest_type=sensor.ingest_type,
             parser_id=sensor.parser_id,
+            external_sftp=sensor.external_sftp.dict() if sensor.external_sftp else None,
+            external_api=sensor.external_api.dict() if sensor.external_api else None,
         )
 
         # Back-fill schema on project + Keycloak group if project exists but had no schema

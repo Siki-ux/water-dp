@@ -182,7 +182,7 @@ def seed_data(db: Session) -> None:
         # Seed Watershed Layers (e.g. Morava)
         # -------------------------------------------------------------------------
         data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "geoserver", "data")
-        watershed_files = ["morava_river_watershed.geojson", "orava_river_watershed.geojson"]
+        watershed_files = ["morava_river_watershed.geojson", "orava_river_watershed.geojson", "czech_regions_praha.geojson"]
         
         for ws_file in watershed_files:
             ws_path = os.path.join(data_dir, ws_file)

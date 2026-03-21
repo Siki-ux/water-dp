@@ -51,8 +51,11 @@ class GeoServerService:
                 response.raise_for_status()
             return response
         except requests.exceptions.RequestException as e:
-            logger.error(f"GeoServer request failed: {e}")
-            raise GeoServerException(f"GeoServer request failed: {e}")
+            err_detail = f"GeoServer request failed: {e}"
+            if hasattr(e, "response") and e.response is not None:
+                err_detail += f"\nResponse body: {e.response.text}"
+            logger.error(err_detail)
+            raise GeoServerException(err_detail)
 
     def test_connection(self) -> bool:
         """Test connection to GeoServer."""
@@ -346,17 +349,47 @@ class GeoServerService:
             )
             layer_data = response.json()
 
+            # The /layers/{name}.json resource stub doesn't include bounds.
+            # We need to fetch the featureType to get bounds, SRS, title, etc.
+            bounds = {}
+            srs = "EPSG:4326"
+            native_srs = "EPSG:4326"
+            title = layer_data["layer"].get("title", layer_name)
+            abstract = layer_data["layer"].get("abstract")
+            store_name = layer_data["layer"]["resource"]["name"]
+
+            # Follow the resource href to get full featureType data
+            try:
+                resource_href = layer_data["layer"]["resource"].get("href", "")
+                if resource_href:
+                    ft_response = requests.get(
+                        resource_href,
+                        auth=self.auth,
+                        timeout=settings.geoserver_timeout,
+                    )
+                    if ft_response.status_code == 200:
+                        ft_data = ft_response.json().get("featureType", {})
+                        
+                        raw_bounds = ft_data.get("latLonBoundingBox") or ft_data.get("nativeBoundingBox", {})
+                        # Copy to avoid mutating original and remove non-float 'crs' param
+                        bounds = {k: float(v) for k, v in raw_bounds.items() if k != "crs"}
+                        
+                        srs = ft_data.get("srs", srs)
+                        native_srs = ft_data.get("nativeCRS", native_srs)
+                        title = ft_data.get("title", title)
+                        abstract = ft_data.get("abstract", abstract)
+            except Exception as e:
+                logger.warning(f"Failed to fetch featureType details for {layer_name}: {e}")
+
             return GeoServerLayerInfo(
                 name=layer_data["layer"]["name"],
-                title=layer_data["layer"].get("title", layer_name),
-                abstract=layer_data["layer"].get("abstract"),
+                title=title,
+                abstract=abstract,
                 workspace=workspace,
-                store=layer_data["layer"]["resource"]["name"],
-                srs=layer_data["layer"]["resource"].get("srs", "EPSG:4326"),
-                native_srs=layer_data["layer"]["resource"].get(
-                    "nativeSRS", "EPSG:4326"
-                ),
-                bounds=layer_data["layer"]["resource"].get("nativeBoundingBox", {}),
+                store=store_name,
+                srs=srs,
+                native_srs=native_srs,
+                bounds=bounds,
                 metadata=layer_data["layer"].get("metadata"),
             )
         except Exception as e:

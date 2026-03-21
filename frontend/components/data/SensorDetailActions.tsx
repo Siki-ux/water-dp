@@ -7,6 +7,7 @@ import { SensorEditDialog } from "@/components/SensorEditDialog";
 import MqttPublishDialog from "./MqttPublishDialog";
 import FileUploadDialog from "./FileUploadDialog";
 import { getApiUrl } from "@/lib/utils";
+import { useTranslation } from "@/lib/i18n";
 
 interface SensorDetailActionsProps {
     sensor: any;
@@ -14,13 +15,14 @@ interface SensorDetailActionsProps {
 }
 
 export default function SensorDetailActions({ sensor, token }: SensorDetailActionsProps) {
+    const { t } = useTranslation();
     const [isMqttDialogOpen, setIsMqttDialogOpen] = useState(false);
     const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const router = useRouter();
 
     const handleDelete = async () => {
-        if (!confirm("Are you sure you want to permanently delete this sensor? This action cannot be undone.")) {
+        if (!confirm(t("sms.sensors.deleteConfirm"))) {
             return;
         }
 
@@ -39,11 +41,11 @@ export default function SensorDetailActions({ sensor, token }: SensorDetailActio
                 router.refresh();
             } else {
                 const error = await res.json();
-                alert(`Failed to delete sensor: ${error.detail || "Unknown error"}`);
+                alert(`${t("sms.sensors.deleteFail")}: ${error.detail || t("sms.sensors.unknown")}`);
             }
         } catch (error) {
             console.error("Delete error:", error);
-            alert("An error occurred while deleting the sensor.");
+            alert(t("sms.sensors.deleteError"));
         } finally {
             setIsDeleting(false);
         }
@@ -56,7 +58,7 @@ export default function SensorDetailActions({ sensor, token }: SensorDetailActio
                 className="flex items-center gap-1 px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-lg text-amber-400 text-sm font-medium transition-colors"
             >
                 <Upload className="w-4 h-4" />
-                Upload File
+                {t("sms.sensors.uploadFile")}
             </button>
 
             <button
@@ -64,7 +66,7 @@ export default function SensorDetailActions({ sensor, token }: SensorDetailActio
                 className="flex items-center gap-1 px-3 py-2 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 rounded-lg text-purple-400 text-sm font-medium transition-colors"
             >
                 <Activity className="w-4 h-4" />
-                Test MQTT
+                {t("sms.sensors.testMqtt")}
             </button>
 
             <SensorEditDialog sensor={sensor} />
@@ -79,7 +81,7 @@ export default function SensorDetailActions({ sensor, token }: SensorDetailActio
                 ) : (
                     <Trash2 className="w-4 h-4" />
                 )}
-                {isDeleting ? "Deleting..." : "Delete"}
+                {isDeleting ? t("sms.sensors.deleting") : t("sms.sensors.deleteBtn")}
             </button>
 
             <MqttPublishDialog

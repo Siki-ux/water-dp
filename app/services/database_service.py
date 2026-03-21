@@ -302,7 +302,7 @@ class DatabaseService:
             )
 
             sensors = []
-            seen_iot_ids = set()
+            seen_uuids = set()
 
             for project in projects:
                 try:
@@ -316,9 +316,9 @@ class DatabaseService:
 
                     for thing_model in project_things:
                         # Deduplicate if necessary (unlikely given schema isolation but safe)
-                        if thing_model.thing_id in seen_iot_ids:
+                        if thing_model.sensor_uuid in seen_uuids:
                             continue
-                        seen_iot_ids.add(thing_model.thing_id)
+                        seen_uuids.add(thing_model.sensor_uuid)
 
                         # Precise Check: Verify intersection with actual layer polygons (not just BBOX)
                         if thing_model.location and thing_model.location.coordinates:
@@ -343,6 +343,7 @@ class DatabaseService:
                                 sensor_dict = thing_model.model_dump()
                                 # Frontend specific mapping
                                 sensor_dict["id"] = thing_model.thing_id
+                                sensor_dict["uuid"] = thing_model.sensor_uuid
                                 if thing_model.properties:
                                     sensor_dict["station_type"] = (
                                         thing_model.properties.get("station_type")

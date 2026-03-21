@@ -15,7 +15,7 @@ export default async function ProjectsLayout({
     }
 
     return (
-        <div className="relative min-h-screen bg-water-depth text-white font-[family-name:var(--font-geist-sans)]">
+        <div className="relative min-h-screen bg-water-depth text-[var(--foreground)] font-[family-name:var(--font-geist-sans)]">
             <div className="fixed inset-0 z-0">
                 <WaterBackground />
             </div>

@@ -46,6 +46,8 @@ class SMSService:
         page: int = 1,
         page_size: int = 20,
         user: dict = None,
+        search: str = None,
+        ingest_type: str = None,
     ) -> Dict[str, Any]:
         """
         Get sensors across projects with extended metadata.
@@ -64,7 +66,8 @@ class SMSService:
 
         # Fetch from ConfigDB with optional schema filter
         db_result = db.get_all_sensors_paginated(
-            limit=page_size, offset=offset, schemas=accessible_schemas
+            limit=page_size, offset=offset, schemas=accessible_schemas,
+            search=search, ingest_type=ingest_type,
         )
         items_db = db_result["items"]
         total = db_result["total"]
@@ -121,6 +124,7 @@ class SMSService:
                 "description": item["description"],
                 "project_name": item["project_name"], # Extra useful info
                 "schema_name": item["schema_name"],
+                "ingest_type": item.get("ingest_type"),
                 # Extended ConfigDB fields
                 "mqtt_username": item["mqtt_username"],
                 "mqtt_topic": item["mqtt_topic"],
@@ -179,12 +183,28 @@ class SMSService:
         except Exception as e:
             logger.warning(f"Failed to fetch structured SMS metadata for {uuid}: {e}")
 
-        # 4. Merge
-        
+        # 4. Fetch External Source Config (ext_api / ext_sftp)
+        ext_config = db.get_thing_external_config(uuid)
+        external_api = None
+        external_sftp = None
+        if ext_config:
+            if ext_config.get("external_api"):
+                ea = ext_config["external_api"]
+                external_api = {
+                    "type_name": ea.get("type"),
+                    "sync_interval": ea.get("sync_interval"),
+                    "sync_enabled": ea.get("enabled"),
+                    "settings": ea.get("settings") or {},
+                }
+            if ext_config.get("external_sftp"):
+                external_sftp = ext_config["external_sftp"]
+
+        # 5. Merge
+
         # Location logic: FROST > Properties > None
         lat = frost_data.get("latitude")
         lon = frost_data.get("longitude")
-        
+
         if lat is None or lon is None:
             # Try to get from properties (legacy or direct input)
             props = config.get("properties") or {}
@@ -221,6 +241,9 @@ class SMSService:
             "s3_user": config.get("s3_user"),
             "s3_password": config.get("s3_pass"),
             "filename_pattern": config.get("filename_pattern"),
+            # External Sources
+            "external_api": external_api,
+            "external_sftp": external_sftp,
             # FROST / Computed fields
             "latitude": lat,
             "longitude": lon,
@@ -237,13 +260,61 @@ class SMSService:
         """
         from app.services.timeio.timeio_db import TimeIODatabase
         db = TimeIODatabase()
-        
+
+        # Extract external source data before passing to basic config updater
+        external_api_data = update_data.pop("external_api", None)
+        external_sftp_data = update_data.pop("external_sftp", None)
+        latitude = update_data.pop("latitude", None)
+        longitude = update_data.pop("longitude", None)
+        logger.info(f"update_sensor {uuid}: ext_api={'present' if external_api_data else 'None'}, ext_sftp={'present' if external_sftp_data else 'None'}")
+
         # 1. Update basic ConfigDB config
         updated_config = db.update_sensor_config(uuid, update_data)
         if not updated_config:
             return None
-            
-        # 2. Update structured SMS metadata if provided in update_data
+
+        # 2. Update location if provided
+        if latitude is not None and longitude is not None:
+            try:
+                config = db.get_sensor_config_details(uuid)
+                if config and config.get("schema_name"):
+                    schema = config["schema_name"]
+                    # Read existing properties, merge location
+                    existing = db.get_thing_properties(schema, uuid) or {}
+                    existing["latitude"] = latitude
+                    existing["longitude"] = longitude
+                    existing["location"] = {
+                        "type": "Point",
+                        "coordinates": [longitude, latitude],
+                    }
+                    db.update_thing_properties(schema, uuid, {"properties": existing})
+            except Exception as e:
+                logger.error(f"Failed to update location for {uuid}: {e}")
+
+        # 2. Update external API config if provided
+        if external_api_data is not None:
+            try:
+                db.update_thing_external_api(uuid, external_api_data)
+            except Exception as e:
+                logger.error(f"Failed to update external API config for {uuid}: {e}")
+
+        # 3. Update external SFTP config if provided
+        if external_sftp_data is not None:
+            try:
+                db.update_thing_external_sftp(uuid, external_sftp_data)
+            except Exception as e:
+                logger.error(f"Failed to update external SFTP config for {uuid}: {e}")
+
+        # 4. Re-sync sensor if external config was changed (updates crontab, etc.)
+        if external_api_data is not None or external_sftp_data is not None:
+            try:
+                from app.services.timeio.orchestrator import TimeIOOrchestrator
+                orchestrator = TimeIOOrchestrator()
+                orchestrator.sync_sensor(uuid)
+            except Exception as e:
+                logger.error(f"Failed to trigger re-sync for {uuid}: {e}")
+
+        # 5. Update structured SMS metadata if provided in update_data
         # This handles cases where we want to update metadata for multiple datastreams at once
         if "datastreams" in update_data and isinstance(update_data["datastreams"], list):
             for ds in update_data["datastreams"]:
@@ -391,6 +462,13 @@ class SMSService:
         db = TimeIODatabase()
         # Separate name and settings if needed, but db.update_parser handles it
         return db.update_parser(uuid, update_data.get("name"), update_data.get("settings"))
+
+    @staticmethod
+    def delete_parser(parser_id: int) -> Dict[str, Any]:
+        """Delete a parser. Returns result dict with success status and linked sensors if any."""
+        from app.services.timeio.timeio_db import TimeIODatabase
+        db = TimeIODatabase()
+        return db.delete_parser(parser_id)
 
     @staticmethod
     async def get_device_type_details(id: str) -> Optional[Dict[str, Any]]:

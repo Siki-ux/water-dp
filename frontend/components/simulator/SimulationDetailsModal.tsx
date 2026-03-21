@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { X, RefreshCw, Save, Trash2, Plus } from "lucide-react";
+import { useEscapeKey } from '@/hooks/useEscapeKey';
 
 interface Simulation {
     thing_id: number;
@@ -21,6 +22,8 @@ interface Props {
 }
 
 export default function SimulationDetailsModal({ isOpen, onClose, simulation, onUpdate, onDelete }: Props) {
+    useEscapeKey(onClose, isOpen);
+
     const [isSaving, setIsSaving] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
 
@@ -152,7 +155,7 @@ export default function SimulationDetailsModal({ isOpen, onClose, simulation, on
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <div className="bg-slate-900 border border-white/10 rounded-xl w-full max-w-2xl shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
+            <div className="bg-card border border-white/10 rounded-xl w-full max-w-2xl shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
                 <div className="p-4 border-b border-white/10 flex justify-between items-center bg-white/5">
                     <h2 className="text-lg font-bold text-white">Simulation Details</h2>
                     <button onClick={onClose} className="text-white/50 hover:text-white transition-colors">

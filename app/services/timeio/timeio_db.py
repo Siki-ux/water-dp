@@ -847,11 +847,13 @@ class TimeIODatabase:
         try:
             with connection.cursor(cursor_factory=RealDictCursor) as cursor:
                 query = """
-                    SELECT 
+                    SELECT
                         t.uuid, t.name, t.description, t.ingest_type_id,
                         it.name as ingest_type,
-                        p.name as project_name, d.schema as schema_name,
-                        m."user" as mqtt_username, m.password as mqtt_password, m.topic as mqtt_topic,
+                        p.name as project_name, p.uuid as project_uuid,
+                        d.schema as schema_name,
+                        m."user" as mqtt_username, m.password as mqtt_password,
+                        m.password_hashed as mqtt_password_hash, m.topic as mqtt_topic,
                         m.mqtt_device_type_id as device_type_id,
                         dt.name as device_type,
                         pa.name as parser, pa.id as parser_id,
@@ -978,8 +980,8 @@ class TimeIODatabase:
                         )
                         cursor.execute(query, mqtt_values + [mqtt_id])
 
-                # 4. Update S3 Store (File Parser)
-                if s3_store_id and "file_parser_id" in update_data:
+                # 4. Update S3 Store (File Parser) - only if a valid parser_id is provided
+                if s3_store_id and "file_parser_id" in update_data and update_data["file_parser_id"] is not None:
                     cursor.execute(
                         "UPDATE config_db.s3_store SET file_parser_id = %s WHERE id = %s",
                         (update_data["file_parser_id"], s3_store_id)
@@ -1002,33 +1004,44 @@ class TimeIODatabase:
             return {"mqtt_user": config["mqtt_user"], "mqtt_pass": config["mqtt_pass"]}
         return None
 
-    def get_all_sensors_paginated(self, limit: int = 20, offset: int = 0, schemas: list = None) -> Dict[str, Any]:
-        """Fetch sensors with pagination, optionally filtered by accessible schemas."""
+    def get_all_sensors_paginated(self, limit: int = 20, offset: int = 0, schemas: list = None, search: str = None, ingest_type: str = None) -> Dict[str, Any]:
+        """Fetch sensors with pagination, optionally filtered by accessible schemas, search term, and ingest type."""
         connection = self._get_admin_connection()
         try:
             with connection.cursor(cursor_factory=RealDictCursor) as cursor:
-                # Build optional WHERE clause for schema filtering
-                schema_filter = ""
-                params_count = []
-                params_query = []
+                # Build WHERE conditions
+                conditions = []
+                params = []
 
                 if schemas is not None:
-                    schema_filter = " WHERE d.schema = ANY(%s)"
-                    params_count = [schemas]
-                    params_query = [schemas]
+                    conditions.append("d.schema = ANY(%s)")
+                    params.append(schemas)
 
-                # Count total (with optional filter)
+                if search:
+                    conditions.append("(t.name ILIKE %s OR t.uuid::text ILIKE %s OR p.name ILIKE %s OR m.topic ILIKE %s)")
+                    like = f"%{search}%"
+                    params.extend([like, like, like, like])
+
+                if ingest_type:
+                    conditions.append("it.name = %s")
+                    params.append(ingest_type)
+
+                where_clause = (" WHERE " + " AND ".join(conditions)) if conditions else ""
+
+                # Count total (with filters)
                 count_query = """
                     SELECT COUNT(*) FROM config_db.thing t
+                    LEFT JOIN config_db.ingest_type it ON t.ingest_type_id = it.id
                     LEFT JOIN config_db.project p ON t.project_id = p.id
                     LEFT JOIN config_db.database d ON p.database_id = d.id
-                """ + schema_filter
-                cursor.execute(count_query, params_count)
+                    LEFT JOIN config_db.mqtt m ON t.mqtt_id = m.id
+                """ + where_clause
+                cursor.execute(count_query, params)
                 total = cursor.fetchone()["count"]
 
                 # Fetch page with ingest_type and schema info
                 query = """
-                    SELECT 
+                    SELECT
                         t.uuid, t.name, t.description, t.ingest_type_id,
                         it.name as ingest_type,
                         p.name as project_name,
@@ -1044,11 +1057,11 @@ class TimeIODatabase:
                     LEFT JOIN config_db.mqtt_device_type dt ON m.mqtt_device_type_id = dt.id
                     LEFT JOIN config_db.s3_store s ON t.s3_store_id = s.id
                     LEFT JOIN config_db.file_parser pa ON s.file_parser_id = pa.id
-                """ + schema_filter + """
+                """ + where_clause + """
                     ORDER BY t.id DESC
                     LIMIT %s OFFSET %s
                 """
-                cursor.execute(query, params_query + [limit, offset])
+                cursor.execute(query, params + [limit, offset])
                 items = cursor.fetchall()
                 return {"items": [dict(i) for i in items], "total": total}
         except Exception as error:
@@ -1122,22 +1135,69 @@ class TimeIODatabase:
             connection.close()
 
     def get_parser(self, uuid: str) -> Optional[Dict[str, Any]]:
-        """Fetch parser by ID/UUID? Actually config_db.parser uses integer IDs."""
+        """Fetch parser by UUID from config_db.file_parser."""
         connection = self._get_admin_connection()
         try:
             with connection.cursor(cursor_factory=RealDictCursor) as cursor:
-                if uuid.isdigit():
-                    cursor.execute("SELECT * FROM config_db.parser WHERE id = %s", (int(uuid),))
-                else:
-                    # Fallback to name? ConfigDB doesn't have UUID for parsers usually
-                    cursor.execute("SELECT * FROM config_db.parser WHERE name = %s", (uuid,))
+                cursor.execute(
+                    """
+                    SELECT fp.id, fp.uuid, fp.name, fp.params as settings,
+                           fpt.name as type
+                    FROM config_db.file_parser fp
+                    LEFT JOIN config_db.file_parser_type fpt ON fp.file_parser_type_id = fpt.id
+                    WHERE fp.uuid = %s
+                    """,
+                    (uuid,),
+                )
                 result = cursor.fetchone()
-                return dict(result) if result else None
+                if result:
+                    r = dict(result)
+                    if r.get("uuid"):
+                        r["uuid"] = str(r["uuid"])
+                    return r
+                return None
         except Exception as error:
             logger.error(f"Failed to fetch parser {uuid}: {error}")
             return None
         finally:
             connection.close()
+
+    def update_parser(self, uuid: str, name: Optional[str] = None, settings: Optional[Dict] = None) -> Optional[Dict[str, Any]]:
+        """Update a parser's name and/or settings in config_db.file_parser."""
+        connection = self._get_admin_connection()
+        try:
+            with connection.cursor(cursor_factory=RealDictCursor) as cursor:
+                # Build dynamic SET clause
+                updates = []
+                values = []
+                if name is not None:
+                    updates.append("name = %s")
+                    values.append(name)
+                if settings is not None:
+                    updates.append("params = %s")
+                    values.append(json.dumps(settings))
+
+                if not updates:
+                    return self.get_parser(uuid)
+
+                values.append(uuid)
+                cursor.execute(
+                    f"UPDATE config_db.file_parser SET {', '.join(updates)} WHERE uuid = %s RETURNING id",
+                    values,
+                )
+                row = cursor.fetchone()
+                connection.commit()
+
+                if row:
+                    return self.get_parser(uuid)
+                return None
+        except Exception as error:
+            connection.rollback()
+            logger.error(f"Failed to update parser {uuid}: {error}")
+            return None
+        finally:
+            connection.close()
+
 
     def get_datastream_metadata(self, thing_uuid: str) -> List[Dict[str, Any]]:
         """Fetch structured metadata for all datastreams of a thing from sms schema."""
@@ -2227,6 +2287,29 @@ class TimeIODatabase:
         finally:
             connection.close()
 
+    def get_thing_properties(self, schema: str, thing_uuid: str) -> Optional[Dict[str, Any]]:
+        """Read current properties JSON from {schema}.thing for a given UUID."""
+        connection = self._get_connection()
+        try:
+            with connection.cursor(cursor_factory=RealDictCursor) as cursor:
+                query = sql.SQL(
+                    "SELECT properties FROM {schema}.thing WHERE uuid = %s"
+                ).format(schema=sql.Identifier(schema))
+                cursor.execute(query, (thing_uuid,))
+                row = cursor.fetchone()
+                if row and row.get("properties"):
+                    props = row["properties"]
+                    if isinstance(props, str):
+                        import json
+                        return json.loads(props)
+                    return dict(props) if props else {}
+                return {}
+        except Exception as e:
+            logger.error(f"Failed to get thing properties for {thing_uuid} in {schema}: {e}")
+            return {}
+        finally:
+            connection.close()
+
     def update_thing_properties(
         self, schema: Optional[str], thing_uuid: str, updates: Dict[str, Any]
     ) -> bool:
@@ -2823,9 +2906,10 @@ class TimeIODatabase:
                 # 2. Construct Params
                 params = {
                     "delimiter": delimiter,
-                    "timestamp_column": timestamp_column,
-                    "timestamp_format": timestamp_format,
-                    "header_line": header_line
+                    "timestamp_columns": [
+                        {"column": timestamp_column, "format": timestamp_format}
+                    ],
+                    "header": header_line,
                 }
                 if extra_params:
                     params.update(extra_params)
@@ -2889,6 +2973,56 @@ class TimeIODatabase:
         except Exception as e:
             logger.error(f"Failed to fetch parsers: {e}")
             return {"items": [], "total": 0}
+        finally:
+            connection.close()
+
+    def delete_parser(self, parser_id: int) -> Dict[str, Any]:
+        """
+        Delete a parser from config_db.file_parser.
+        First checks if it's linked to any sensors via s3_store.file_parser_id.
+        Returns {"success": True} or {"success": False, "reason": "...", "linked_sensors": [...]}.
+        """
+        connection = self._get_admin_connection()
+        try:
+            with connection.cursor(cursor_factory=RealDictCursor) as cursor:
+                # 1. Check if parser is linked to any sensors
+                cursor.execute(
+                    """
+                    SELECT t.uuid, t.name
+                    FROM config_db.s3_store s
+                    JOIN config_db.thing t ON t.s3_store_id = s.id
+                    WHERE s.file_parser_id = %s
+                    """,
+                    (parser_id,),
+                )
+                linked = cursor.fetchall()
+
+                if linked:
+                    sensor_names = [f"{r['name']} ({r['uuid'][:8]}...)" for r in linked]
+                    return {
+                        "success": False,
+                        "reason": "Parser is assigned to sensors",
+                        "linked_sensors": sensor_names,
+                    }
+
+                # 2. Delete the parser
+                cursor.execute(
+                    "DELETE FROM config_db.file_parser WHERE id = %s RETURNING id",
+                    (parser_id,),
+                )
+                deleted = cursor.fetchone()
+                connection.commit()
+
+                if deleted:
+                    logger.info(f"Deleted parser ID {parser_id}")
+                    return {"success": True}
+                else:
+                    return {"success": False, "reason": "Parser not found"}
+
+        except Exception as e:
+            connection.rollback()
+            logger.error(f"Failed to delete parser {parser_id}: {e}")
+            return {"success": False, "reason": str(e)}
         finally:
             connection.close()
 
@@ -3022,11 +3156,502 @@ class TimeIODatabase:
                 "password": encrypt_password(details["s3_pass"]) if details.get("s3_pass") else None,
                 "filename_pattern": "*",
             },
-            "parsers": {
-                "parsers": [],
-            },
+            "parsers": {},
             "external_sftp": {},
             "external_api": {},
         }
+
+        # Populate external config if present
+        ext_config = self.get_thing_external_config(thing_uuid)
+        if ext_config:
+            if ext_config.get("external_api"):
+                ea = ext_config["external_api"]
+                # Settings may contain already-encrypted values from config_db
+                payload["external_api"] = {
+                    "type": ea["type"],
+                    "enabled": ea.get("enabled", True),
+                    "sync_interval": ea.get("sync_interval", 60),
+                    "settings": ea.get("settings", {}),
+                }
+            if ext_config.get("external_sftp"):
+                es = ext_config["external_sftp"]
+                payload["external_sftp"] = {
+                    "uri": es["uri"],
+                    "path": es["path"],
+                    "username": es["username"],
+                    "sync_interval": es.get("sync_interval", 60),
+                    "sync_enabled": es.get("sync_enabled", True),
+                    # Pass through encrypted values from config_db
+                    "password": es.get("password") or None,
+                    "private_key": es.get("private_key") or "",
+                    "public_key": es.get("public_key") or "",
+                }
         
         return payload
+
+    # ========== External API Type CRUD ==========
+
+    def get_all_ext_api_types(self, limit: int = 100, offset: int = 0) -> Dict[str, Any]:
+        """Get all external API types with pagination."""
+        connection = self._get_admin_connection()
+        try:
+            with connection.cursor(cursor_factory=RealDictCursor) as cursor:
+                cursor.execute("SELECT COUNT(*) FROM config_db.ext_api_type")
+                row = cursor.fetchone()
+                total = row["count"] if row else 0
+
+                cursor.execute(
+                    """
+                    SELECT id, name, properties
+                    FROM config_db.ext_api_type
+                    ORDER BY name
+                    LIMIT %s OFFSET %s
+                    """,
+                    (limit, offset),
+                )
+                rows = cursor.fetchall()
+                return {"items": [dict(row) for row in rows], "total": total}
+        except Exception as e:
+            logger.error(f"Failed to fetch ext API types: {e}")
+            return {"items": [], "total": 0}
+        finally:
+            connection.close()
+
+    def get_ext_api_type(self, id_or_name) -> Optional[Dict[str, Any]]:
+        """Get a single external API type by ID or name."""
+        connection = self._get_admin_connection()
+        try:
+            with connection.cursor(cursor_factory=RealDictCursor) as cursor:
+                try:
+                    type_id = int(id_or_name)
+                    cursor.execute(
+                        "SELECT id, name, properties FROM config_db.ext_api_type WHERE id = %s",
+                        (type_id,),
+                    )
+                except (ValueError, TypeError):
+                    cursor.execute(
+                        "SELECT id, name, properties FROM config_db.ext_api_type WHERE name = %s",
+                        (str(id_or_name).lower(),),
+                    )
+                row = cursor.fetchone()
+                return dict(row) if row else None
+        except Exception as e:
+            logger.error(f"Failed to fetch ext API type {id_or_name}: {e}")
+            return None
+        finally:
+            connection.close()
+
+    def upsert_ext_api_type(self, name: str, properties: Dict[str, Any] = None) -> bool:
+        """Insert or update an external API type."""
+        connection = self._get_admin_connection()
+        try:
+            with connection.cursor() as cursor:
+                props_json = json.dumps(properties) if properties else None
+                cursor.execute(
+                    """
+                    INSERT INTO config_db.ext_api_type (name, properties)
+                    VALUES (%s, %s)
+                    ON CONFLICT (name) DO UPDATE SET
+                    properties = COALESCE(config_db.ext_api_type.properties, '{}'::jsonb) || COALESCE(EXCLUDED.properties, '{}'::jsonb)
+                    """,
+                    (name.lower(), props_json),
+                )
+                connection.commit()
+                return True
+        except Exception as e:
+            connection.rollback()
+            logger.error(f"Failed to upsert ext API type {name}: {e}")
+            raise
+        finally:
+            connection.close()
+
+    def delete_ext_api_type(self, id_or_name) -> Dict[str, Any]:
+        """Delete an external API type (only if not referenced by any thing)."""
+        connection = self._get_admin_connection()
+        try:
+            with connection.cursor(cursor_factory=RealDictCursor) as cursor:
+                # Resolve ID
+                try:
+                    type_id = int(id_or_name)
+                except (ValueError, TypeError):
+                    cursor.execute(
+                        "SELECT id FROM config_db.ext_api_type WHERE name = %s",
+                        (str(id_or_name).lower(),),
+                    )
+                    row = cursor.fetchone()
+                    if not row:
+                        return {"success": False, "reason": "Type not found"}
+                    type_id = row["id"]
+
+                # Check for references
+                cursor.execute(
+                    """
+                    SELECT t.uuid, t.name
+                    FROM config_db.ext_api ea
+                    JOIN config_db.thing t ON t.ext_api_id = ea.id
+                    WHERE ea.api_type_id = %s
+                    """,
+                    (type_id,),
+                )
+                linked = cursor.fetchall()
+                if linked:
+                    sensor_names = [f"{r['name']} ({r['uuid'][:8]}...)" for r in linked]
+                    return {
+                        "success": False,
+                        "reason": "Type is in use by sensors",
+                        "linked_sensors": sensor_names,
+                    }
+
+                cursor.execute(
+                    "DELETE FROM config_db.ext_api_type WHERE id = %s RETURNING id",
+                    (type_id,),
+                )
+                deleted = cursor.fetchone()
+                connection.commit()
+                return {"success": True} if deleted else {"success": False, "reason": "Type not found"}
+        except Exception as e:
+            connection.rollback()
+            logger.error(f"Failed to delete ext API type {id_or_name}: {e}")
+            return {"success": False, "reason": str(e)}
+        finally:
+            connection.close()
+
+    # ========== External Config Read/Write for Things ==========
+
+    def get_thing_external_config(self, thing_uuid: str) -> Optional[Dict[str, Any]]:
+        """Read ext_api and ext_sftp config for a thing from config_db."""
+        connection = self._get_admin_connection()
+        try:
+            with connection.cursor(cursor_factory=RealDictCursor) as cursor:
+                cursor.execute(
+                    """
+                    SELECT
+                        t.uuid, t.ext_api_id, t.ext_sftp_id,
+                        it.name as ingest_type,
+                        ea.sync_interval as api_sync_interval,
+                        ea.sync_enabled as api_enabled,
+                        ea.settings as api_settings,
+                        eat.name as api_type_name,
+                        es.uri as sftp_uri,
+                        es.path as sftp_path,
+                        es."user" as sftp_user,
+                        es.password as sftp_password,
+                        es.ssh_priv_key as sftp_private_key,
+                        es.ssh_pub_key as sftp_public_key,
+                        es.sync_interval as sftp_sync_interval,
+                        es.sync_enabled as sftp_enabled
+                    FROM config_db.thing t
+                    LEFT JOIN config_db.ingest_type it ON t.ingest_type_id = it.id
+                    LEFT JOIN config_db.ext_api ea ON t.ext_api_id = ea.id
+                    LEFT JOIN config_db.ext_api_type eat ON ea.api_type_id = eat.id
+                    LEFT JOIN config_db.ext_sftp es ON t.ext_sftp_id = es.id
+                    WHERE t.uuid = %s
+                    """,
+                    (thing_uuid,),
+                )
+                row = cursor.fetchone()
+                if not row:
+                    return None
+
+                result = {"uuid": row["uuid"], "ingest_type": row["ingest_type"]}
+
+                if row["ext_api_id"]:
+                    result["external_api"] = {
+                        "type": row["api_type_name"],
+                        "enabled": row["api_enabled"],
+                        "sync_interval": row["api_sync_interval"],
+                        "settings": row["api_settings"] or {},
+                    }
+                else:
+                    result["external_api"] = None
+
+                if row["ext_sftp_id"]:
+                    result["external_sftp"] = {
+                        "uri": row["sftp_uri"],
+                        "path": row["sftp_path"],
+                        "username": row["sftp_user"],
+                        "password": row["sftp_password"],
+                        "private_key": row["sftp_private_key"],
+                        "public_key": row["sftp_public_key"],
+                        "sync_interval": row["sftp_sync_interval"],
+                        "sync_enabled": row["sftp_enabled"],
+                    }
+                else:
+                    result["external_sftp"] = None
+
+                return result
+        except Exception as e:
+            logger.error(f"Failed to get external config for {thing_uuid}: {e}")
+            return None
+        finally:
+            connection.close()
+
+    def update_thing_external_api(self, thing_uuid: str, ext_api_data: Dict[str, Any]) -> bool:
+        """Update or create ext_api config for an existing thing."""
+        connection = self._get_admin_connection()
+        try:
+            with connection.cursor(cursor_factory=RealDictCursor) as cursor:
+                # Get thing and current ext_api_id
+                cursor.execute(
+                    "SELECT id, ext_api_id FROM config_db.thing WHERE uuid = %s",
+                    (thing_uuid,),
+                )
+                thing = cursor.fetchone()
+                if not thing:
+                    return False
+
+                # Resolve api_type_id
+                api_type_name = ext_api_data["type"].lower()
+                cursor.execute(
+                    "SELECT id FROM config_db.ext_api_type WHERE name = %s",
+                    (api_type_name,),
+                )
+                type_row = cursor.fetchone()
+                if not type_row:
+                    raise ValueError(f"Unknown ext_api_type: {api_type_name}")
+                api_type_id = type_row["id"]
+
+                settings_json = json.dumps(ext_api_data.get("settings", {}))
+
+                if thing["ext_api_id"]:
+                    # Update existing
+                    cursor.execute(
+                        """
+                        UPDATE config_db.ext_api
+                        SET api_type_id = %s, sync_interval = %s, sync_enabled = %s, settings = %s
+                        WHERE id = %s
+                        """,
+                        (
+                            api_type_id,
+                            ext_api_data.get("sync_interval", 60),
+                            ext_api_data.get("enabled", True),
+                            settings_json,
+                            thing["ext_api_id"],
+                        ),
+                    )
+                else:
+                    # Insert new ext_api row
+                    cursor.execute(
+                        """
+                        INSERT INTO config_db.ext_api (api_type_id, sync_interval, sync_enabled, settings)
+                        VALUES (%s, %s, %s, %s)
+                        RETURNING id
+                        """,
+                        (
+                            api_type_id,
+                            ext_api_data.get("sync_interval", 60),
+                            ext_api_data.get("enabled", True),
+                            settings_json,
+                        ),
+                    )
+                    new_id = cursor.fetchone()["id"]
+
+                    # Update thing's ext_api_id
+                    cursor.execute(
+                        "UPDATE config_db.thing SET ext_api_id = %s WHERE id = %s",
+                        (new_id, thing["id"]),
+                    )
+
+                # Update ingest_type to extapi
+                cursor.execute(
+                    "SELECT id FROM config_db.ingest_type WHERE name = 'extapi'"
+                )
+                ingest_row = cursor.fetchone()
+                if ingest_row:
+                    cursor.execute(
+                        "UPDATE config_db.thing SET ingest_type_id = %s WHERE id = %s",
+                        (ingest_row["id"], thing["id"]),
+                    )
+
+                connection.commit()
+                return True
+        except Exception as e:
+            connection.rollback()
+            logger.error(f"Failed to update ext_api for {thing_uuid}: {e}")
+            raise
+        finally:
+            connection.close()
+
+    def update_thing_external_sftp(self, thing_uuid: str, ext_sftp_data: Dict[str, Any]) -> bool:
+        """Update or create ext_sftp config for an existing thing."""
+        connection = self._get_admin_connection()
+        try:
+            with connection.cursor(cursor_factory=RealDictCursor) as cursor:
+                # Get thing and current ext_sftp_id
+                cursor.execute(
+                    "SELECT id, ext_sftp_id FROM config_db.thing WHERE uuid = %s",
+                    (thing_uuid,),
+                )
+                thing = cursor.fetchone()
+                if not thing:
+                    return False
+
+                if thing["ext_sftp_id"]:
+                    # Update existing - only update fields that are provided
+                    set_parts = []
+                    values = []
+
+                    set_parts.append('"uri" = %s')
+                    values.append(ext_sftp_data["uri"])
+                    set_parts.append('"path" = %s')
+                    values.append(ext_sftp_data["path"])
+                    set_parts.append('"user" = %s')
+                    values.append(ext_sftp_data["username"])
+                    set_parts.append('"sync_interval" = %s')
+                    values.append(ext_sftp_data.get("sync_interval", 60))
+                    set_parts.append('"sync_enabled" = %s')
+                    values.append(ext_sftp_data.get("sync_enabled", True))
+
+                    # Only update credentials if actually provided (non-empty)
+                    if ext_sftp_data.get("password"):
+                        set_parts.append('"password" = %s')
+                        values.append(ext_sftp_data["password"])
+                    if ext_sftp_data.get("private_key"):
+                        set_parts.append('"ssh_priv_key" = %s')
+                        values.append(ext_sftp_data["private_key"])
+                    if ext_sftp_data.get("public_key"):
+                        set_parts.append('"ssh_pub_key" = %s')
+                        values.append(ext_sftp_data["public_key"])
+
+                    values.append(thing["ext_sftp_id"])
+                    cursor.execute(
+                        f"UPDATE config_db.ext_sftp SET {', '.join(set_parts)} WHERE id = %s",
+                        values,
+                    )
+                else:
+                    # Insert new ext_sftp row
+                    cursor.execute(
+                        """
+                        INSERT INTO config_db.ext_sftp
+                            (uri, path, "user", password, ssh_priv_key, ssh_pub_key, sync_interval, sync_enabled)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        RETURNING id
+                        """,
+                        (
+                            ext_sftp_data["uri"],
+                            ext_sftp_data["path"],
+                            ext_sftp_data["username"],
+                            ext_sftp_data.get("password"),
+                            ext_sftp_data.get("private_key", ""),
+                            ext_sftp_data.get("public_key", ""),
+                            ext_sftp_data.get("sync_interval", 60),
+                            ext_sftp_data.get("sync_enabled", True),
+                        ),
+                    )
+                    new_id = cursor.fetchone()["id"]
+
+                    # Update thing's ext_sftp_id
+                    cursor.execute(
+                        "UPDATE config_db.thing SET ext_sftp_id = %s WHERE id = %s",
+                        (new_id, thing["id"]),
+                    )
+
+                # Update ingest_type to extsftp
+                cursor.execute(
+                    "SELECT id FROM config_db.ingest_type WHERE name = 'extsftp'"
+                )
+                ingest_row = cursor.fetchone()
+                if ingest_row:
+                    cursor.execute(
+                        "UPDATE config_db.thing SET ingest_type_id = %s WHERE id = %s",
+                        (ingest_row["id"], thing["id"]),
+                    )
+
+                connection.commit()
+                return True
+        except Exception as e:
+            connection.rollback()
+            logger.error(f"Failed to update ext_sftp for {thing_uuid}: {e}")
+            raise
+        finally:
+            connection.close()
+
+    def remove_thing_external_api(self, thing_uuid: str) -> bool:
+        """Remove ext_api config from a thing."""
+        connection = self._get_admin_connection()
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT id, ext_api_id FROM config_db.thing WHERE uuid = %s",
+                    (thing_uuid,),
+                )
+                row = cursor.fetchone()
+                if not row or not row[1]:
+                    return False
+
+                thing_id, ext_api_id = row
+
+                # Unlink from thing
+                cursor.execute(
+                    "UPDATE config_db.thing SET ext_api_id = NULL WHERE id = %s",
+                    (thing_id,),
+                )
+                # Delete ext_api row
+                cursor.execute(
+                    "DELETE FROM config_db.ext_api WHERE id = %s", (ext_api_id,)
+                )
+
+                # Revert ingest_type to mqtt
+                cursor.execute(
+                    "SELECT id FROM config_db.ingest_type WHERE name = 'mqtt'"
+                )
+                ingest_row = cursor.fetchone()
+                if ingest_row:
+                    cursor.execute(
+                        "UPDATE config_db.thing SET ingest_type_id = %s WHERE id = %s",
+                        (ingest_row[0], thing_id),
+                    )
+
+                connection.commit()
+                return True
+        except Exception as e:
+            connection.rollback()
+            logger.error(f"Failed to remove ext_api from {thing_uuid}: {e}")
+            return False
+        finally:
+            connection.close()
+
+    def remove_thing_external_sftp(self, thing_uuid: str) -> bool:
+        """Remove ext_sftp config from a thing."""
+        connection = self._get_admin_connection()
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT id, ext_sftp_id FROM config_db.thing WHERE uuid = %s",
+                    (thing_uuid,),
+                )
+                row = cursor.fetchone()
+                if not row or not row[1]:
+                    return False
+
+                thing_id, ext_sftp_id = row
+
+                # Unlink from thing
+                cursor.execute(
+                    "UPDATE config_db.thing SET ext_sftp_id = NULL WHERE id = %s",
+                    (thing_id,),
+                )
+                # Delete ext_sftp row
+                cursor.execute(
+                    "DELETE FROM config_db.ext_sftp WHERE id = %s", (ext_sftp_id,)
+                )
+
+                # Revert ingest_type to mqtt
+                cursor.execute(
+                    "SELECT id FROM config_db.ingest_type WHERE name = 'mqtt'"
+                )
+                ingest_row = cursor.fetchone()
+                if ingest_row:
+                    cursor.execute(
+                        "UPDATE config_db.thing SET ingest_type_id = %s WHERE id = %s",
+                        (ingest_row[0], thing_id),
+                    )
+
+                connection.commit()
+                return True
+        except Exception as e:
+            connection.rollback()
+            logger.error(f"Failed to remove ext_sftp from {thing_uuid}: {e}")
+            return False
+        finally:
+            connection.close()

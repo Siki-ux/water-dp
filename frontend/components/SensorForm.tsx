@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Loader2, Save } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 interface Group {
     id: string;
@@ -19,6 +20,7 @@ interface DeviceType {
 export function SensorForm() {
     const router = useRouter();
     const { data: session } = useSession();
+    const { t } = useTranslation();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -71,7 +73,7 @@ export function SensorForm() {
         setError(null);
 
         if (!formData.group_id) {
-            setError("Please select an Owner Group");
+            setError(t('sms.sensors.selectGroupError'));
             setLoading(false);
             return;
         }
@@ -101,7 +103,7 @@ export function SensorForm() {
 
             if (!res.ok) {
                 const errData = await res.json();
-                throw new Error(errData.detail || "Failed to create sensor");
+                throw new Error(errData.detail || t('sms.sensors.createSensorError'));
             }
 
             // Success
@@ -120,10 +122,10 @@ export function SensorForm() {
         name.startsWith("UFZ-TSM:") ? name.slice(8) : name;
 
     return (
-        <form onSubmit={handleSubmit} className="max-w-2xl mx-auto bg-black/20 backdrop-blur-md rounded-xl p-6 border border-white/10 space-y-6">
+        <form onSubmit={handleSubmit} className="max-w-2xl mx-auto bg-card backdrop-blur-md rounded-xl p-6 border border-border space-y-6">
             <div>
-                <h2 className="text-xl font-bold text-white mb-1">Sensor Details</h2>
-                <p className="text-white/40 text-sm">Configure the basic settings for the new sensor.</p>
+                <h2 className="text-xl font-bold text-[var(--foreground)] mb-1">{t('sms.sensors.sensorDetails')}</h2>
+                <p className="text-[var(--foreground)]/40 text-sm">{t('sms.sensors.sensorDetailsDesc')}</p>
             </div>
 
             {error && (
@@ -135,22 +137,22 @@ export function SensorForm() {
             <div className="space-y-4">
                 {/* Group Selection */}
                 <div>
-                    <label className="block text-sm font-medium text-white/80 mb-1">
-                        Owner Group <span className="text-red-400">*</span>
+                    <label className="block text-sm font-medium text-[var(--foreground)]/80 mb-1">
+                        {t('sms.sensors.ownerGroup')} <span className="text-red-400">*</span>
                     </label>
-                    <p className="text-xs text-white/40 mb-2">
-                        The Keycloak group that will own this sensor's data and schema.
+                    <p className="text-xs text-[var(--foreground)]/40 mb-2">
+                        {t('sms.sensors.ownerGroupDesc')}
                     </p>
                     <select
                         name="group_id"
                         value={formData.group_id}
                         onChange={handleChange}
                         required
-                        className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                        className="w-full bg-background border border-border rounded-lg px-4 py-2 text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-blue-500/50 appearance-none"
                     >
-                        <option value="">Select a Group...</option>
+                        <option value="" className="bg-card">{t('sms.sensors.selectGroup')}</option>
                         {groups.map(g => (
-                            <option key={g.id} value={g.id}>
+                            <option key={g.id} value={g.id} className="bg-card">
                                 {displayGroupName(g.name)}
                             </option>
                         ))}
@@ -159,8 +161,8 @@ export function SensorForm() {
 
                 {/* Name */}
                 <div>
-                    <label className="block text-sm font-medium text-white/80 mb-1">
-                        Sensor Name <span className="text-red-400">*</span>
+                    <label className="block text-sm font-medium text-[var(--foreground)]/80 mb-1">
+                        {t('sms.sensors.sensorName')} <span className="text-red-400">*</span>
                     </label>
                     <input
                         type="text"
@@ -168,43 +170,43 @@ export function SensorForm() {
                         value={formData.name}
                         onChange={handleChange}
                         required
-                        placeholder="e.g. River_Station_01"
-                        className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                        placeholder={t('sms.sensors.placeholderName')}
+                        className="w-full bg-background border border-border rounded-lg px-4 py-2 text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                     />
                 </div>
 
                 {/* Description */}
                 <div>
-                    <label className="block text-sm font-medium text-white/80 mb-1">Description</label>
+                    <label className="block text-sm font-medium text-[var(--foreground)]/80 mb-1">{t('sms.sensors.description')}</label>
                     <textarea
                         name="description"
                         value={formData.description}
                         onChange={handleChange}
                         rows={3}
-                        placeholder="Optional description..."
-                        className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                        placeholder={t('sms.sensors.optionalDesc')}
+                        className="w-full bg-background border border-border rounded-lg px-4 py-2 text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                     />
                 </div>
 
                 {/* Device Type */}
                 <div>
-                    <label className="block text-sm font-medium text-white/80 mb-1">
-                        Device Type / Parser <span className="text-red-400">*</span>
+                    <label className="block text-sm font-medium text-[var(--foreground)]/80 mb-1">
+                        {t('sms.sensors.deviceTypeParser')} <span className="text-red-400">*</span>
                     </label>
-                    <p className="text-xs text-white/40 mb-2">
-                        Determines how data is parsed (e.g. standard MQTT, CSV).
+                    <p className="text-xs text-[var(--foreground)]/40 mb-2">
+                        {t('sms.sensors.deviceTypeParserDesc')}
                     </p>
                     <select
                         name="device_type"
                         value={formData.device_type}
                         onChange={handleChange}
                         required
-                        className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                        className="w-full bg-background border border-border rounded-lg px-4 py-2 text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-blue-500/50 appearance-none"
                     >
-                        <option value="chirpstack_generic">Generic (Chirpstack)</option>
+                        <option value="chirpstack_generic" className="bg-card">{t('sms.sensors.genericChirpstack')}</option>
                         {deviceTypes.map(dt => (
                             dt.name !== "chirpstack_generic" && (
-                                <option key={dt.name} value={dt.name}>{dt.name}</option>
+                                <option key={dt.name} value={dt.name} className="bg-card">{dt.name}</option>
                             )
                         ))}
                     </select>
@@ -213,40 +215,40 @@ export function SensorForm() {
                 {/* Location */}
                 <div className="grid grid-cols-2 gap-4">
                     <div>
-                        <label className="block text-sm font-medium text-white/80 mb-1">Latitude</label>
+                        <label className="block text-sm font-medium text-[var(--foreground)]/80 mb-1">{t('sms.sensors.latitude')}</label>
                         <input
                             type="number"
                             step="any"
                             name="latitude"
                             value={formData.latitude}
                             onChange={handleChange}
-                            placeholder="e.g. 50.123"
-                            className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                            placeholder={t('sms.sensors.placeholderLat')}
+                            className="w-full bg-background border border-border rounded-lg px-4 py-2 text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-white/80 mb-1">Longitude</label>
+                        <label className="block text-sm font-medium text-[var(--foreground)]/80 mb-1">{t('sms.sensors.longitude')}</label>
                         <input
                             type="number"
                             step="any"
                             name="longitude"
                             value={formData.longitude}
                             onChange={handleChange}
-                            placeholder="e.g. 14.456"
-                            className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                            placeholder={t('sms.sensors.placeholderLon')}
+                            className="w-full bg-background border border-border rounded-lg px-4 py-2 text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                         />
                     </div>
                 </div>
 
             </div>
 
-            <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
+            <div className="flex justify-end gap-3 pt-4 border-t border-border">
                 <button
                     type="button"
                     onClick={() => router.back()}
-                    className="px-4 py-2 rounded-lg text-white/60 hover:text-white hover:bg-white/5 transition-colors"
+                    className="px-4 py-2 rounded-lg text-[var(--foreground)]/60 hover:text-[var(--foreground)] hover:bg-muted/50 transition-colors"
                 >
-                    Cancel
+                    {t('sms.sensors.cancel')}
                 </button>
                 <button
                     type="submit"
@@ -254,7 +256,7 @@ export function SensorForm() {
                     className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                    Create Sensor
+                    {t('sms.sensors.createSensorBtn')}
                 </button>
             </div>
         </form >

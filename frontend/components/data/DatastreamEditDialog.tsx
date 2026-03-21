@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X, Save, Loader2 } from "lucide-react";
 import { getApiUrl } from "@/lib/utils";
+import { useEscapeKey } from '@/hooks/useEscapeKey';
 
 interface DatastreamEditDialogProps {
     isOpen: boolean;
@@ -22,6 +23,8 @@ export default function DatastreamEditDialog({
     token,
     onUpdate
 }: DatastreamEditDialogProps) {
+    useEscapeKey(onClose, isOpen);
+
     const [loading, setLoading] = useState(false);
     const [mounted, setMounted] = useState(false);
     const [formData, setFormData] = useState({
@@ -96,63 +99,63 @@ export default function DatastreamEditDialog({
     };
 
     return createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-            <div className="bg-[#0a0a0a] border border-white/10 rounded-xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh] overflow-y-auto">
-                <div className="flex items-center justify-between p-4 border-b border-white/10 sticky top-0 bg-[#0a0a0a] z-10">
-                    <h3 className="text-lg font-semibold text-white">Edit Datastream</h3>
-                    <button onClick={onClose} className="text-white/60 hover:text-white transition-colors">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-background/80 backdrop-blur-md p-4">
+            <div className="bg-card border border-border rounded-xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between p-4 border-b border-border sticky top-0 bg-card z-10">
+                    <h3 className="text-lg font-semibold text-[var(--foreground)]">Edit Datastream</h3>
+                    <button onClick={onClose} className="text-[var(--foreground)]/60 hover:text-[var(--foreground)] transition-colors">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
 
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-white/70 mb-1">Name</label>
+                        <label className="block text-sm font-medium text-[var(--foreground)]/70 mb-1">Name</label>
                         <input
                             type="text"
                             value={formData.name}
                             onChange={e => setFormData({ ...formData, name: e.target.value })}
-                            className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                            className="w-full bg-muted/50 border border-border rounded-lg px-3 py-2 text-[var(--foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                         />
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-white/70 mb-1">Description</label>
+                        <label className="block text-sm font-medium text-[var(--foreground)]/70 mb-1">Description</label>
                         <textarea
                             value={formData.description}
                             onChange={e => setFormData({ ...formData, description: e.target.value })}
-                            className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                            className="w-full bg-muted/50 border border-border rounded-lg px-3 py-2 text-[var(--foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                             rows={2}
                         />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-white/70 mb-1">Unit Label (Name)</label>
+                            <label className="block text-sm font-medium text-[var(--foreground)]/70 mb-1">Unit Label (Name)</label>
                             <input
                                 type="text"
                                 value={formData.unitName}
                                 onChange={e => setFormData({ ...formData, unitName: e.target.value })}
-                                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                                className="w-full bg-muted/50 border border-border rounded-lg px-3 py-2 text-[var(--foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-white/70 mb-1">Unit Symbol</label>
+                            <label className="block text-sm font-medium text-[var(--foreground)]/70 mb-1">Unit Symbol</label>
                             <input
                                 type="text"
                                 value={formData.unitSymbol}
                                 onChange={e => setFormData({ ...formData, unitSymbol: e.target.value })}
-                                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                                className="w-full bg-muted/50 border border-border rounded-lg px-3 py-2 text-[var(--foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                             />
                         </div>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-white/70 mb-1">Unit Definition (URI)</label>
+                        <label className="block text-sm font-medium text-[var(--foreground)]/70 mb-1">Unit Definition (URI)</label>
                         <input
                             type="text"
                             value={formData.unitDefinition}
                             onChange={e => setFormData({ ...formData, unitDefinition: e.target.value })}
-                            className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                            className="w-full bg-muted/50 border border-border rounded-lg px-3 py-2 text-[var(--foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                             placeholder="http://..."
                         />
                     </div>
@@ -161,14 +164,14 @@ export default function DatastreamEditDialog({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-4 py-2 hover:bg-white/5 text-white/70 hover:text-white rounded-lg text-sm transition-colors"
+                            className="px-4 py-2 hover:bg-muted/50 text-[var(--foreground)]/70 hover:text-[var(--foreground)] rounded-lg text-sm transition-colors"
                         >
                             Cancel
                         </button>
                         <button
                             type="submit"
                             disabled={loading}
-                            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
+                            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-[var(--foreground)] rounded-lg text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
                         >
                             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                             Save Changes

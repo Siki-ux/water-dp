@@ -3,6 +3,7 @@
 import React, { useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import { useTheme } from '@/components/ThemeContext';
 
 interface LocationPickerMapProps {
     latitude: number;
@@ -15,11 +16,16 @@ export default function LocationPickerMap({ latitude, longitude, onLocationChang
     const map = useRef<maplibregl.Map | null>(null);
     const marker = useRef<maplibregl.Marker | null>(null);
 
+    const { theme } = useTheme();
+
     // Initial Map Setup
     useEffect(() => {
         if (map.current || !mapContainer.current) return;
 
-        const styleUrl = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
+        const isLight = theme === 'light';
+        const styleUrl = isLight
+            ? 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json'
+            : 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 
         try {
             map.current = new maplibregl.Map({
@@ -61,7 +67,18 @@ export default function LocationPickerMap({ latitude, longitude, onLocationChang
             map.current?.remove();
             map.current = null;
         };
-    }, []);
+    }, []); // Run only once
+
+    // Update map style when theme changes
+    useEffect(() => {
+        if (!map.current) return;
+        const isLight = theme === 'light';
+        map.current.setStyle(
+            isLight
+                ? 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json'
+                : 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
+        );
+    }, [theme]);
 
     // Sync Props to Map (One-way sync to avoid loop if parent updates)
     // We only update map view if the distance is significant or it's a fresh load

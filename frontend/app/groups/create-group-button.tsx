@@ -7,10 +7,12 @@ import { Button } from "@/components/ui/button";
 import { getApiUrl } from "@/lib/utils";
 import api from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "@/lib/i18n";
 
 export default function CreateGroupButton() {
     const router = useRouter();
     const queryClient = useQueryClient();
+    const { t } = useTranslation();
     const [isOpen, setIsOpen] = useState(false);
     const [loading, setLoading] = useState(false);
     const [name, setName] = useState("");
@@ -45,7 +47,7 @@ export default function CreateGroupButton() {
                 className="bg-hydro-primary hover:bg-blue-600 text-white shadow-lg shadow-blue-500/20"
             >
                 <Plus className="w-4 h-4 mr-2" />
-                Create Group
+                {t("groups.createGroupBtn")}
             </Button>
         );
     }
@@ -55,7 +57,7 @@ export default function CreateGroupButton() {
             {/* Button Placeholder to maintain layout if needed, or just null? logic above returns button. */}
             <Button disabled className="opacity-50 cursor-not-allowed">
                 <Plus className="w-4 h-4 mr-2" />
-                Create Group
+                {t("groups.createGroupBtn")}
             </Button>
 
             {/* Modal Overlay */}
@@ -68,14 +70,14 @@ export default function CreateGroupButton() {
                         <X className="w-5 h-5" />
                     </button>
 
-                    <h2 className="text-xl font-bold text-white mb-1">Create Authorization Group</h2>
+                    <h2 className="text-xl font-bold text-white mb-1">{t("groups.createModalTitle")}</h2>
                     <p className="text-sm text-white/50 mb-6">
-                        Create a new group in Keycloak. It will automatically be prefixed with <code>UFZ-TSM:</code>.
+                        {t("groups.createModalDesc")} <code>UFZ-TSM:</code>.
                     </p>
 
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-white">Group Name</label>
+                            <label className="text-sm font-medium text-white">{t("groups.groupName")}</label>
                             <div className="flex items-center gap-2">
                                 <span className="text-white/40 font-mono text-sm bg-white/5 px-2 py-2 rounded-l-lg border border-r-0 border-white/10 select-none">
                                     UFZ-TSM:
@@ -105,7 +107,7 @@ export default function CreateGroupButton() {
                                 onClick={() => setIsOpen(false)}
                                 className="text-white/60 hover:text-white"
                             >
-                                Cancel
+                                {t("groups.cancel")}
                             </Button>
                             <Button
                                 type="submit"
@@ -113,7 +115,7 @@ export default function CreateGroupButton() {
                                 className="bg-hydro-primary hover:bg-blue-600 text-white"
                             >
                                 {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                                Create
+                                {t("groups.createSubmit")}
                             </Button>
                         </div>
                     </form>

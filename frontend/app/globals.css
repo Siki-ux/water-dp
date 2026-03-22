@@ -62,6 +62,7 @@
 /* Ensure inputs also follow dark theme */
 .dark input[type="number"],
 .dark input[type="text"],
+.dark input[type="password"],
 .dark input[type="datetime-local"],
 .dark textarea {
   color-scheme: dark;

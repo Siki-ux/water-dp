@@ -42,10 +42,10 @@ COMPOSE_FILES="-f docker-compose.yml -f docker-compose.tsm.yml"
 
 if [[ "$PODMAN_MODE" == "true" ]]; then
     echo "Podman mode: regenerating podman compose files and stripping postgres-app dependencies..."
-    python3 strip_postgres.py $SERVICES
-    COMPOSE_CMD="env UID=$(id -u) podman compose --in-pod false -p water-dp-api"
+    python3 scripts/strip_postgres.py $SERVICES
+    COMPOSE_CMD="env UID=$(id -u) podman compose --in-pod false -p water-dp"
     export GID=$(id -g)
-    COMPOSE_FILES="-f docker-compose.podman.yml -f docker-compose.tsm.podman.yml -f docker-compose.override.podman.yml"
+    COMPOSE_FILES="-f docker-compose.podman.yml -f docker-compose.tsm.podman.yml -f deploy/docker-compose.override.podman.yml"
     # Ensure external networks exist before compose tries to use them
     podman network exists water_shared_net || podman network create water_shared_net
 fi

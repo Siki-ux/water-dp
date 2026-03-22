@@ -92,10 +92,12 @@ yarn-error.log*
 frontend/.eslintcache
 
 # Project Specific
-app/computations/*_flood_prediction.py
+api/app/computations/*_flood_prediction.py
 openapi.json
-payload.json
-test_ingest.csv
+
+# Generated Podman compose files (created at runtime by scripts/strip_postgres.py)
+docker-compose.podman.yml
+docker-compose.tsm.podman.yml
 
 # Ruff cache
 .ruff_cache/

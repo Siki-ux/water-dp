@@ -1,4 +1,4 @@
-# Water Data Platform API
+# Water Data Platform
 
 The **Water Data Platform** is a comprehensive Python backend for managing environmental sensor data, geospatial layers, and time series analytics. It serves as the **Core Intelligence Layer** bridging TSM (Time Series Management), GeoServer, and a modern web frontend.
 
@@ -6,9 +6,12 @@ The **Water Data Platform** is a comprehensive Python backend for managing envir
 
 | Component | Location | Description |
 |-----------|----------|-------------|
-| **Core Backend (API)** | `./` | FastAPI application |
+| **API Backend** | `./api/` | FastAPI application, Alembic migrations, tests |
 | **Frontend Portal** | `./frontend/` | Next.js dashboard |
 | **GeoServer Config** | `./geoserver/` | Layer seeding and configuration |
+| **Scripts** | `./scripts/` | Container startup and operational scripts |
+| **Examples** | `./examples/` | Sample payloads and data files |
+| **Deploy** | `./deploy/` | Production and Podman compose variants |
 | **TSM Orchestration** | `../tsm-orchestration/` | Time series infrastructure |
 
 ---
@@ -23,7 +26,7 @@ graph TB
         Browser[Web Browser]
     end
 
-    subgraph "water_dp-api Repository"
+    subgraph "water-dp Repository"
         subgraph "Frontend Container"
             Portal[Hydro Portal<br/>Next.js :3000]
         end
@@ -158,12 +161,12 @@ Use the integrated script that starts TSM first, then Water DP:
 
 ```bash
 # 1. Clone both repositories
-git clone https://github.com/Siki-ux/water_dp-api.git
+git clone https://github.com/Siki-ux/water-dp.git
 git clone https://github.com/Siki-ux/tsm-orchestration.git
 
 # 2. Setup environment
-cd water_dp-api
-cp env.example .env
+cd water-dp
+cp .env.example .env
 
 # 3. Create shared network
 docker network create water_shared_net
@@ -176,7 +179,7 @@ docker network create water_shared_net
 
 ```bash
 # 1. Setup environment
-cp env.example .env
+cp .env.example .env
 
 # 2. Start services
 docker compose up -d --build
@@ -202,40 +205,34 @@ docker compose up -d --build
 ### Project Structure
 
 ```
-water_dp-api/
-├── app/
-│   ├── api/v1/endpoints/     # FastAPI route handlers
-│   │   ├── things.py         # Sensor CRUD
-│   │   ├── projects.py       # Project management
-│   │   ├── datasets.py       # Data export
-│   │   ├── geospatial.py     # GeoServer integration
-│   │   ├── alerts.py         # Alert management
-│   │   ├── computations.py   # Background jobs
-│   │   └── simulator.py      # Data simulation
-│   ├── models/               # SQLAlchemy ORM models
-│   ├── schemas/              # Pydantic request/response models
-│   ├── services/
-│   │   ├── timeio/           # TSM integration clients
-│   │   │   ├── frost_client.py
-│   │   │   ├── mqtt_client.py
-│   │   │   └── timeio_db.py
-│   │   ├── geoserver_service.py
-│   │   └── project_service.py
-│   ├── core/                 # Config, database, middleware
-│   └── main.py               # FastAPI app entry
+water-dp/
+├── api/                      # FastAPI backend (self-contained Python project)
+│   ├── app/
+│   │   ├── api/v1/endpoints/ # FastAPI route handlers
+│   │   ├── models/           # SQLAlchemy ORM models
+│   │   ├── schemas/          # Pydantic request/response models
+│   │   ├── services/
+│   │   │   ├── timeio/       # TSM integration clients (FROST, MQTT, DB)
+│   │   │   └── ...           # Alert, GeoServer, QA/QC, SMS services
+│   │   ├── core/             # Config, database, middleware
+│   │   └── main.py           # FastAPI app entry
+│   ├── alembic/              # Database migrations
+│   ├── tests/                # Pytest test suite
+│   ├── Dockerfile
+│   └── pyproject.toml
 ├── frontend/                 # Next.js dashboard
 ├── geoserver/                # GeoServer config & seed data
-├── alembic/                  # Database migrations
-├── scripts/                  # Utility scripts
-├── tests/                    # Pytest test suite
-└── docker-compose.yml
+├── scripts/                  # Container startup and operational scripts
+├── examples/                 # Sample payloads and data files
+├── deploy/                   # Production and Podman compose variants
+└── docker-compose.yml        # Main development compose
 ```
 
 ### Local Development
 
 ```bash
-# Install dependencies
-poetry install
+# Install dependencies (from within api/)
+cd api && poetry install
 
 # Run with hot reload (requires Docker services running)
 poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000

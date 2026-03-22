@@ -7,6 +7,7 @@ from .base import BaseModel
 from .computations import ComputationJob, ComputationScript
 from .geospatial import GeoFeature, GeoLayer
 from .layer_assignment import LayerProjectAssignment
+from .sensor_activity import SensorActivityConfig
 from .simulation import Simulation
 from .user_context import Dashboard, Project, project_sensors
 
@@ -22,4 +23,5 @@ __all__ = [
     "AlertDefinition",
     "Alert",
     "Simulation",
+    "SensorActivityConfig",
 ]

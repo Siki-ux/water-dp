@@ -127,6 +127,19 @@ def _assert_config_belongs_to_project(cfg: dict | None, tsm_project_id: int) -> 
 
 _CUSTOM_SAQC_BUCKET = "custom-saqc-functions"
 
+_CONNECTIVITY_HINTS = ("NameResolutionError", "Max retries exceeded", "Connection refused", "timed out")
+
+
+def _raise_storage_error(exc: Exception) -> None:
+    """Translate a raw MinIO/urllib3 exception into a clean HTTP response."""
+    exc_str = str(exc)
+    if any(hint in exc_str for hint in _CONNECTIVITY_HINTS):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Object storage is unavailable. Check MINIO_URL configuration.",
+        )
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Object storage error.")
+
 
 def _ensure_custom_saqc_bucket() -> None:
     if not minio_service.bucket_exists(_CUSTOM_SAQC_BUCKET):
@@ -150,8 +163,10 @@ async def list_custom_saqc_functions(
             }
             for obj in objects
         ]
+    except HTTPException:
+        raise
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+        _raise_storage_error(exc)
 
 
 @sms_router.post("/qaqc/functions", status_code=status.HTTP_201_CREATED, tags=["qaqc"])
@@ -192,8 +207,10 @@ async def upload_custom_saqc_function(
             length=len(content),
             content_type="text/x-python",
         )
+    except HTTPException:
+        raise
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+        _raise_storage_error(exc)
     return {"name": file.filename.removesuffix(".py"), "filename": file.filename, "size": len(content)}
 
 
@@ -206,8 +223,10 @@ async def delete_custom_saqc_function(
     try:
         _ensure_custom_saqc_bucket()
         minio_service.client.remove_object(_CUSTOM_SAQC_BUCKET, f"{name}.py")
+    except HTTPException:
+        raise
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+        _raise_storage_error(exc)
 
 
 @sms_router.get(

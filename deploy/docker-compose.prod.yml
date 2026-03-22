@@ -2,7 +2,7 @@ services:
   # PostgreSQL Database (TimescaleDB + PostGIS)
   postgres:
     image: timescale/timescaledb-ha:pg15
-    container_name: water_dp_postgres
+    container_name: water-dp-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: water_data
@@ -24,7 +24,7 @@ services:
   # Redis Cache
   redis:
     image: redis:7-alpine
-    container_name: water_dp_redis
+    container_name: water-dp-redis
     restart: unless-stopped
     volumes:
       - redis_data:/data
@@ -34,7 +34,7 @@ services:
   # Object Storage (MinIO)
   minio:
     image: minio/minio:RELEASE.2024-01-13T07-53-03Z
-    container_name: water_dp_minio
+    container_name: water-dp-minio
     restart: unless-stopped
     environment:
       MINIO_ROOT_USER: ${OBJECT_STORAGE_ROOT_USER:-minioadmin}
@@ -48,7 +48,7 @@ services:
   # GeoServer
   geoserver:
     image: kartoza/geoserver:2.22.1
-    container_name: water_dp_geoserver
+    container_name: water-dp-geoserver
     restart: unless-stopped
     environment:
       - GEOSERVER_ADMIN_PASSWORD=${GEOSERVER_ADMIN_PASSWORD:-geoserver}
@@ -75,7 +75,7 @@ services:
   # Water Data Platform API
   api:
     image: ghcr.io/${GITHUB_REPOSITORY_LOWER}/water_dp_api:latest
-    container_name: water_dp_api
+    container_name: water-dp-api
     restart: unless-stopped
     environment:
       - APP_NAME=Water Data Platform
@@ -130,7 +130,7 @@ services:
   # Celery Worker
   worker:
     image: ghcr.io/${GITHUB_REPOSITORY_LOWER}/water_dp_worker:latest
-    container_name: water_dp_worker
+    container_name: water-dp-worker
     restart: unless-stopped
     command: celery -A app.core.celery_app.celery_app worker --loglevel=info -Q imports,computations,celery
     environment:
@@ -175,7 +175,7 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - ./mosquitto.conf:/etc/mosquitto/mosquitto.conf:ro
+      - ../mosquitto.conf:/etc/mosquitto/mosquitto.conf:ro
     networks:
       - water_dp_network
 
@@ -199,7 +199,7 @@ services:
       - KEYCLOAK_HOSTNAME_STRICT_HTTPS=false
       - KEYCLOAK_HOSTNAME_STRICT=false
     volumes:
-      - ./keycloak/import:/opt/keycloak/data/import
+      - ../keycloak/import:/opt/keycloak/data/import
     command: start-dev --import-realm --http-port 8080 --hostname-strict=false --http-enabled=true
     ports:
       - "8081:8080"
@@ -226,7 +226,7 @@ services:
       - KEYCLOAK_ADMIN=${KEYCLOAK_ADMIN:-admin}
       - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD:-admin}
     volumes:
-      - ./scripts/setup_keycloak.sh:/opt/keycloak/setup_keycloak.sh
+      - ../scripts/setup_keycloak.sh:/opt/keycloak/setup_keycloak.sh
     networks:
       - water_dp_network
     entrypoint: /bin/bash
@@ -365,7 +365,7 @@ services:
       thing-management-api:
         condition: service_started
     volumes:
-      - ./nginx_proxy_api.conf:/etc/nginx/conf.d/default.conf
+      - ../nginx_proxy_api.conf:/etc/nginx/conf.d/default.conf
     networks:
       - water_dp_network
 

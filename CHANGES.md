@@ -1,6 +1,6 @@
 # What Changed and Why
 
-This document covers the major architectural additions made to `water_dp-api`. The README covers configuration and running the service; this document explains the *motivation and design* behind each significant new subsystem.
+This document covers the major architectural additions made to `water-dp` (formerly `water_dp-api`). The README covers configuration and running the service; this document explains the *motivation and design* behind each significant new subsystem.
 
 ---
 

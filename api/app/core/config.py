@@ -107,6 +107,8 @@ class Settings(BaseSettings):
     mqtt_broker_host: str = Field(default="mqtt-broker", alias="MQTT_BROKER_HOST")
     mqtt_username: str = Field(default="frontendbus", alias="MQTT_USERNAME")
     mqtt_password: str = Field(default="frontendbus", alias="MQTT_PASSWORD")
+    mqtt_topic_qaqc_done: str = Field(default="qaqc_done", alias="MQTT_TOPIC_QAQC_DONE")
+    mqtt_topic_data_parsed: str = Field(default="data_parsed", alias="MQTT_TOPIC_DATA_PARSED")
     topic_config_db_update: str = Field(
         default="configdb_update", alias="TOPIC_CONFIG_DB_UPDATE"
     )

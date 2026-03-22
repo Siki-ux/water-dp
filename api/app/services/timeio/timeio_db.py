@@ -509,7 +509,7 @@ class TimeIODatabase:
             with connection.cursor() as cursor:
                 cursor.execute(
                     """
-                    SELECT t.uuid 
+                    SELECT t.uuid
                     FROM config_db.thing t
                     JOIN config_db.ingest_type it ON t.ingest_type_id = it.id
                     WHERE it.name = 'mqtt'
@@ -517,10 +517,27 @@ class TimeIODatabase:
                 )
                 rows = cursor.fetchall()
                 return [str(row[0]) for row in rows]
+        finally:
+            connection.close()
 
+    def get_all_things_with_ingest_type(self) -> List[Dict[str, str]]:
+        """
+        Get all Thing UUIDs together with their ingest type name.
 
-
-
+        Returns a list of dicts: [{"uuid": "...", "ingest_type": "mqtt"}, ...]
+        """
+        connection = self._get_connection()
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT t.uuid, it.name AS ingest_type
+                    FROM config_db.thing t
+                    JOIN config_db.ingest_type it ON t.ingest_type_id = it.id
+                    """
+                )
+                rows = cursor.fetchall()
+                return [{"uuid": str(row[0]), "ingest_type": row[1]} for row in rows]
         finally:
             connection.close()
 

@@ -317,6 +317,115 @@ class AlertEvaluator:
         except Exception as e:
             logger.error(f"Error in QA/QC alert evaluation: {e}")
 
+    def evaluate_qaqc_rules_for_thing(self, project_uuid: str, thing_uuid: str):
+        """
+        Evaluate QA/QC alert rules for a single project+thing.
+
+        Called when TSM publishes a qaqc_done MQTT message, so evaluation is
+        event-driven rather than on a polling schedule.
+        """
+        import psycopg2
+        from datetime import datetime, timedelta
+        from psycopg2 import sql as pgsql
+        from app.core.config import settings
+
+        FLAG_THRESHOLDS = {
+            "BAD": 255.0,
+            "QUESTIONABLE": 2.0,
+            "ANY": 0.0,
+        }
+
+        try:
+            definitions = (
+                self.db.query(AlertDefinition)
+                .options(joinedload(AlertDefinition.project))
+                .filter(
+                    AlertDefinition.is_active,
+                    AlertDefinition.alert_type == "qaqc",
+                    AlertDefinition.datastream_id.isnot(None),
+                    AlertDefinition.project.has(Project.id == project_uuid),
+                )
+                .all()
+            )
+
+            if not definitions:
+                return
+
+            conn = psycopg2.connect(
+                host=settings.timeio_db_host,
+                port=settings.timeio_db_port,
+                dbname=settings.timeio_db_name,
+                user=settings.timeio_db_user,
+                password=settings.timeio_db_password,
+            )
+
+            try:
+                for definition in definitions:
+                    try:
+                        schema = definition.project.schema_name if definition.project else None
+                        if not schema:
+                            continue
+
+                        conditions = definition.conditions or {}
+                        flag_level = conditions.get("flag_level", "BAD")
+                        threshold_pct = float(conditions.get("threshold_pct", 10))
+                        window_hours = int(conditions.get("window_hours", 24))
+                        min_flag_value = FLAG_THRESHOLDS.get(flag_level, 255.0)
+
+                        since = datetime.utcnow() - timedelta(hours=window_hours)
+
+                        with conn.cursor() as cur:
+                            # Join via datastream to filter to the specific thing
+                            cur.execute(
+                                pgsql.SQL(
+                                    """
+                                    SELECT
+                                        COUNT(*) AS total,
+                                        COUNT(*) FILTER (
+                                            WHERE o.result_quality IS NOT NULL
+                                            AND (o.result_quality->>'annotation')::float >= %s
+                                        ) AS flagged
+                                    FROM {schema}.observation o
+                                    JOIN {schema}.datastream ds ON ds.id = o.datastream_id
+                                    JOIN {schema}.thing t ON t.id = ds.thing_id
+                                    WHERE o.datastream_id = %s
+                                    AND t.uuid = %s
+                                    AND o.result_time >= %s
+                                    """
+                                ).format(schema=pgsql.Identifier(schema)),
+                                (min_flag_value, int(definition.datastream_id), thing_uuid, since),
+                            )
+                            row = cur.fetchone()
+
+                        if not row or not row[0]:
+                            continue
+
+                        total, flagged = row
+                        ratio_pct = (flagged / total) * 100
+
+                        if ratio_pct >= threshold_pct:
+                            self._create_alert(
+                                definition,
+                                f"{ratio_pct:.1f}% flagged ({flagged}/{total} obs, last {window_hours}h)",
+                            )
+                        else:
+                            existing = (
+                                self.db.query(Alert)
+                                .filter(Alert.definition_id == definition.id, Alert.status == "active")
+                                .first()
+                            )
+                            if existing:
+                                existing.status = "resolved"
+                                self.db.commit()
+
+                    except Exception as e:
+                        logger.error(f"Failed to evaluate QA/QC rule {definition.id} for thing {thing_uuid}: {e}")
+            finally:
+                conn.close()
+
+        except Exception as e:
+            logger.error(f"Error evaluating QA/QC alerts for thing {thing_uuid}: {e}")
+
     def _create_alert(self, definition: AlertDefinition, value: Any):
         from datetime import datetime
 

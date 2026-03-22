@@ -34,7 +34,9 @@ services:
 
   # --- Application ---
   api:
-    build: .
+    build:
+      context: ./api
+      dockerfile: Dockerfile
     container_name: water-dp-api
     restart: unless-stopped
     env_file: .env
@@ -89,11 +91,11 @@ services:
       redis:
         condition: service_started
     volumes:
-      - ./app:/app/app
-      - ./alembic:/app/alembic
+      - ./api/app:/app/app
+      - ./api/alembic:/app/alembic
       - ./scripts:/app/scripts
       - ./geoserver/data:/app/geoserver/data
-      - ./alembic.ini:/app/alembic.ini
+      - ./api/alembic.ini:/app/alembic.ini
       - temp_imports:/app/app/temp_imports
     networks:
       - water_shared_net
@@ -128,7 +130,7 @@ services:
 
   geoserver-init:
     image: python:3.11-slim
-    container_name: geoserver_init
+    container_name: water-dp-geoserver-init
     restart: "no"
     command: python /app/seed_geoserver.py
     environment:
@@ -184,7 +186,9 @@ services:
 
 
   worker:
-    build: .
+    build:
+      context: ./api
+      dockerfile: Dockerfile
     container_name: water-dp-worker
     # restart: unless-stopped
     command: celery -A app.core.celery_app.celery_app worker -B --loglevel=debug -Q imports,computations,celery
@@ -217,11 +221,11 @@ services:
       api:
         condition: service_healthy
     volumes:
-      - ./app:/app/app
-      - ./alembic:/app/alembic
+      - ./api/app:/app/app
+      - ./api/alembic:/app/alembic
       - ./scripts:/app/scripts
       - ./geoserver/data:/app/geoserver/data
-      - ./alembic.ini:/app/alembic.ini
+      - ./api/alembic.ini:/app/alembic.ini
       - temp_imports:/app/app/temp_imports
     networks:
       - water_shared_net
@@ -229,7 +233,9 @@ services:
 
   # docker compose --profile seed run --rm water-dp-seed
   water-dp-seed:
-    build: .
+    build:
+      context: ./api
+      dockerfile: Dockerfile
     container_name: water-dp-seed
     command: python scripts/simulate_sensors.py
     # restart: on-failure

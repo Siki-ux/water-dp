@@ -1,4 +1,5 @@
 from celery import Celery
+from celery.signals import worker_ready
 
 from app.core.config import settings
 
@@ -26,13 +27,20 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.simulation_tasks.run_simulation_step",
         "schedule": 10.0,
     },
-    "check-inactive-things-every-hour": {
+    "check-inactive-sensors": {
         "task": "app.tasks.monitoring_tasks.run_inactive_check",
-        # "schedule": 3600.0,  # 1 hour
-        "schedule": 120.0
+        "schedule": 1800.0,  # 30 minutes — fast DB query, no FROST polling
     },
-    "periodic-alert-evaluation": {
-        "task": "app.tasks.monitoring_tasks.run_periodic_alert_evaluation",
-        "schedule": 60.0,  # Every minute
-    },
+    # QA/QC alert evaluation is now event-driven via MQTT (qaqc_done topic).
+    # The periodic-alert-evaluation task has been removed in favour of
+    # evaluate_qaqc_alerts_for_thing triggered by mqtt_handler.
 }
+
+
+@worker_ready.connect
+def start_mqtt_subscriber(**kwargs):
+    """Start persistent MQTT subscriber thread when the Celery worker is ready.
+    Subscribes to qaqc_done and data_parsed topics to drive event-based alerts."""
+    from app.worker.mqtt_handler import start_subscriber
+
+    start_subscriber()

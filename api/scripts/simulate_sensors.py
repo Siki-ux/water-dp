@@ -6,7 +6,7 @@ import time
 
 import requests
 
-# Allow importing from api/app/ (same pattern as scripts/seed.py)
+# Allow importing from app/ (same pattern as seed_water_dp.py)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Configure Logging

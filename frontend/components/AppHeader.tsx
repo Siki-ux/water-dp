@@ -18,10 +18,10 @@ export function AppHeader() {
                     {t('header.hydroPortal')}
                 </Link>
                 <div className="hidden md:flex h-6 w-px bg-[var(--border)] mx-2"></div>
-                <nav className="hidden md:flex gap-4 text-sm font-medium text-[var(--foreground)]/60">
-                    <Link href="/projects" className="hover:text-[var(--foreground)] transition-colors">{t('header.projects')}</Link>
-                    <Link href="/sms/sensors" className="hover:text-[var(--foreground)] transition-colors">{t('header.sms')}</Link>
-                    <Link href="/layers" className="hover:text-[var(--foreground)] transition-colors">{t('header.layers')}</Link>
+                <nav className="hidden md:flex gap-1 text-sm font-medium">
+                    <Link href="/projects" className="px-3 py-1.5 rounded-md text-[var(--foreground)]/70 hover:text-[var(--foreground)] hover:bg-[var(--foreground)]/8 transition-colors">{t('header.projects')}</Link>
+                    <Link href="/sms/sensors" className="px-3 py-1.5 rounded-md text-[var(--foreground)]/70 hover:text-[var(--foreground)] hover:bg-[var(--foreground)]/8 transition-colors">{t('header.sms')}</Link>
+                    <Link href="/layers" className="px-3 py-1.5 rounded-md text-[var(--foreground)]/70 hover:text-[var(--foreground)] hover:bg-[var(--foreground)]/8 transition-colors">{t('header.layers')}</Link>
                 </nav>
             </div>
 

@@ -1,8 +1,11 @@
 import logging
 import re
+import uuid as uuid_pkg
+from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from pydantic import BaseModel as PydanticBaseModel
 from sqlalchemy.orm import Session
 
 from app.api import deps
@@ -10,6 +13,7 @@ from app.api.deps import get_db
 from app.core.exceptions import (
     ResourceNotFoundException,
 )
+from app.models.sensor_activity import SensorActivityConfig
 from app.models.user_context import Project
 from app.schemas.frost.datastream import Datastream, Observation, DatastreamUpdate
 from app.schemas.frost.thing import Thing
@@ -23,6 +27,26 @@ from app.schemas.sensor import (
 from app.services.async_thing_service import AsyncThingService
 from app.services.keycloak_service import KeycloakService
 from app.services.timeio.orchestrator import TimeIOOrchestrator
+
+
+# ---- Pydantic schemas for activity config endpoints ----
+
+class ActivityConfigResponse(PydanticBaseModel):
+    thing_uuid: str
+    track_activity: bool
+    inactivity_threshold_hours: int
+    last_seen_at: Optional[datetime]
+
+    model_config = {"from_attributes": True}
+
+
+class ActivityConfigUpdate(PydanticBaseModel):
+    track_activity: Optional[bool] = None
+    inactivity_threshold_hours: Optional[int] = None
+
+
+# ---- Ingest types that default to tracking OFF ----
+_SFTP_INGEST_TYPES = {"sftp", "extsftp"}
 
 logger = logging.getLogger(__name__)
 
@@ -239,6 +263,18 @@ async def create_sensor(
         # Ensure ID is string for Pydantic response model
         if result.get("id"):
             result["id"] = str(result["id"])
+
+        # Auto-create SensorActivityConfig with defaults based on ingest type
+        if project:
+            try:
+                _ensure_activity_config(
+                    database,
+                    thing_uuid=result["uuid"],
+                    project_id=project.id,
+                    ingest_type=sensor.ingest_type,
+                )
+            except Exception as error:
+                logger.warning(f"Failed to create activity config for sensor: {error}")
 
         return result
     except HTTPException:
@@ -484,6 +520,118 @@ async def ingest_csv(
     from app.services.ingestion_service import IngestionService
 
     return await IngestionService.upload_csv(uuid, file)
+
+
+def _ensure_activity_config(
+    db: Session,
+    thing_uuid: str,
+    project_id,
+    ingest_type: str,
+) -> SensorActivityConfig:
+    """Create a SensorActivityConfig for a sensor if one doesn't already exist."""
+    thing_uuid_obj = uuid_pkg.UUID(thing_uuid)
+    existing = (
+        db.query(SensorActivityConfig)
+        .filter(SensorActivityConfig.thing_uuid == thing_uuid_obj)
+        .first()
+    )
+    if existing:
+        return existing
+    config = SensorActivityConfig(
+        thing_uuid=thing_uuid_obj,
+        project_id=project_id,
+        track_activity=ingest_type not in _SFTP_INGEST_TYPES,
+        inactivity_threshold_hours=24,
+        last_seen_at=None,
+    )
+    db.add(config)
+    db.commit()
+    db.refresh(config)
+    return config
+
+
+@router.get(
+    "/{sensor_uuid}/activity-config",
+    response_model=ActivityConfigResponse,
+    summary="Get sensor activity config",
+    description="Returns the activity tracking configuration for a sensor.",
+)
+def get_activity_config(
+    sensor_uuid: str,
+    database: Session = Depends(get_db),
+):
+    try:
+        thing_uuid_obj = uuid_pkg.UUID(sensor_uuid)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid sensor UUID")
+
+    config = (
+        database.query(SensorActivityConfig)
+        .filter(SensorActivityConfig.thing_uuid == thing_uuid_obj)
+        .first()
+    )
+    if not config:
+        # Auto-create with defaults (lazy init for existing sensors)
+        from app.services.monitoring_service import MonitoringService
+        ms = MonitoringService(database)
+        config = ms._get_or_create_activity_config(sensor_uuid)
+        if not config:
+            raise HTTPException(status_code=404, detail="Sensor not found or project unknown")
+
+    return ActivityConfigResponse(
+        thing_uuid=str(config.thing_uuid),
+        track_activity=config.track_activity,
+        inactivity_threshold_hours=config.inactivity_threshold_hours,
+        last_seen_at=config.last_seen_at,
+    )
+
+
+@router.patch(
+    "/{sensor_uuid}/activity-config",
+    response_model=ActivityConfigResponse,
+    summary="Update sensor activity config",
+    description="Update activity tracking settings for a sensor (track_activity, inactivity_threshold_hours).",
+)
+def update_activity_config(
+    sensor_uuid: str,
+    update: ActivityConfigUpdate,
+    database: Session = Depends(get_db),
+):
+    try:
+        thing_uuid_obj = uuid_pkg.UUID(sensor_uuid)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid sensor UUID")
+
+    config = (
+        database.query(SensorActivityConfig)
+        .filter(SensorActivityConfig.thing_uuid == thing_uuid_obj)
+        .first()
+    )
+    if not config:
+        from app.services.monitoring_service import MonitoringService
+        ms = MonitoringService(database)
+        config = ms._get_or_create_activity_config(sensor_uuid)
+        if not config:
+            raise HTTPException(status_code=404, detail="Sensor not found or project unknown")
+
+    if update.track_activity is not None:
+        config.track_activity = update.track_activity
+    if update.inactivity_threshold_hours is not None:
+        if update.inactivity_threshold_hours < 1:
+            raise HTTPException(
+                status_code=400, detail="inactivity_threshold_hours must be at least 1"
+            )
+        config.inactivity_threshold_hours = update.inactivity_threshold_hours
+
+    database.commit()
+    database.refresh(config)
+
+    return ActivityConfigResponse(
+        thing_uuid=str(config.thing_uuid),
+        track_activity=config.track_activity,
+        inactivity_threshold_hours=config.inactivity_threshold_hours,
+        last_seen_at=config.last_seen_at,
+    )
 
 
 @router.post(

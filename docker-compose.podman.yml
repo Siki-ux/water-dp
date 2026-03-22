@@ -1,0 +1,246 @@
+services:
+  postgres-app:
+    image: postgis/postgis:15-3.3-alpine
+    container_name: water-dp-postgres
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-water_app}
+      POSTGRES_USER: ${DATABASE_USER:-postgres}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-postgres}
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB:-water_app}
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    volumes:
+    - postgres_app_data:/var/lib/postgresql/data
+    ports:
+    - 5433:5432
+    networks:
+    - water_shared_net
+  redis:
+    image: redis:7-alpine
+    container_name: water-dp-redis
+    restart: unless-stopped
+    volumes:
+    - redis_data:/data
+    networks:
+    - water_shared_net
+  api:
+    build: .
+    container_name: water-dp-api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      APP_NAME: Water Data Platform
+      DEBUG: 'true'
+      VERSION: 1.0.0
+      API_PREFIX: /api/v1
+      DATABASE_URL: postgresql://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-postgres}@postgres-app:5432/${POSTGRES_DB:-water_app}
+      DATABASE_POOL_SIZE: '10'
+      DATABASE_MAX_OVERFLOW: '20'
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
+      GEOSERVER_URL: ${GEOSERVER_URL:-http://water-dp-geoserver:8080/geoserver}
+      GEOSERVER_USERNAME: ${GEOSERVER_ADMIN_USER:-admin}
+      GEOSERVER_PASSWORD: ${GEOSERVER_ADMIN_PASSWORD:-geoserver}
+      GEOSERVER_WORKSPACE: ${GEOSERVER_WORKSPACE:-water_data}
+      TIME_ZONE: UTC
+      MAX_TIME_RANGE_DAYS: '365'
+      SECRET_KEY: ${SECRET_KEY}
+      ACCESS_TOKEN_EXPIRE_MINUTES: '30'
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://keycloak:8081/keycloak}
+      KEYCLOAK_EXTERNAL_URL: ${KEYCLOAK_EXTERNAL_URL:-http://${PUBLIC_HOSTNAME:-localhost}:8081}
+      KEYCLOAK_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:-keycloak}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-keycloak}
+      FROST_URL: http://frost:8080
+      FROST_SERVER: sta
+      FROST_VERSION: v1.1
+      FROST_TIMEOUT: '30'
+      TIMEIO_DB_HOST: database
+      TIMEIO_DB_PORT: '5432'
+      MQTT_BROKER_HOST: mqtt-broker
+      THING_MANAGEMENT_API_URL: http://thing-management-api:8002
+      FERNET_ENCRYPTION_SECRET: ${FERNET_ENCRYPTION_SECRET:-CKoB---DEFAULT-DUMMY-SECRET---0exKVH0QDLy1B=}
+      MQTT_USERNAME: ${MQTT_USERNAME:-frontendbus}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-frontendbus}
+      SQLALCHEMY_LOG_LEVEL: WARNING
+    ports:
+    - 8000:8000
+    healthcheck:
+      test:
+      - CMD
+      - python
+      - -c
+      - import urllib.request; urllib.request.urlopen('http://localhost:8000/health')
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 30s
+    depends_on:
+      redis:
+        condition: service_started
+    volumes:
+    - ./app:/app/app
+    - ./alembic:/app/alembic
+    - ./scripts:/app/scripts
+    - ./geoserver/data:/app/geoserver/data
+    - ./alembic.ini:/app/alembic.ini
+    - temp_imports:/app/app/temp_imports
+    networks:
+    - water_shared_net
+    - tsm_network
+    command: sh scripts/start.sh
+  water-dp-geoserver:
+    image: kartoza/geoserver:2.22.1
+    container_name: water-dp-geoserver
+    restart: unless-stopped
+    environment:
+      GEOSERVER_ADMIN_PASSWORD: ${GEOSERVER_ADMIN_PASSWORD:-geoserver}
+      GEOSERVER_ADMIN_USER: ${GEOSERVER_ADMIN_USER:-admin}
+      GEOSERVER_DATA_DIR: /opt/geoserver/data_dir
+      ALLOW_CORS: 'true'
+      JAVA_OPTS: -Xms512m -Xmx1024m -DGEOSERVER_CSRF_DISABLED=true
+    ports:
+    - 8079:8080
+    volumes:
+    - geoserver_data:/opt/geoserver/data_dir
+    - ./geoserver/conf/server.xml:/usr/local/tomcat/conf/server.xml
+    networks:
+    - water_shared_net
+    - tsm_network
+    healthcheck:
+      test: curl --fail http://localhost:8080/geoserver/web/ || exit 1
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 120s
+  geoserver-init:
+    image: python:3.11-slim
+    container_name: geoserver_init
+    restart: 'no'
+    command: python /app/seed_geoserver.py
+    environment:
+    - PYTHONUNBUFFERED=1
+    - GEOSERVER_URL=http://water-dp-geoserver:8080/geoserver
+    - GEOSERVER_USER=${GEOSERVER_ADMIN_USER:-admin}
+    - GEOSERVER_PASSWORD=${GEOSERVER_ADMIN_PASSWORD:-geoserver}
+    - DB_HOST=postgres-app
+    - DB_PORT=5432
+    - DB_NAME=${POSTGRES_DB:-water_app}
+    - DB_USER=${DATABASE_USER:-postgres}
+    - DB_PASSWORD=${DATABASE_PASSWORD:-postgres}
+    - DB_SCHEMA=${GEOSERVER_DB_SCHEMA:-water_dp_geo}
+    depends_on:
+      water-dp-geoserver:
+        condition: service_healthy
+      postgres-app:
+        condition: service_healthy
+    volumes:
+    - ./geoserver/scripts/seed_geoserver.py:/app/seed_geoserver.py
+    - ./geoserver/data:/app/data
+    networks:
+    - water_shared_net
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: runner
+      args:
+      - NEXT_PUBLIC_API_URL=http://${PUBLIC_HOSTNAME:-localhost}/water-api/api/v1
+      - NEXT_PUBLIC_GEOSERVER_URL=http://${PUBLIC_HOSTNAME:-localhost}/geoserver
+      - NEXT_PUBLIC_NEXTAUTH_URL=http://${PUBLIC_HOSTNAME:-localhost}/portal
+    container_name: water-dp-frontend
+    ports:
+    - 3000:3000
+    environment:
+      NEXT_PUBLIC_API_URL: http://${PUBLIC_HOSTNAME:-localhost}/water-api/api/v1
+      NEXT_PUBLIC_GEOSERVER_URL: http://${PUBLIC_HOSTNAME:-localhost}/geoserver
+      NEXT_PUBLIC_NEXTAUTH_URL: http://${PUBLIC_HOSTNAME:-localhost}/portal
+      INTERNAL_API_URL: http://water-dp-api:8000/api/v1
+      AUTH_SECRET: ${AUTH_SECRET:-6e2e9c8b3a4f5d6e7f8g9h0i1j2k3l4m5n6o7p8q9r}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-6e2e9c8b3a4f5d6e7f8g9h0i1j2k3l4m5n6o7p8q9r}
+      NEXTAUTH_URL: http://${PUBLIC_HOSTNAME:-localhost}/portal
+      AUTH_URL: http://${PUBLIC_HOSTNAME:-localhost}/portal/api/auth
+      AUTH_TRUST_HOST: 'true'
+    networks:
+    - water_shared_net
+    - tsm_network
+  worker:
+    build: .
+    container_name: water-dp-worker
+    command: celery -A app.core.celery_app.celery_app worker -B --loglevel=debug -Q
+      imports,computations,celery
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-postgres}@postgres-app:5432/water_app
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
+      FROST_URL: ${FROST_URL:-http://timeio-frost:8080/FROST-Server/v1.1}
+      SECRET_KEY: ${SECRET_KEY}
+      GEOSERVER_URL: http://water-dp-geoserver:8080/geoserver
+      TIMEIO_DB_HOST: database
+      TIMEIO_DB_PORT: '5432'
+      MQTT_BROKER_HOST: mqtt-broker
+      THING_MANAGEMENT_API_URL: http://thing-management-api:8002
+      FERNET_ENCRYPTION_SECRET: ${FERNET_ENCRYPTION_SECRET:-CKoB---DEFAULT-DUMMY-SECRET---0exKVH0QDLy1B=}
+      MQTT_USERNAME: ${MQTT_USERNAME:-frontendbus}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-frontendbus}
+      GEOSERVER_USERNAME: ${GEOSERVER_ADMIN_USER:-admin}
+      GEOSERVER_PASSWORD: ${GEOSERVER_ADMIN_PASSWORD:-geoserver}
+      LOG_LEVEL: DEBUG
+      SQLALCHEMY_LOG_LEVEL: WARNING
+    depends_on:
+      redis:
+        condition: service_started
+      api:
+        condition: service_healthy
+    volumes:
+    - ./app:/app/app
+    - ./alembic:/app/alembic
+    - ./scripts:/app/scripts
+    - ./geoserver/data:/app/geoserver/data
+    - ./alembic.ini:/app/alembic.ini
+    - temp_imports:/app/app/temp_imports
+    networks:
+    - water_shared_net
+    - tsm_network
+  water-dp-seed:
+    build: .
+    container_name: water-dp-seed
+    command: python scripts/simulate_sensors.py
+    env_file: .env
+    environment:
+      API_URL: http://water-dp-api:8000/api/v1
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://keycloak:8081/keycloak}
+      ADMIN_USERNAME: ${SEED_ADMIN_USERNAME:-admin-siki}
+      ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-admin-siki}
+      DATABASE_URL: postgresql://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-postgres}@postgres-app:5432/${POSTGRES_DB:-water_app}
+      TIMEIO_DB_HOST: postgres-app
+      TIMEIO_DB_PORT: '5432'
+      MQTT_BROKER_HOST: mqtt-broker
+    networks:
+    - water_shared_net
+    - tsm_network
+    profiles:
+    - seed
+volumes:
+  postgres_app_data: null
+  redis_data: null
+  minio_data: null
+  geoserver_data: null
+  temp_imports: null
+networks:
+  water_shared_net:
+    external: true
+  tsm_network:
+    external: true
+    name: tsm-orchestration_default

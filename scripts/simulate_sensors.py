@@ -247,6 +247,13 @@ def get_headers(token):
     return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
 
+def refresh_headers(headers):
+    """Re-authenticate and update headers in-place with a fresh token."""
+    logger.info("Token expired, re-authenticating...")
+    token = get_access_token()
+    headers["Authorization"] = f"Bearer {token}"
+
+
 def wait_for_api():
     base_url = API_URL.replace("/api/v1", "").rstrip("/")
     health_url = f"{base_url}/health"
@@ -366,6 +373,10 @@ def create_simulated_sensor(headers, project_id, location_info, index):
             elif res.status_code == 409:
                 logger.info(f"Sensor {name} likely already exists.")
                 return
+            elif res.status_code == 401:
+                refresh_headers(headers)
+                # don't count 401 as a retry attempt, just redo immediately
+                continue
             else:
                 logger.warning(
                     f"Attempt {attempt + 1}/{max_retries} failed for {name}: {res.status_code} - {res.text}"
@@ -497,6 +508,9 @@ def create_external_source_sensor(headers, project_id, sensor_config):
             elif res.status_code == 409:
                 logger.info(f"Sensor '{name}' likely already exists.")
                 return True
+            elif res.status_code == 401:
+                refresh_headers(headers)
+                continue
             else:
                 logger.warning(
                     f"Attempt {attempt + 1}/{max_retries} for '{name}': "

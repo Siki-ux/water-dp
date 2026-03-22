@@ -1,0 +1,9 @@
+services:
+  water-dp-geoserver:
+    # kartoza/geoserver entrypoint runs groupadd/useradd and needs root — keep-id is
+    # incompatible (it makes the container start as the host user UID, not root).
+    # The slow startup chown is unavoidable on first run; avoid `down -v` to keep
+    # the volume between restarts so subsequent chowns are read-only (no writes).
+    environment:
+      GEOSERVER_UID: "1000"
+      GEOSERVER_GID: "10001"

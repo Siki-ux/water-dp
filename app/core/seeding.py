@@ -961,7 +961,7 @@ def seed_qaqc_configs() -> None:
       1. flagMissing   — mark missing observations
       2. flagRange     — physically impossible values (< -2 m or > 20 m)
       3. flagConstants — stuck sensor (same reading for 12 h)
-      4. flagMad       — rolling-median outlier detection (30-day window, z=3.5)
+      4. flagMAD       — rolling-median outlier detection (30-day window, z=3.5)
 
     This is non-fatal: failures are logged and silently skipped.
     """
@@ -1028,7 +1028,7 @@ def seed_qaqc_configs() -> None:
             # 4. Rolling-median outlier detection
             svc.create_test(
                 qaqc_id=qaqc_id,
-                function="flagMad",
+                function="flagMAD",
                 name="Outlier (MAD, 30d)",
                 position=4,
                 args={"window": "30d", "z": 3.5},

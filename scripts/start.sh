@@ -5,8 +5,12 @@ set -e
 # with Base.metadata.create_all(checkfirst=True) which is idempotent
 echo "Table creation handled by init_db() during app startup..."
 
-echo "Running Keycloak setup..."
-python scripts/setup_keycloak.py
+echo "Running Keycloak setup (retrying until Keycloak is ready)..."
+for i in $(seq 1 20); do
+    python scripts/setup_keycloak.py && break
+    echo "Keycloak not ready yet (attempt $i/20), retrying in 5s..."
+    sleep 5
+done
 
 echo "Initializing database schema (once)..."
 python -c "from app.core.database import init_db; init_db()"

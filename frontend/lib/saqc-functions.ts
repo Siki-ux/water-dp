@@ -45,7 +45,7 @@ export const SAQC_FUNCTIONS: SaQCFunction[] = [
         ],
     },
     {
-        name: "flagMad",
+        name: "flagMAD",
         label: "Median Absolute Deviation",
         description: "Flag values that deviate from the rolling median by more than z standard deviations (MAD-based).",
         whenToUse:

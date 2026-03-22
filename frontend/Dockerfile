@@ -6,11 +6,16 @@ FROM base AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false
+ENV NPM_CONFIG_FUND=false
+ENV NPM_CONFIG_AUDIT=false
+ENV NEXT_TELEMETRY_DISABLED=1
+
 # Install dependencies based on the preferred package manager
 COPY package.json package-lock.json* ./
 RUN \
-    if [ -f package-lock.json ]; then npm ci --legacy-peer-deps; \
-    else echo "Lockfile not found." && npm install --legacy-peer-deps; \
+    if [ -f package-lock.json ]; then npm ci --legacy-peer-deps --ignore-scripts; \
+    else echo "Lockfile not found." && npm install --legacy-peer-deps --ignore-scripts; \
     fi
 
 

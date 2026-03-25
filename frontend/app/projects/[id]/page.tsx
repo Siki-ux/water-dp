@@ -80,8 +80,14 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
         return <div className="text-red-400"><T path="projects.details.notFound" /></div>;
     }
 
-    // Basic stats calculation
-    const activeSensors = sensors.filter(s => s.status === 'active').length;
+    // Basic stats calculation — a sensor is "active" if it has recent data (within 24h)
+    // or if FROST has already marked it active (for sensors tracked by the monitoring service)
+    const ACTIVE_THRESHOLD_MS = 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const activeSensors = sensors.filter(s =>
+        s.status === 'active' ||
+        (s.last_activity && (now - new Date(s.last_activity).getTime()) < ACTIVE_THRESHOLD_MS)
+    ).length;
 
     // Fetch Active Alerts Count
     let activeAlertsCount = 0;

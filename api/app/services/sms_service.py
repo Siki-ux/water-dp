@@ -10,7 +10,8 @@ from app.services.async_thing_service import AsyncThingService
 # from app.services.timeio.timeio_db import TimeIODatabase  # Moved locally to break circularity
 from app.services.timeio.crypto_utils import decrypt_password
 from app.schemas.sms import SensorSMS
-from app.services.project_service import ProjectService, _sanitize_user_groups
+from app.services.project_service import ProjectService
+from app.services.rbac_service import parse_group_roles, is_realm_admin
 from app.core.database import SessionLocal
 
 logger = logging.getLogger(__name__)
@@ -26,17 +27,20 @@ class SMSService:
         from app.models.user_context import Project
 
         # Realm admin sees everything
-        if ProjectService._is_admin(user):
+        if is_realm_admin(user):
             return None  # None = no filter
 
-        user_groups = _sanitize_user_groups(user)
-        if not user_groups:
+        # Parse group names from JWT claim (no Keycloak Admin API call)
+        jwt_groups: list = user.get("groups", [])
+        group_roles = parse_group_roles(jwt_groups)
+        group_names = list(group_roles.keys())  # e.g. ["UFZ-TSM:ProjectA"]
+        if not group_names:
             return []  # No groups = no access
 
         with SessionLocal() as session:
             projects = (
                 session.query(Project.schema_name)
-                .filter(Project.authorization_provider_group_id.in_(user_groups))
+                .filter(Project.authorization_provider_group_name.in_(group_names))
                 .all()
             )
             return [p.schema_name for p in projects if p.schema_name]

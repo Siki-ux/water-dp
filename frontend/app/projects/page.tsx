@@ -2,14 +2,17 @@ import { ProjectsClientView } from "@/components/ProjectsClientView";
 import { getApiUrl } from "@/lib/utils";
 import { auth } from "@/lib/auth";
 
-async function getProjects() {
+async function getProjects(groupId?: string) {
     const session = await auth();
     if (!session?.accessToken) return [];
 
     const apiUrl = getApiUrl();
+    const url = groupId
+        ? `${apiUrl}/projects/?group_id=${encodeURIComponent(groupId)}`
+        : `${apiUrl}/projects/`;
 
     try {
-        const res = await fetch(`${apiUrl}/projects/`, {
+        const res = await fetch(url, {
             headers: {
                 Authorization: `Bearer ${session.accessToken}`,
             },
@@ -42,9 +45,14 @@ async function getProjectSensorCount(id: string, session: any) {
     }
 }
 
-export default async function ProjectsPage() {
+export default async function ProjectsPage({
+    searchParams,
+}: {
+    searchParams: Promise<{ group_id?: string }>;
+}) {
     const session = await auth();
-    const projects = await getProjects();
+    const { group_id } = await searchParams;
+    const projects = await getProjects(group_id);
 
     // Fetch sensor counts in parallel
     const projectsWithCounts = await Promise.all(projects.map(async (project: any) => {
@@ -52,5 +60,5 @@ export default async function ProjectsPage() {
         return { ...project, sensorCount: count };
     }));
 
-    return <ProjectsClientView projectsWithCounts={projectsWithCounts} />;
+    return <ProjectsClientView projectsWithCounts={projectsWithCounts} selectedGroupId={group_id} />;
 }

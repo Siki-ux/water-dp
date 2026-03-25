@@ -13,9 +13,8 @@ import {
     Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
 import { useTranslation } from "@/lib/i18n";
+import { useProjectPermissions } from "@/hooks/usePermissions";
 
 interface ProjectSidebarProps {
     projectId: string;
@@ -24,52 +23,18 @@ interface ProjectSidebarProps {
 
 export function ProjectSidebar({ projectId, projectName }: ProjectSidebarProps) {
     const pathname = usePathname();
-    const { data: session } = useSession();
-    const [showSimulator, setShowSimulator] = useState(false);
     const { t } = useTranslation();
-
-    useEffect(() => {
-        if (session?.accessToken && projectId) {
-            const checkSimulatorAccess = async () => {
-                // Check sessionStorage cache first
-                const cacheKey = `simulator_access_${projectId}`;
-                const cached = sessionStorage.getItem(cacheKey);
-
-                if (cached !== null) {
-                    setShowSimulator(cached === 'true');
-                    return;
-                }
-
-                try {
-                    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
-                    const res = await fetch(`${apiUrl}/projects/${projectId}/simulator/status`, {
-                        headers: {
-                            "Authorization": `Bearer ${session.accessToken}`
-                        }
-                    });
-                    const hasAccess = res.ok;
-                    setShowSimulator(hasAccess);
-                    // Cache for this session
-                    sessionStorage.setItem(cacheKey, String(hasAccess));
-                } catch (e) {
-                    console.error("Failed to check simulator access", e);
-                    sessionStorage.setItem(cacheKey, 'false');
-                }
-            };
-            checkSimulatorAccess();
-        }
-    }, [projectId, session]);
+    const { data: perms } = useProjectPermissions(projectId);
 
     const links = [
         { label: t('sidebar.overview'), icon: Activity, href: `/projects/${projectId}` },
         { label: t('sidebar.dataSources'), icon: Database, href: `/projects/${projectId}/data` },
-
         { label: t('sidebar.alerts'), icon: Bell, href: `/projects/${projectId}/alerts` },
         { label: t('sidebar.settings'), icon: Settings, href: `/projects/${projectId}/settings` },
     ];
 
-    if (showSimulator) {
-        links.splice(5, 0, { label: t('sidebar.simulator'), icon: Zap, href: `/projects/${projectId}/simulator` });
+    if (perms?.can_view_simulator) {
+        links.splice(3, 0, { label: t('sidebar.simulator'), icon: Zap, href: `/projects/${projectId}/simulator` });
     }
 
     return (

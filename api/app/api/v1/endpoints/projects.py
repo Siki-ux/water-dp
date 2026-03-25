@@ -9,7 +9,7 @@ v1 Projects Endpoints
 
 import asyncio
 import logging
-from typing import Any, List
+from typing import Any, List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -17,6 +17,12 @@ from sqlalchemy.orm import Session
 
 from app.api import deps
 from app.core.database import get_db
+from app.schemas.rbac import (
+    PermissionsResponse,
+    ProjectMemberCreate,
+    ProjectMemberResponse,
+    ProjectMemberUpdate,
+)
 from app.schemas.user_context import (
     DashboardCreate,
     DashboardResponse,
@@ -27,6 +33,7 @@ from app.schemas.user_context import (
 )
 from app.services.dashboard_service import DashboardService
 from app.services.project_service import ProjectService
+from app.services.rbac_service import RBACService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -48,11 +55,21 @@ async def create_project(
 async def list_projects(
     skip: int = 0,
     limit: int = 100,
+    group_id: Optional[str] = Query(None, description="Filter by Keycloak group ID or name"),
     database: Session = Depends(get_db),
     user: dict = Depends(deps.get_current_user),
 ) -> Any:
-    """List projects (owned or member of)."""
-    return ProjectService.list_projects(database, user, skip=skip, limit=limit)
+    """List projects (owned or member of). Optionally filter by Keycloak group."""
+    from app.services.rbac_service import PermissionResolver
+    projects = ProjectService.list_projects(database, user, skip=skip, limit=limit, group_id=group_id)
+    # Annotate each project with the requesting user's effective role (avoids N+1 on frontend)
+    result = []
+    for p in projects:
+        perms = PermissionResolver.resolve(user, p, database)
+        resp = ProjectResponse.model_validate(p)
+        resp.user_role = perms.effective_role
+        result.append(resp)
+    return result
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
@@ -208,3 +225,90 @@ async def create_project_dashboard(
         )
     dashboard_in = dashboard_in.model_copy(update={"project_id": project_id})
     return DashboardService.create_dashboard(database, dashboard_in, user)
+
+
+# --- Project Permissions ---
+
+
+@router.get("/{project_id}/permissions", response_model=PermissionsResponse)
+async def get_project_permissions(
+    project_id: UUID,
+    database: Session = Depends(get_db),
+    user: dict = Depends(deps.get_current_user),
+) -> Any:
+    """
+    Get effective permissions for the current user on this project.
+    Returns can_view=False rather than 403 when user has no access,
+    allowing the frontend to silently redirect.
+    """
+    return RBACService.get_project_permissions(database, project_id, user)
+
+
+# --- Project Members ---
+
+
+@router.get("/{project_id}/members", response_model=List[ProjectMemberResponse])
+async def list_project_members(
+    project_id: UUID,
+    database: Session = Depends(get_db),
+    user: dict = Depends(deps.get_current_user),
+) -> Any:
+    """List all explicit members of a project with their roles."""
+    return RBACService.list_members(database, project_id, user)
+
+
+@router.post(
+    "/{project_id}/members",
+    response_model=ProjectMemberResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_project_member(
+    project_id: UUID,
+    member_in: ProjectMemberCreate,
+    database: Session = Depends(get_db),
+    user: dict = Depends(deps.get_current_user),
+) -> Any:
+    """
+    Add a user to a project with editor or viewer role.
+    Requires owner or group admin permissions.
+    Accepts either user_id (Keycloak sub) or username.
+    """
+    return RBACService.add_member(database, project_id, member_in, user)
+
+
+@router.put(
+    "/{project_id}/members/{target_user_id}",
+    response_model=ProjectMemberResponse,
+)
+async def update_project_member(
+    project_id: UUID,
+    target_user_id: str,
+    member_in: ProjectMemberUpdate,
+    database: Session = Depends(get_db),
+    user: dict = Depends(deps.get_current_user),
+) -> Any:
+    """
+    Change a project member's role.
+    Requires owner permissions. Cannot change the owner's role.
+    """
+    return RBACService.update_member_role(
+        database, project_id, target_user_id, member_in, user
+    )
+
+
+@router.delete(
+    "/{project_id}/members/{target_user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_project_member(
+    project_id: UUID,
+    target_user_id: str,
+    database: Session = Depends(get_db),
+    user: dict = Depends(deps.get_current_user),
+) -> None:
+    """
+    Remove a member from a project.
+    Requires owner permissions. Cannot remove the project owner.
+    """
+    RBACService.remove_member(database, project_id, target_user_id, user)
+    return

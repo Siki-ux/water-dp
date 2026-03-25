@@ -162,6 +162,57 @@ def assign_client_role_to_group(token, realm, group_id, client_name, role_name):
         print(f"Failed to assign role to group: {resp.status_code} {resp.text}")
 
 
+def create_subgroup(token, realm, parent_id, name):
+    """Create a child group under parent_id. Returns child group ID or None."""
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    url = f"{KEYCLOAK_URL}/admin/realms/{realm}/groups/{parent_id}/children"
+    response = requests.post(url, headers=headers, json={"name": name})
+    if response.status_code in (201, 409):
+        if response.status_code == 201:
+            print(f"  Created subgroup '{name}' under {parent_id}")
+            # Try Location header first (most reliable across Keycloak versions)
+            location = response.headers.get("Location", "")
+            if location:
+                sg_id = location.rstrip("/").split("/")[-1]
+                if sg_id:
+                    return sg_id
+        else:
+            print(f"  Subgroup '{name}' already exists under {parent_id}")
+        # Fallback: list children and match by name
+        children_resp = requests.get(
+            f"{KEYCLOAK_URL}/admin/realms/{realm}/groups/{parent_id}/children",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        if children_resp.status_code == 200:
+            for c in children_resp.json():
+                if c.get("name") == name:
+                    return c["id"]
+        # Second fallback: subGroups in parent object
+        parent_resp = requests.get(
+            f"{KEYCLOAK_URL}/admin/realms/{realm}/groups/{parent_id}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        for c in parent_resp.json().get("subGroups", []):
+            if c.get("name") == name:
+                return c["id"]
+    else:
+        print(f"  Failed to create subgroup '{name}': {response.status_code} {response.text}")
+    return None
+
+
+def find_subgroup(token, realm, parent_id, name):
+    """Return a child group dict by name, or None."""
+    headers = {"Authorization": f"Bearer {token}"}
+    resp = requests.get(
+        f"{KEYCLOAK_URL}/admin/realms/{realm}/groups/{parent_id}",
+        headers=headers,
+    )
+    for c in resp.json().get("subGroups", []):
+        if c.get("name") == name:
+            return c
+    return None
+
+
 def join_group(token, realm, user_id, group_id):
     url = f"{KEYCLOAK_URL}/admin/realms/{realm}/users/{user_id}/groups/{group_id}"
     headers = {"Authorization": f"Bearer {token}"}
@@ -191,15 +242,17 @@ def set_user_password(token, realm, user_id, password):
         print(f"Failed to set password: {response.text}")
 
 
-def create_user(token, realm, username, password):
+def create_user(token, realm, username, password, first_name="", last_name=""):
     url = f"{KEYCLOAK_URL}/admin/realms/{realm}/users"
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     payload = {
         "username": username,
         "email": f"{username}@example.com",
         "enabled": True,
-        "firstName": "Admin",
-        "lastName": "Siki",
+        "emailVerified": True,
+        "firstName": first_name or username,
+        "lastName": last_name or username,
+        "requiredActions": [],
         "credentials": [{"value": password, "type": "password", "temporary": False}],
     }
     response = requests.post(url, headers=headers, json=payload)
@@ -209,9 +262,19 @@ def create_user(token, realm, username, password):
         return user["id"]
     elif response.status_code == 409:
         print(
-            f"User {username} already exists in {realm}. Ensuring password is up to date..."
+            f"User {username} already exists in {realm}. Ensuring password and flags are up to date..."
         )
         user = find_user(token, realm, username)
+        requests.put(
+            f"{KEYCLOAK_URL}/admin/realms/{realm}/users/{user['id']}",
+            headers=headers,
+            json={
+                "emailVerified": True,
+                "requiredActions": [],
+                "firstName": user.get("firstName") or first_name or username,
+                "lastName": user.get("lastName") or last_name or username,
+            },
+        )
         set_user_password(token, realm, user["id"], password)
         return user["id"]
     else:
@@ -339,10 +402,11 @@ if __name__ == "__main__":
         print("Could not find client to update.")
 
     # ----------------------------------------------------------------------
-    # 5. Ensure 'admin' client role exists on timeIO-client
+    # 5. Ensure viewer / editor / admin client roles exist on timeIO-client
     # ----------------------------------------------------------------------
-    print("Ensuring 'admin' client role exists on timeIO-client...")
-    ensure_client_role(token, KEYCLOAK_REALM, CLIENT_ID_NAME, "admin")
+    print("Ensuring client roles (viewer, editor, admin) exist on timeIO-client...")
+    for role in ("viewer", "editor", "admin"):
+        ensure_client_role(token, KEYCLOAK_REALM, CLIENT_ID_NAME, role)
 
     # ----------------------------------------------------------------------
     # 5.5 Ensure 'groups' protocol mapper on timeIO-client
@@ -379,72 +443,7 @@ if __name__ == "__main__":
         else:
             print("Groups protocol mapper already exists on timeIO-client.")
 
-    # ----------------------------------------------------------------------
-    # 6. Create Additional Users
-    # ----------------------------------------------------------------------
-    additional_users = ["SikiViewer", "SikiEditor", "Siki3"]
-    user_ids_map = {}
-    print("Creating additional users...")
-    for u in additional_users:
-        try:
-            uid = create_user(token, KEYCLOAK_REALM, u, u)  # password = username
-            if uid:
-                user_ids_map[u] = uid
-        except Exception as e:
-            print(f"Error creating user {u}: {e}")
+    print("Keycloak infrastructure setup complete.")
+    print(f"  admin-siki is ready (realm admin, password: {admin_pass})")
+    print("  Run 'make seed' to seed test users, groups, projects, and sensors.")
 
-    # ----------------------------------------------------------------------
-    # 7. Seed Project Groups (NO subgroups - Keycloak-centric model)
-    #    Groups have attributes for schema_name linking.
-    #    Client roles (admin) assigned to groups for authorization.
-    # ----------------------------------------------------------------------
-    print(f"Seeding groups in '{KEYCLOAK_REALM}' (Keycloak-centric model)...")
-
-    projects_to_seed = ["UFZ-TSM:MyProject", "UFZ-TSM:MyProject2"]
-
-    try:
-        for project_group_name in projects_to_seed:
-            # Create main group (no subgroups!)
-            main_group_id = create_group(token, KEYCLOAK_REALM, project_group_name)
-
-            if main_group_id:
-                # Set group attributes for schema linking
-                # schema_name will be populated when config_db project exists
-                set_group_attributes(token, KEYCLOAK_REALM, main_group_id, {
-                    "schema_name": "",  # populated later by project creation or backfill
-                })
-
-                # Assign 'admin' client role to the group
-                # All members of this group will inherit the 'admin' role on timeIO-client
-                assign_client_role_to_group(
-                    token, KEYCLOAK_REALM, main_group_id, CLIENT_ID_NAME, "admin"
-                )
-
-                # Add admin-siki to every project group
-                if user_id:
-                    join_group(token, KEYCLOAK_REALM, user_id, main_group_id)
-
-                # Project-specific user assignments (just group membership, no subgroups)
-                if project_group_name == "UFZ-TSM:MyProject":
-                    if "SikiViewer" in user_ids_map:
-                        join_group(
-                            token, KEYCLOAK_REALM,
-                            user_ids_map["SikiViewer"], main_group_id,
-                        )
-                    if "SikiEditor" in user_ids_map:
-                        join_group(
-                            token, KEYCLOAK_REALM,
-                            user_ids_map["SikiEditor"], main_group_id,
-                        )
-
-                elif project_group_name == "UFZ-TSM:MyProject2":
-                    if "Siki3" in user_ids_map:
-                        join_group(
-                            token, KEYCLOAK_REALM,
-                            user_ids_map["Siki3"], main_group_id,
-                        )
-
-    except Exception as e:
-        print(f"Error seeding groups: {e}")
-
-    print("Keycloak setup complete (Keycloak-centric model).")

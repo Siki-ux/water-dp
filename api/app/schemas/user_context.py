@@ -76,6 +76,7 @@ class ProjectResponse(ProjectBase):
     created_at: datetime
     updated_at: datetime
     schema_name: Optional[str] = None
+    user_role: Optional[str] = None  # effective role for the requesting user (owner/editor/viewer)
 
     @classmethod
     def model_validate(cls, obj: Any, **kwargs: Any) -> "ProjectResponse":

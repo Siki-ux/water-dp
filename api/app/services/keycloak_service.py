@@ -265,6 +265,34 @@ class KeycloakService:
             return None
 
     @classmethod
+    def create_subgroup(cls, parent_id: str, name: str) -> Optional[str]:
+        """Create a child group under parent_id and return the new group's ID."""
+        try:
+            admin = cls.get_admin_client()
+            group_id = admin.create_group(payload={"name": name}, parent=parent_id)
+            return group_id
+        except Exception as e:
+            logger.error(f"Error creating subgroup '{name}' under {parent_id}: {e}")
+            cls._admin_client = None
+            return None
+
+    @classmethod
+    def get_subgroups(cls, group_id: str) -> list:
+        """Return all direct child groups of a group."""
+        try:
+            admin = cls.get_admin_client()
+            return admin.get_group_children(group_id=group_id) or []
+        except Exception as e:
+            logger.error(f"Error fetching subgroups for {group_id}: {e}")
+            cls._admin_client = None
+            return []
+
+    @classmethod
+    def get_subgroup_by_name(cls, parent_id: str, name: str) -> Optional[dict]:
+        """Get a specific child group by name (alias for get_child_group)."""
+        return cls.get_child_group(parent_id, name)
+
+    @classmethod
     def get_group_by_name(cls, group_name: str) -> Optional[dict]:
         """
         Find group by name (exact match).

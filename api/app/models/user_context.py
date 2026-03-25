@@ -12,6 +12,7 @@ from sqlalchemy import (
     ForeignKey,
     String,
     Table,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
@@ -60,6 +61,8 @@ class Project(Base, BaseModel):
 
     # Keycloak Group mapping for authorization
     authorization_provider_group_id = Column(String(255), nullable=True, index=True)
+    # Human-readable group name/path (e.g. "UFZ-TSM:ProjectA") for JWT group matching
+    authorization_provider_group_name = Column(String(255), nullable=True, index=True)
     # authorization_group_ids = Column(JSONB, nullable=True, default=list) # Removed
 
     # TimeIO Project ID
@@ -68,6 +71,9 @@ class Project(Base, BaseModel):
     # Relationships
     dashboards = relationship(
         "Dashboard", back_populates="project", cascade="all, delete-orphan"
+    )
+    members = relationship(
+        "ProjectMember", back_populates="project", cascade="all, delete-orphan"
     )
 
 
@@ -111,3 +117,30 @@ class Dashboard(Base, BaseModel):
     is_public = Column(Boolean, default=False, nullable=False)
 
     project = relationship("Project", back_populates="dashboards")
+
+
+class ProjectMember(Base, BaseModel):
+    """
+    Explicit per-project role assignment (Tier 2 of the two-tier RBAC system).
+    Roles: 'owner', 'editor', 'viewer'
+    """
+
+    __tablename__ = "project_members"
+    __table_args__ = (
+        UniqueConstraint("project_id", "user_id", name="uq_project_member"),
+        {"schema": "water_dp"},
+    )
+
+    # Override ID to use UUID (BaseModel uses Integer)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+
+    project_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("water_dp.projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id = Column(String(255), nullable=False, index=True)  # Keycloak sub (UUID)
+    role = Column(String(50), nullable=False)  # 'owner' | 'editor' | 'viewer'
+
+    project = relationship("Project", back_populates="members")

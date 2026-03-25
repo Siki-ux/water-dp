@@ -6,10 +6,12 @@ import { LogOut, User } from "lucide-react";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 import { useTranslation } from "@/lib/i18n";
+import { useGlobalPermissions } from "@/hooks/usePermissions";
 
 export function AppHeader() {
     const { data: session } = useSession();
     const { t } = useTranslation();
+    const { canAccessSMS, canAccessLayers } = useGlobalPermissions();
 
     return (
         <header className="fixed top-0 left-0 right-0 h-16 bg-[var(--header-bg)] backdrop-blur-md border-b border-[var(--border)] z-50 flex items-center justify-between px-6">
@@ -20,8 +22,12 @@ export function AppHeader() {
                 <div className="hidden md:flex h-6 w-px bg-[var(--border)] mx-2"></div>
                 <nav className="hidden md:flex gap-1 text-sm font-medium">
                     <Link href="/projects" className="px-3 py-1.5 rounded-md text-[var(--foreground)]/70 hover:text-[var(--foreground)] hover:bg-[var(--foreground)]/8 transition-colors">{t('header.projects')}</Link>
-                    <Link href="/sms/sensors" className="px-3 py-1.5 rounded-md text-[var(--foreground)]/70 hover:text-[var(--foreground)] hover:bg-[var(--foreground)]/8 transition-colors">{t('header.sms')}</Link>
-                    <Link href="/layers" className="px-3 py-1.5 rounded-md text-[var(--foreground)]/70 hover:text-[var(--foreground)] hover:bg-[var(--foreground)]/8 transition-colors">{t('header.layers')}</Link>
+                    {canAccessSMS && (
+                        <Link href="/sms/sensors" className="px-3 py-1.5 rounded-md text-[var(--foreground)]/70 hover:text-[var(--foreground)] hover:bg-[var(--foreground)]/8 transition-colors">{t('header.sms')}</Link>
+                    )}
+                    {canAccessLayers && (
+                        <Link href="/layers" className="px-3 py-1.5 rounded-md text-[var(--foreground)]/70 hover:text-[var(--foreground)] hover:bg-[var(--foreground)]/8 transition-colors">{t('header.layers')}</Link>
+                    )}
                 </nav>
             </div>
 

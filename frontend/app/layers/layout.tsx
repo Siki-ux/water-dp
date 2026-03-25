@@ -1,8 +1,9 @@
 import { AppHeader } from "@/components/AppHeader";
 import { LayerSidebar } from "@/components/LayerSidebar";
 import { WaterBackground } from "@/components/WaterBackground";
-import { auth } from "@/lib/auth";
+import { auth, parseJwt } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { parseGroupRoles, getHighestGroupRole, isRealmAdmin } from "@/lib/jwt";
 
 export default async function LayersLayout({
     children,
@@ -13,6 +14,16 @@ export default async function LayersLayout({
 
     if (!session) {
         redirect("/auth/signin");
+    }
+
+    // Guard: only editors and admins (or realm admins) may access Layers
+    const decoded = parseJwt((session as any).accessToken ?? "");
+    const jwtGroups: string[] = (decoded?.groups as string[]) ?? [];
+    const groupRoles = parseGroupRoles(jwtGroups);
+    const highest = getHighestGroupRole(groupRoles);
+    const hasAccess = isRealmAdmin(decoded) || highest === "editor" || highest === "admin";
+    if (!hasAccess) {
+        redirect("/projects");
     }
 
     return (

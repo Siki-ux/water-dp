@@ -13,6 +13,7 @@ import DataUploadModal from "@/components/data/DataUploadModal";
 import DatasetUploadModal from "@/components/data/DatasetUploadModal";
 import SensorLinkModal from "@/components/data/SensorLinkModal";
 import { useTranslation } from "@/lib/i18n";
+import { useProjectPermissions } from "@/hooks/usePermissions";
 
 interface PageProps {
     params: Promise<{ id: string }>;
@@ -22,6 +23,7 @@ export default function ProjectDataPage({ params }: PageProps) {
     const { data: session } = useSession();
     const { id } = React.use(params);
     const { t } = useTranslation();
+    const { data: perms } = useProjectPermissions(id);
 
     const [sensors, setSensors] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -279,12 +281,14 @@ export default function ProjectDataPage({ params }: PageProps) {
                     >
                         ↻ {t("projects.dataSources.refresh")}
                     </button>
-                    <button
-                        onClick={() => setIsLinkModalOpen(true)}
-                        className="px-4 py-2 bg-hydro-primary text-black font-semibold rounded-lg hover:bg-hydro-accent transition-colors"
-                    >
-                        + {t("projects.dataSources.linkDatasource")}
-                    </button>
+                    {perms?.can_link_sensors && (
+                        <button
+                            onClick={() => setIsLinkModalOpen(true)}
+                            className="px-4 py-2 bg-hydro-primary text-black font-semibold rounded-lg hover:bg-hydro-accent transition-colors"
+                        >
+                            + {t("projects.dataSources.linkDatasource")}
+                        </button>
+                    )}
                 </div>
             </div>
 

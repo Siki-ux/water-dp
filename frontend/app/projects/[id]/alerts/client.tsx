@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Loader2, Plus, Bell, AlertTriangle, CheckCircle, Trash2, Zap, ArrowUpRight } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
+import { useProjectPermissions } from '@/hooks/usePermissions';
 
 interface AlertDefinition {
     id: string;
@@ -41,6 +42,8 @@ export default function AlertsClient({ token }: AlertsClientProps) {
     const { t } = useTranslation();
     const [activeTab, setActiveTab] = useState<'rules' | 'history'>('rules');
     const [isCreateOpen, setIsCreateOpen] = useState(false);
+    const { data: perms } = useProjectPermissions(projectId);
+    const canEditAlerts = perms?.can_edit_alerts ?? false;
 
     return (
         <div className="flex h-full flex-col p-6 gap-6 bg-background overflow-hidden">
@@ -59,12 +62,14 @@ export default function AlertsClient({ token }: AlertsClientProps) {
                         </p>
                     </div>
 
-                    <button
-                        onClick={() => setIsCreateOpen(true)}
-                        className="px-5 py-2.5 bg-hydro-primary hover:bg-hydro-primary/90 text-[var(--foreground)] rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-hydro-primary/20 transition-all active:scale-95"
-                    >
-                        <Plus size={18} /> {t('alerts.newRule')}
-                    </button>
+                    {canEditAlerts && (
+                        <button
+                            onClick={() => setIsCreateOpen(true)}
+                            className="px-5 py-2.5 bg-hydro-primary hover:bg-hydro-primary/90 text-[var(--foreground)] rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-hydro-primary/20 transition-all active:scale-95"
+                        >
+                            <Plus size={18} /> {t('alerts.newRule')}
+                        </button>
+                    )}
                 </div>
 
                 {/* Tabs Navigation */}
@@ -98,7 +103,7 @@ export default function AlertsClient({ token }: AlertsClientProps) {
 
             <div className="flex-1 min-h-0 bg-muted/50 backdrop-blur-sm border border-border rounded-2xl overflow-hidden shadow-2xl">
                 {activeTab === 'rules' ? (
-                    <RulesList projectId={projectId} token={token} queryClient={queryClient} />
+                    <RulesList projectId={projectId} token={token} queryClient={queryClient} canEdit={canEditAlerts} />
                 ) : (
                     <HistoryList projectId={projectId} token={token} />
                 )}
@@ -123,7 +128,7 @@ export default function AlertsClient({ token }: AlertsClientProps) {
 
 // --- Sub-components ---
 
-function RulesList({ projectId, token, queryClient }: { projectId: string, token: string, queryClient: any }) {
+function RulesList({ projectId, token, queryClient, canEdit }: { projectId: string, token: string, queryClient: any, canEdit: boolean }) {
     const { t } = useTranslation();
     const [editingRule, setEditingRule] = useState<AlertDefinition | null>(null);
 
@@ -238,41 +243,45 @@ function RulesList({ projectId, token, queryClient }: { projectId: string, token
                                     <td className="px-6 py-4">
                                         {rule.is_active ? (
                                             <button
-                                                onClick={() => toggleMutation.mutate(rule)}
-                                                disabled={toggleMutation.isPending}
-                                                className="flex items-center gap-1.5 text-emerald-400 text-xs font-bold uppercase tracking-wider hover:opacity-80 transition-opacity"
+                                                onClick={() => canEdit && toggleMutation.mutate(rule)}
+                                                disabled={!canEdit || toggleMutation.isPending}
+                                                className="flex items-center gap-1.5 text-emerald-400 text-xs font-bold uppercase tracking-wider hover:opacity-80 transition-opacity disabled:cursor-default"
                                             >
                                                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> {t('alerts.statusActive')}
                                             </button>
                                         ) : (
                                             <button
-                                                onClick={() => toggleMutation.mutate(rule)}
-                                                disabled={toggleMutation.isPending}
-                                                className="text-[var(--foreground)]/30 text-xs font-bold uppercase tracking-wider hover:text-[var(--foreground)]/60 transition-colors"
+                                                onClick={() => canEdit && toggleMutation.mutate(rule)}
+                                                disabled={!canEdit || toggleMutation.isPending}
+                                                className="text-[var(--foreground)]/30 text-xs font-bold uppercase tracking-wider hover:text-[var(--foreground)]/60 transition-colors disabled:cursor-default"
                                             >
                                                 {t('alerts.statusDisabled')}
                                             </button>
                                         )}
                                     </td>
                                     <td className="px-6 py-4 text-right flex justify-end gap-2">
-                                        <button
-                                            onClick={() => testTriggerMutation.mutate(rule.id)}
-                                            disabled={testTriggerMutation.isPending}
-                                            title="Trigger Test Alert"
-                                            className="p-2 hover:bg-white/10 text-yellow-400 rounded-lg transition-colors"
-                                        >
-                                            <Zap size={16} />
-                                        </button>
-                                        <button
-                                            onClick={() => setEditingRule(rule)}
-                                            className="p-2 hover:bg-white/10 text-blue-400 rounded-lg transition-colors"
-                                            title="Edit Rule"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
-                                        </button>
-                                        <button className="p-2 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors">
-                                            <Trash2 size={16} />
-                                        </button>
+                                        {canEdit && (
+                                            <>
+                                                <button
+                                                    onClick={() => testTriggerMutation.mutate(rule.id)}
+                                                    disabled={testTriggerMutation.isPending}
+                                                    title="Trigger Test Alert"
+                                                    className="p-2 hover:bg-white/10 text-yellow-400 rounded-lg transition-colors"
+                                                >
+                                                    <Zap size={16} />
+                                                </button>
+                                                <button
+                                                    onClick={() => setEditingRule(rule)}
+                                                    className="p-2 hover:bg-white/10 text-blue-400 rounded-lg transition-colors"
+                                                    title="Edit Rule"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                                                </button>
+                                                <button className="p-2 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors">
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </>
+                                        )}
                                     </td>
                                 </tr>
                             ))}

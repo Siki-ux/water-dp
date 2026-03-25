@@ -9,7 +9,7 @@ from .geospatial import GeoFeature, GeoLayer
 from .layer_assignment import LayerProjectAssignment
 from .sensor_activity import SensorActivityConfig
 from .simulation import Simulation
-from .user_context import Dashboard, Project, project_sensors
+from .user_context import Dashboard, Project, ProjectMember, project_sensors
 
 __all__ = [
     "BaseModel",
@@ -17,6 +17,7 @@ __all__ = [
     "GeoFeature",
     "Project",
     "Dashboard",
+    "ProjectMember",
     "project_sensors",
     "ComputationScript",
     "ComputationJob",

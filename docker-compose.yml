@@ -237,7 +237,7 @@ services:
       context: ./api
       dockerfile: Dockerfile
     container_name: water-dp-seed
-    command: python scripts/simulate_sensors.py
+    command: python scripts/seed_data.py
     # restart: on-failure
     env_file: .env
     environment:

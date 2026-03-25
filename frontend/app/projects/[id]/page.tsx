@@ -45,9 +45,18 @@ async function getProjectSensors(id: string) {
         console.log(`[ProjectMap] Fetched ${things.length} sensors.`);
 
         // Map API 'Thing' -> Frontend 'Sensor'
+        const ACTIVE_THRESHOLD_MS = 24 * 60 * 60 * 1000;
+        const now = Date.now();
+
         const sensors = things.map(t => {
             const lat = t.location?.coordinates?.latitude || 0;
             const lng = t.location?.coordinates?.longitude || 0;
+
+            const hasRecentData = t.last_activity &&
+                (now - new Date(t.last_activity).getTime()) < ACTIVE_THRESHOLD_MS;
+            const effectiveStatus = (t.properties?.status === 'active' || hasRecentData)
+                ? 'active'
+                : (t.properties?.status || 'inactive');
 
             return {
                 uuid: t.sensor_uuid,
@@ -56,7 +65,8 @@ async function getProjectSensors(id: string) {
                 description: t.description,
                 latitude: lat,
                 longitude: lng,
-                status: t.properties?.status || 'inactive',
+                status: effectiveStatus,
+                last_activity: t.last_activity,
                 datastreams: t.datastreams || [],
                 properties: t.properties
             } as Sensor;

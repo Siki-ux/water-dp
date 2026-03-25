@@ -162,17 +162,18 @@ services:
       dockerfile: Dockerfile
       target: runner
       args:
-        # Route through nginx proxy (fixes WSL2 localhost networking issues)
-        - NEXT_PUBLIC_API_URL=http://${PUBLIC_HOSTNAME:-localhost}/water-api/api/v1
-        - NEXT_PUBLIC_GEOSERVER_URL=http://${PUBLIC_HOSTNAME:-localhost}/geoserver
+        # Use relative URLs so the frontend works over any protocol (HTTP locally, HTTPS via tunnel).
+        # NEXT_PUBLIC_* vars are baked into the JS bundle at build time — absolute http:// URLs
+        # break when the page is served over HTTPS (mixed content blocking).
+        - NEXT_PUBLIC_API_URL=/water-api/api/v1
+        - NEXT_PUBLIC_GEOSERVER_URL=/geoserver
         - NEXT_PUBLIC_NEXTAUTH_URL=http://${PUBLIC_HOSTNAME:-localhost}/portal
     container_name: water-dp-frontend
     ports:
       - "3000:3000"
     environment:
-      # Route through nginx proxy (fixes WSL2 localhost networking issues)
-      - NEXT_PUBLIC_API_URL=http://${PUBLIC_HOSTNAME:-localhost}/water-api/api/v1
-      - NEXT_PUBLIC_GEOSERVER_URL=http://${PUBLIC_HOSTNAME:-localhost}/geoserver
+      - NEXT_PUBLIC_API_URL=/water-api/api/v1
+      - NEXT_PUBLIC_GEOSERVER_URL=/geoserver
       - NEXT_PUBLIC_NEXTAUTH_URL=http://${PUBLIC_HOSTNAME:-localhost}/portal
       - INTERNAL_API_URL=http://water-dp-api:8000/api/v1
       - AUTH_SECRET=${AUTH_SECRET:-6e2e9c8b3a4f5d6e7f8g9h0i1j2k3l4m5n6o7p8q9r}

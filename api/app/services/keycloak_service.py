@@ -199,6 +199,62 @@ class KeycloakService:
             return None
 
     @classmethod
+    def create_user(cls, username: str, email: str, password: str, first_name: str = "", last_name: str = "") -> str:
+        """Create a new Keycloak user and return their UUID."""
+        from fastapi import HTTPException
+        try:
+            admin = cls.get_admin_client()
+            user_id = admin.create_user({
+                "username": username,
+                "email": email,
+                "firstName": first_name,
+                "lastName": last_name,
+                "enabled": True,
+                "emailVerified": True,
+            })
+            # Explicitly set password — some python-keycloak versions ignore
+            # the credentials field in the create payload.
+            admin.set_user_password(user_id, password, temporary=False)
+            return user_id
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"Error creating user '{username}': {error_msg}")
+            cls._admin_client = None
+            if "409" in error_msg or "Conflict" in error_msg or "already exists" in error_msg.lower():
+                raise HTTPException(status_code=400, detail="Username or email already exists")
+            raise HTTPException(status_code=500, detail="Failed to create user")
+
+    @classmethod
+    def update_profile(cls, user_id: str, first_name: Optional[str], last_name: Optional[str], email: Optional[str]):
+        """Update a user's profile fields in Keycloak."""
+        try:
+            admin = cls.get_admin_client()
+            payload = {}
+            if first_name is not None:
+                payload["firstName"] = first_name
+            if last_name is not None:
+                payload["lastName"] = last_name
+            if email is not None:
+                payload["email"] = email
+            if payload:
+                admin.update_user(user_id, payload)
+        except Exception as e:
+            logger.error(f"Error updating profile for user {user_id}: {e}")
+            cls._admin_client = None
+            raise
+
+    @classmethod
+    def set_user_password(cls, user_id: str, new_password: str):
+        """Set a new password for a user (admin override, no current password required)."""
+        try:
+            admin = cls.get_admin_client()
+            admin.set_user_password(user_id, new_password, temporary=False)
+        except Exception as e:
+            logger.error(f"Error setting password for user {user_id}: {e}")
+            cls._admin_client = None
+            raise
+
+    @classmethod
     def get_user_by_email(cls, email: str) -> Optional[dict]:
         try:
             admin = cls.get_admin_client()

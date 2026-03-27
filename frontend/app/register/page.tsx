@@ -12,6 +12,8 @@ export default function Register() {
     const { t } = useTranslation();
     const [formData, setFormData] = useState({
         username: "",
+        firstName: "",
+        lastName: "",
         email: "",
         password: "",
         confirmPassword: ""
@@ -40,6 +42,8 @@ export default function Register() {
             // Adjust payload to match backend requirements
             await axios.post(`${apiUrl}/auth/register`, {
                 username: formData.username,
+                first_name: formData.firstName,
+                last_name: formData.lastName,
                 email: formData.email,
                 password: formData.password,
             });
@@ -83,6 +87,33 @@ export default function Register() {
                             className="w-full px-4 py-3 bg-muted/50 border border-border rounded-lg focus:outline-none focus:border-hydro-primary/50 focus:ring-1 focus:ring-hydro-primary/50 transition-colors text-[var(--foreground)] placeholder:opacity-30"
                             placeholder="johndoe"
                         />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-[var(--foreground)]/80">{t('auth.firstName')}</label>
+                            <input
+                                type="text"
+                                name="firstName"
+                                value={formData.firstName}
+                                onChange={handleChange}
+                                required
+                                className="w-full px-4 py-3 bg-muted/50 border border-border rounded-lg focus:outline-none focus:border-hydro-primary/50 focus:ring-1 focus:ring-hydro-primary/50 transition-colors text-[var(--foreground)] placeholder:opacity-30"
+                                placeholder="John"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-[var(--foreground)]/80">{t('auth.lastName')}</label>
+                            <input
+                                type="text"
+                                name="lastName"
+                                value={formData.lastName}
+                                onChange={handleChange}
+                                required
+                                className="w-full px-4 py-3 bg-muted/50 border border-border rounded-lg focus:outline-none focus:border-hydro-primary/50 focus:ring-1 focus:ring-hydro-primary/50 transition-colors text-[var(--foreground)] placeholder:opacity-30"
+                                placeholder="Doe"
+                            />
+                        </div>
                     </div>
 
                     <div className="space-y-2">

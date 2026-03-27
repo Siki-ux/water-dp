@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Search, Filter, X } from "lucide-react";
+import { Search, Filter, X, Upload } from "lucide-react";
 import { SensorCreateDialog } from "@/components/SensorCreateDialog";
+import { BulkImportDialog } from "@/components/BulkImportDialog";
 import { useTranslation } from "@/lib/i18n";
 
 interface SensorsClientProps {
@@ -38,6 +39,7 @@ export function SensorsClient({ data, page, pageSize, totalPages, search, ingest
     const router = useRouter();
     const [searchValue, setSearchValue] = useState(search);
     const [filterOpen, setFilterOpen] = useState(false);
+    const [bulkOpen, setBulkOpen] = useState(false);
 
     // Navigate with filters, always reset to page 1
     const navigate = useCallback((newSearch: string, newIngestType: string) => {
@@ -74,8 +76,25 @@ export function SensorsClient({ data, page, pageSize, totalPages, search, ingest
                     <p className="text-white/60 mt-1">{t('sms.sensors.manageDesc')}</p>
                 </div>
 
-                <SensorCreateDialog />
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setBulkOpen(true)}
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg border border-white/10 text-sm text-white/70 hover:text-white hover:border-white/30 transition-colors"
+                    >
+                        <Upload className="w-4 h-4" />
+                        {t("sms.sensors.bulkImport")}
+                    </button>
+                    <SensorCreateDialog />
+                </div>
             </div>
+
+            <BulkImportDialog
+                open={bulkOpen}
+                onClose={(created) => {
+                    setBulkOpen(false);
+                    if (created > 0) router.refresh();
+                }}
+            />
 
             {/* Search + Filter Toolbar */}
             <div className="flex gap-2 mb-6">

@@ -176,6 +176,20 @@ class SensorCreationResponse(BaseModel):
     external_api: Optional[Dict[str, Any]] = None
 
 
+class BulkSensorResult(BaseModel):
+    row: int
+    sensor_name: str
+    status: str            # "created" | "failed"
+    uuid: Optional[str] = None
+    error: Optional[str] = None
+
+
+class BulkSensorResponse(BaseModel):
+    created: int
+    failed: int
+    results: List[BulkSensorResult]
+
+
 class IngestionResponse(BaseModel):
     status: str
     bucket: str

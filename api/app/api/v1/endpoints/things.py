@@ -1,10 +1,14 @@
+import csv
+import io
+import json
 import logging
 import re
 import uuid as uuid_pkg
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel as PydanticBaseModel
 from sqlalchemy.orm import Session
 
@@ -18,6 +22,10 @@ from app.models.user_context import Project
 from app.schemas.frost.datastream import Datastream, Observation, DatastreamUpdate
 from app.schemas.frost.thing import Thing
 from app.schemas.sensor import (
+    BulkSensorResponse,
+    BulkSensorResult,
+    ExternalAPIConfig,
+    ExternalSFTPConfig,
     IngestionResponse,
     SensorCreate,
     SensorCreationResponse,
@@ -103,6 +111,273 @@ def _resolve_group_info(group_id: str) -> dict:
     }
 
 
+BULK_CSV_COLUMNS = [
+    "sensor_name", "group_id", "description", "device_type",
+    "latitude", "longitude", "ingest_type", "parser_id",
+    "mqtt_username", "mqtt_password", "mqtt_topic",
+    "ext_sftp_uri", "ext_sftp_path", "ext_sftp_username", "ext_sftp_password", "ext_sftp_sync_interval",
+    "ext_api_type", "ext_api_sync_interval", "ext_api_settings",
+]
+
+BULK_CSV_EXAMPLE = {
+    "sensor_name": "River A - gauge",
+    "group_id": "<keycloak-group-uuid>",
+    "description": "Water gauge at the bridge",
+    "device_type": "chirpstack_generic",
+    "latitude": "50.0755",
+    "longitude": "14.4378",
+    "ingest_type": "mqtt",
+    "parser_id": "",
+    "mqtt_username": "",
+    "mqtt_password": "",
+    "mqtt_topic": "",
+    "ext_sftp_uri": "",
+    "ext_sftp_path": "",
+    "ext_sftp_username": "",
+    "ext_sftp_password": "",
+    "ext_sftp_sync_interval": "",
+    "ext_api_type": "",
+    "ext_api_sync_interval": "",
+    "ext_api_settings": "",
+}
+
+
+def _row_to_sensor_create(row: Dict[str, str]) -> SensorCreate:
+    """Convert a CSV row dict to a SensorCreate schema, coercing types and ignoring blank values."""
+
+    def _float(v: str) -> Optional[float]:
+        return float(v) if v.strip() else None
+
+    def _int(v: str) -> Optional[int]:
+        return int(v) if v.strip() else None
+
+    external_sftp = None
+    if row.get("ext_sftp_uri", "").strip():
+        external_sftp = ExternalSFTPConfig(
+            uri=row["ext_sftp_uri"],
+            path=row.get("ext_sftp_path", ""),
+            username=row.get("ext_sftp_username", ""),
+            password=row.get("ext_sftp_password") or None,
+            sync_interval=_int(row.get("ext_sftp_sync_interval", "")) or 60,
+        )
+
+    external_api = None
+    if row.get("ext_api_type", "").strip():
+        settings: Dict[str, Any] = {}
+        raw_settings = row.get("ext_api_settings", "").strip()
+        if raw_settings:
+            try:
+                settings = json.loads(raw_settings)
+            except json.JSONDecodeError:
+                pass
+        external_api = ExternalAPIConfig(
+            type=row["ext_api_type"],
+            sync_interval=_int(row.get("ext_api_sync_interval", "")) or 60,
+            settings=settings,
+        )
+
+    return SensorCreate(
+        group_id=row.get("group_id", "").strip() or None,
+        sensor_name=row["sensor_name"].strip(),
+        description=row.get("description", "").strip(),
+        device_type=row.get("device_type", "").strip() or "chirpstack_generic",
+        latitude=_float(row.get("latitude", "")),
+        longitude=_float(row.get("longitude", "")),
+        ingest_type=row.get("ingest_type", "").strip() or "mqtt",
+        parser_id=_int(row.get("parser_id", "")),
+        mqtt_username=row.get("mqtt_username", "").strip() or None,
+        mqtt_password=row.get("mqtt_password", "").strip() or None,
+        mqtt_topic=row.get("mqtt_topic", "").strip() or None,
+        external_sftp=external_sftp,
+        external_api=external_api,
+    )
+
+
+async def _create_one_sensor(
+    sensor: SensorCreate,
+    database: Session,
+    user: dict,
+) -> dict:
+    """Core sensor creation logic shared by single and bulk endpoints."""
+    location = None
+    if sensor.latitude is not None and sensor.longitude is not None:
+        location = {
+            "type": "Point",
+            "coordinates": [sensor.longitude, sensor.latitude],
+        }
+
+    project = None
+
+    if sensor.project_uuid:
+        project = (
+            database.query(Project)
+            .filter(Project.id == sensor.project_uuid)
+            .first()
+        )
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        if project.authorization_provider_group_id:
+            try:
+                group_info = _resolve_group_info(project.authorization_provider_group_id)
+                group_name = group_info["name"]
+            except Exception:
+                group_name = project.name
+        else:
+            group_name = project.name
+        schema_name = project.schema_name
+    else:
+        group_info = _resolve_group_info(sensor.group_id)
+        group_name = group_info["name"]
+        schema_name = group_info["schema_name"]
+
+        project = (
+            database.query(Project)
+            .filter(Project.authorization_provider_group_id == sensor.group_id)
+            .first()
+        )
+
+    result = orchestrator.create_sensor(
+        project_group=group_name,
+        sensor_name=sensor.sensor_name,
+        description=sensor.description,
+        mqtt_device_type=sensor.device_type,
+        geometry=location,
+        properties=(
+            [prop.dict() for prop in sensor.properties]
+            if sensor.properties
+            else None
+        ),
+        project_schema=schema_name,
+        mqtt_username=sensor.mqtt_username,
+        mqtt_password=sensor.mqtt_password,
+        mqtt_topic=sensor.mqtt_topic,
+        ingest_type=sensor.ingest_type,
+        parser_id=sensor.parser_id,
+        external_sftp=sensor.external_sftp.dict() if sensor.external_sftp else None,
+        external_api=sensor.external_api.dict() if sensor.external_api else None,
+    )
+
+    resolved_schema = result.get("schema")
+    if project and resolved_schema and not project.schema_name:
+        project.schema_name = resolved_schema
+        database.commit()
+        if project.authorization_provider_group_id:
+            try:
+                KeycloakService.set_group_attributes(
+                    project.authorization_provider_group_id,
+                    {"schema_name": resolved_schema},
+                )
+            except Exception as e:
+                logger.warning(f"Could not back-fill schema on Keycloak group: {e}")
+
+    if project:
+        try:
+            from app.services.project_service import ProjectService
+            ProjectService.add_sensor(
+                database,
+                project_id=project.id,
+                thing_uuid=result["uuid"],
+                user=user,
+            )
+        except Exception as error:
+            logger.warning(f"Failed to auto-link sensor to project: {error}")
+
+    if location:
+        result["latitude"] = location["coordinates"][1]
+        result["longitude"] = location["coordinates"][0]
+
+    if result.get("id"):
+        result["id"] = str(result["id"])
+
+    if project:
+        try:
+            _ensure_activity_config(
+                database,
+                thing_uuid=result["uuid"],
+                project_id=project.id,
+                ingest_type=sensor.ingest_type,
+            )
+        except Exception as error:
+            logger.warning(f"Failed to create activity config for sensor: {error}")
+
+    return result
+
+
+@router.get(
+    "/bulk/template",
+    summary="Download Bulk Import CSV Template",
+    description="Returns a CSV template file for bulk sensor import.",
+)
+async def bulk_import_template(
+    _user: dict = Depends(deps.get_current_user),
+):
+    header = ",".join(BULK_CSV_COLUMNS)
+    example = ",".join(str(BULK_CSV_EXAMPLE.get(col, "")) for col in BULK_CSV_COLUMNS)
+    content = f"{header}\n{example}\n"
+    return StreamingResponse(
+        io.BytesIO(content.encode("utf-8")),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=\"sensor_bulk_template.csv\""},
+    )
+
+
+@router.post(
+    "/bulk",
+    response_model=BulkSensorResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Bulk Create Sensors from CSV",
+    description="Upload a CSV file to create multiple sensors at once. Rows that fail are skipped; a summary is returned.",
+)
+async def bulk_create_sensors(
+    file: UploadFile = File(...),
+    database: Session = Depends(get_db),
+    user: dict = Depends(deps.get_current_user),
+):
+    content = await file.read()
+    try:
+        text = content.decode("utf-8-sig")  # utf-8-sig strips BOM from Excel exports
+    except UnicodeDecodeError:
+        text = content.decode("latin-1")
+
+    reader = csv.DictReader(io.StringIO(text))
+    results: List[BulkSensorResult] = []
+
+    for row_num, row in enumerate(reader, start=2):  # start=2: row 1 is header
+        sensor_name = row.get("sensor_name", "").strip()
+        if not sensor_name:
+            results.append(BulkSensorResult(
+                row=row_num, sensor_name="(blank)", status="failed",
+                error="sensor_name is required",
+            ))
+            continue
+
+        if not row.get("group_id", "").strip():
+            results.append(BulkSensorResult(
+                row=row_num, sensor_name=sensor_name, status="failed",
+                error="group_id is required",
+            ))
+            continue
+
+        try:
+            sensor = _row_to_sensor_create(row)
+            created = await _create_one_sensor(sensor, database, user)
+            results.append(BulkSensorResult(
+                row=row_num, sensor_name=sensor_name, status="created",
+                uuid=created.get("uuid"),
+            ))
+        except Exception as exc:
+            detail = str(exc)
+            if hasattr(exc, "detail"):
+                detail = exc.detail
+            results.append(BulkSensorResult(
+                row=row_num, sensor_name=sensor_name, status="failed", error=detail,
+            ))
+
+    created_count = sum(1 for r in results if r.status == "created")
+    failed_count = sum(1 for r in results if r.status == "failed")
+    return BulkSensorResponse(created=created_count, failed=failed_count, results=results)
+
+
 @router.get(
     "/{schema_name}/all",
     response_model=List[Thing],
@@ -164,119 +439,7 @@ async def create_sensor(
     - project_uuid: Legacy project ID (backward-compatible)
     """
     try:
-        location = None
-        if sensor.latitude is not None and sensor.longitude is not None:
-            location = {
-                "type": "Point",
-                "coordinates": [sensor.longitude, sensor.latitude],
-            }
-
-        # --- Resolve context ---
-        project = None  # may remain None for group_id path
-
-        if sensor.project_uuid:
-            # Legacy path: lookup by project ID
-            project = (
-                database.query(Project)
-                .filter(Project.id == sensor.project_uuid)
-                .first()
-            )
-            if not project:
-                raise HTTPException(status_code=404, detail="Project not found")
-            if project.authorization_provider_group_id:
-                try:
-                    # Resolve clean name from group ID (strips prefix etc.)
-                    group_info = _resolve_group_info(project.authorization_provider_group_id)
-                    group_name = group_info["name"]
-                except Exception:
-                    group_name = project.name
-            else:
-                group_name = project.name
-            schema_name = project.schema_name
-        else:
-            # Keycloak-centric path: resolve from group_id, no project needed
-            group_info = _resolve_group_info(sensor.group_id)
-            group_name = group_info["name"]
-            schema_name = group_info["schema_name"]
-
-            # If a project already exists for this group, use it for linking
-            project = (
-                database.query(Project)
-                .filter(Project.authorization_provider_group_id == sensor.group_id)
-                .first()
-            )
-
-        # --- Create sensor via orchestrator ---
-        result = orchestrator.create_sensor(
-            project_group=group_name,
-            sensor_name=sensor.sensor_name,
-            description=sensor.description,
-            mqtt_device_type=sensor.device_type,
-            geometry=location,
-            properties=(
-                [prop.dict() for prop in sensor.properties]
-                if sensor.properties
-                else None
-            ),
-            project_schema=schema_name,
-            mqtt_username=sensor.mqtt_username,
-            mqtt_password=sensor.mqtt_password,
-            mqtt_topic=sensor.mqtt_topic,
-            ingest_type=sensor.ingest_type,
-            parser_id=sensor.parser_id,
-            external_sftp=sensor.external_sftp.dict() if sensor.external_sftp else None,
-            external_api=sensor.external_api.dict() if sensor.external_api else None,
-        )
-
-        # Back-fill schema on project + Keycloak group if project exists but had no schema
-        resolved_schema = result.get("schema")
-        if project and resolved_schema and not project.schema_name:
-            project.schema_name = resolved_schema
-            database.commit()
-            logger.info(f"Back-filled schema_name '{resolved_schema}' on project {project.id}")
-            if project.authorization_provider_group_id:
-                try:
-                    KeycloakService.set_group_attributes(
-                        project.authorization_provider_group_id,
-                        {"schema_name": resolved_schema},
-                    )
-                except Exception as e:
-                    logger.warning(f"Could not back-fill schema on Keycloak group: {e}")
-
-        # Link sensor to project (only if a project exists)
-        if project:
-            try:
-                from app.services.project_service import ProjectService
-                ProjectService.add_sensor(
-                    database,
-                    project_id=project.id,
-                    thing_uuid=result["uuid"],
-                    user=user,
-                )
-            except Exception as error:
-                logger.warning(f"Failed to auto-link sensor to project: {error}")
-
-        if location:
-            result["latitude"] = location["coordinates"][1]
-            result["longitude"] = location["coordinates"][0]
-
-        # Ensure ID is string for Pydantic response model
-        if result.get("id"):
-            result["id"] = str(result["id"])
-
-        # Auto-create SensorActivityConfig with defaults based on ingest type
-        if project:
-            try:
-                _ensure_activity_config(
-                    database,
-                    thing_uuid=result["uuid"],
-                    project_id=project.id,
-                    ingest_type=sensor.ingest_type,
-                )
-            except Exception as error:
-                logger.warning(f"Failed to create activity config for sensor: {error}")
-
-        return result
+        return await _create_one_sensor(sensor, database, user)
     except HTTPException:
         raise
     except Exception as error:

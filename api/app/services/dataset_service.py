@@ -96,7 +96,9 @@ class DatasetService:
 
         if not existing:
             stmt = project_sensors.insert().values(
-                project_id=project_id, thing_uuid=thing_uuid, added_at=datetime.now(timezone.utc)
+                project_id=project_id,
+                thing_uuid=thing_uuid,
+                added_at=datetime.now(timezone.utc),
             )
             db.execute(stmt)
             db.commit()

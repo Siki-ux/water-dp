@@ -274,7 +274,9 @@ class AlertEvaluator:
                         window_hours = int(conditions.get("window_hours", 24))
                         min_flag_value = FLAG_THRESHOLDS.get(flag_level, 255.0)
 
-                        since = datetime.now(timezone.utc) - timedelta(hours=window_hours)
+                        since = datetime.now(timezone.utc) - timedelta(
+                            hours=window_hours
+                        )
 
                         with conn.cursor() as cur:
                             cur.execute(
@@ -391,7 +393,9 @@ class AlertEvaluator:
                         window_hours = int(conditions.get("window_hours", 24))
                         min_flag_value = FLAG_THRESHOLDS.get(flag_level, 255.0)
 
-                        since = datetime.now(timezone.utc) - timedelta(hours=window_hours)
+                        since = datetime.now(timezone.utc) - timedelta(
+                            hours=window_hours
+                        )
 
                         with conn.cursor() as cur:
                             # Join via datastream to filter to the specific thing

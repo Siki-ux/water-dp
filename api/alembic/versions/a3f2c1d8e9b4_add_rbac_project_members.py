@@ -82,7 +82,9 @@ def downgrade() -> None:
         """
     )
 
-    op.drop_index("ix_project_members_user_id", table_name="project_members", schema="water_dp")
+    op.drop_index(
+        "ix_project_members_user_id", table_name="project_members", schema="water_dp"
+    )
 
     op.drop_index(
         "ix_projects_auth_group_name",

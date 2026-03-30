@@ -42,8 +42,8 @@ jobs:
       - name: Run linting (Ruff)
         run: poetry run ruff check .
 
-      - name: Check formatting (Black)
-        run: poetry run black --check .
+      - name: Check formatting (Ruff)
+        run: poetry run ruff format --check .
 
   api-test:
     name: API Unit Tests

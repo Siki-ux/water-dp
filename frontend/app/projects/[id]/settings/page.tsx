@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Save, Trash2, UserPlus, X } from "lucide-react";
 import axios from "axios";
 import { useTranslation } from "@/lib/i18n";
@@ -173,12 +174,12 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ id: 
                     </div>
 
                     <div className="pt-4 border-t border-white/10">
-                        <a
+                        <Link
                             href="/groups"
                             className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-white font-medium transition-colors text-sm"
                         >
                             {t("projects.settings.manageAuth")}
-                        </a>
+                        </Link>
                     </div>
                 </div>
             </section>

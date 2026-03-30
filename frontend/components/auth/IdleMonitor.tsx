@@ -107,7 +107,7 @@ export function IdleMonitor() {
                     <div>
                         <h2 className="text-xl font-bold text-[var(--foreground)]">Still there?</h2>
                         <p className="text-[var(--foreground)]/60 mt-2">
-                            You've been inactive for a while. For security, your session will time out soon.
+                            You&apos;ve been inactive for a while. For security, your session will time out soon.
                         </p>
                     </div>
 
@@ -123,7 +123,7 @@ export function IdleMonitor() {
                             onClick={handleImHere}
                             className="flex-1 py-2.5 px-4 bg-hydro-primary hover:bg-hydro-accent text-black rounded-lg transition-colors font-bold"
                         >
-                            I'm here
+                            I&apos;m here
                         </button>
                     </div>
                 </div>

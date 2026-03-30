@@ -3,7 +3,7 @@ User Context models for Projects and Dashboards.
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import (
     Boolean,
@@ -33,7 +33,7 @@ project_sensors = Table(
     ),
     Column("thing_uuid", UUID(as_uuid=True), primary_key=True),  # TimeIO thing UUID
     Column(
-        "added_at", DateTime, default=datetime.utcnow
+        "added_at", DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     ),  # Track when sensor was added
     schema="water_dp",
 )

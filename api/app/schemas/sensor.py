@@ -61,6 +61,9 @@ class ExternalAPIConfig(BaseModel):
 class SensorProperty(BaseModel):
     name: str = Field(..., description="Machine-readable name (e.g. 'temp')")
     unit: str = Field("Unknown", description="Unit of measurement (e.g. 'Celsius')")
+    symbol: Optional[str] = Field(
+        None, description="Short symbol for the property (e.g. '°C')"
+    )
     label: Optional[str] = Field(
         None, description="Human-readable label (e.g. 'Air Temperature')"
     )

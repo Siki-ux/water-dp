@@ -1,9 +1,20 @@
+import io
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.core.exceptions import AppException, ResourceNotFoundException
 from app.services.ingestion_service import IngestionService
+
+
+def _make_upload_file(content: bytes = b"content", filename: str = "test.csv", content_type: str = "text/csv") -> MagicMock:
+    """Create a MagicMock UploadFile with a real BytesIO backing file for seek/tell support."""
+    upload_file = MagicMock()
+    upload_file.filename = filename
+    upload_file.content_type = content_type
+    upload_file.file = io.BytesIO(content)
+    upload_file.read = AsyncMock(return_value=content)
+    return upload_file
 
 
 @pytest.fixture
@@ -21,9 +32,7 @@ def mock_minio():
 @pytest.mark.asyncio
 async def test_upload_csv_success(mock_timeio_db, mock_minio):
     thing_uuid = "uuid"
-    upload_file = MagicMock()
-    upload_file.filename = "test.csv"
-    upload_file.read = AsyncMock(return_value=b"content")
+    upload_file = _make_upload_file()
 
     # Mock DB config
     mock_db_instance = mock_timeio_db.return_value
@@ -58,8 +67,7 @@ async def test_upload_csv_no_config(mock_timeio_db):
 @pytest.mark.asyncio
 async def test_upload_csv_minio_error(mock_timeio_db, mock_minio):
     thing_uuid = "uuid"
-    upload_file = MagicMock()
-    upload_file.read = AsyncMock(return_value=b"content")
+    upload_file = _make_upload_file()
 
     # Mock DB config
     mock_db_instance = mock_timeio_db.return_value

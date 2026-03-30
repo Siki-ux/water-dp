@@ -50,8 +50,9 @@ class Datastream(BaseModel):
         thing_id = str(thing_data.get("@iot.id", ""))
 
         # Sensor UUID from Thing properties
+        # Mirror Thing.from_frost resolution: identifier (TSM standard) → uuid (legacy)
         thing_props = thing_data.get("properties", {})
-        sensor_uuid = thing_props.get("uuid")
+        sensor_uuid = thing_props.get("identifier") or thing_props.get("uuid")
 
         return cls(
             datastream_id=datastream_id,

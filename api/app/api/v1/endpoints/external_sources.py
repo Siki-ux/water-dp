@@ -104,7 +104,7 @@ def delete_ext_api_type(id_or_name: str, user: dict = Depends(deps.get_current_u
 async def upload_custom_syncer(
     api_type_name: Annotated[str, Form()],
     file: Annotated[UploadFile, File()],
-    user: dict = Depends(deps.get_current_user),
+    user: dict = Depends(deps.get_current_active_superuser),
 ):
     """
     Upload a custom Python syncer script for an external API type.

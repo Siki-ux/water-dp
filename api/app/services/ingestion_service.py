@@ -48,20 +48,25 @@ class IngestionService:
                 secure=settings.minio_secure,
             )
 
-            # 3. Read File Content
-            content = await file.read()
-            file_size = len(content)
+            # 3. Determine file size without loading entirely into memory
+            upload_stream = file.file
+            upload_stream.seek(0, io.SEEK_END)
+            file_size = upload_stream.tell()
+            upload_stream.seek(0, io.SEEK_SET)
 
-            # 4. Upload
+            max_upload_size = 256 * 1024 * 1024  # 256 MB
+            if file_size > max_upload_size:
+                raise AppException(message="Uploaded file is too large (max 256MB)")
+
+            # 4. Upload — stream directly without reading into memory
             object_name = file.filename
 
-            # Use byte stream
             client.put_object(
                 bucket_name=bucket,
                 object_name=object_name,
-                data=io.BytesIO(content),
+                data=upload_stream,
                 length=file_size,
-                content_type="text/csv",
+                content_type=file.content_type or "text/csv",
             )
 
             logger.info(

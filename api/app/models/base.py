@@ -3,20 +3,38 @@ Base model with common fields and functionality.
 """
 
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any, Dict, Tuple, Union
 
 from pydantic import BaseModel as PydanticBaseModel
 from pydantic import ConfigDict
 from sqlalchemy import Column, DateTime, Integer, String, Text
 from sqlalchemy.ext.declarative import declared_attr
-from sqlalchemy.orm import Session, declarative_base
+from sqlalchemy.orm import Session
+
+_SCHEMA = {"schema": "water_dp"}
 
 
 class BaseModel:
     """Base model with common fields."""
 
-    # All tables belong to water_dp schema
-    __table_args__ = {"schema": "water_dp"}
+    @declared_attr
+    def __table_args__(cls) -> Union[Tuple, Dict]:
+        """Merge water_dp schema into subclass __table_args__, if any."""
+        existing = cls.__dict__.get("__table_args__")
+        if existing is None:
+            return _SCHEMA
+        if isinstance(existing, dict):
+            return {**_SCHEMA, **existing} if "schema" not in existing else existing
+        if isinstance(existing, tuple):
+            if existing and isinstance(existing[-1], dict):
+                opts = existing[-1]
+                return (
+                    existing
+                    if "schema" in opts
+                    else (*existing[:-1], {**_SCHEMA, **opts})
+                )
+            return (*existing, _SCHEMA)
+        return existing
 
     id = Column(Integer, primary_key=True, index=True)
     created_at = Column(
@@ -62,6 +80,3 @@ class PydanticBase(PydanticBaseModel):
     """Base Pydantic model with common configuration."""
 
     model_config = ConfigDict(from_attributes=True)
-
-
-Base = declarative_base(cls=BaseModel)

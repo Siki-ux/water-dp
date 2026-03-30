@@ -5,8 +5,7 @@ This module provides clean abstractions for interacting with TimeIO stack compon
 - FrostClient: FROST SensorThings API
 - ThingManagementClient: thing-management-api
 - MQTTClient: MQTT broker
-- TimeIODatabase: Direct database fixes
-- TimeIOOrchestrator: High-level operations with automatic fixes
+- TimeIODatabase: Direct database access
 """
 
 from app.services.timeio.frost_client import FrostClient

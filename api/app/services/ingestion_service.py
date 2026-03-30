@@ -71,7 +71,7 @@ class IngestionService:
 
         except S3Error as e:
             logger.error(f"MinIO Error: {e}")
-            raise AppException(message=f"S3 Upload failed: {e}")
+            raise AppException(message="S3 upload failed")
         except Exception as e:
             logger.error(f"Ingestion Error: {e}")
-            raise AppException(message=f"Ingestion failed: {e}")
+            raise AppException(message="Ingestion failed")

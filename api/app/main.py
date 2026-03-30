@@ -128,9 +128,12 @@ app.add_middleware(LoggingMiddleware)
 
 @app.get("/docs", tags=["General"])
 async def redirect_to_swagger():
-    """Redirect to Swagger UI."""
+    """Redirect to Swagger UI (only available in debug mode)."""
+    from fastapi import HTTPException
     from fastapi.responses import RedirectResponse
 
+    if not settings.debug:
+        raise HTTPException(status_code=404, detail="API documentation is disabled")
     return RedirectResponse(url=f"{settings.api_prefix}/docs")
 
 

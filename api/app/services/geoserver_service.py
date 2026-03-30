@@ -365,7 +365,7 @@ class GeoServerService:
             # Follow the resource href to get full featureType data
             try:
                 resource_href = layer_data["layer"]["resource"].get("href", "")
-                if resource_href:
+                if resource_href and resource_href.startswith(settings.geoserver_url):
                     ft_response = requests.get(
                         resource_href,
                         auth=self.auth,

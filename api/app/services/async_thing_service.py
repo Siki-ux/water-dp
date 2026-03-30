@@ -98,7 +98,7 @@ class AsyncThingService:
     async def get_things(
         self,
         expand: List[str] = None,
-        filter: str = None,
+        filter_expr: str = None,
         top: int = None,
     ) -> List[Thing]:
         """
@@ -108,11 +108,11 @@ class AsyncThingService:
             expand = ["Locations", "Datastreams"]
 
         logger.info(
-            f"Fetching things for {self.schema_name} with expand={expand}, filter={filter}"
+            f"Fetching things for {self.schema_name} with expand={expand}, filter={filter_expr}"
         )
 
         things_data = await self.frost_client.get_things(
-            expand=",".join(expand), filter=filter, top=top
+            expand=",".join(expand), filter=filter_expr, top=top
         )
 
         logger.info(f"Fetched {len(things_data)} things for {self.schema_name}")

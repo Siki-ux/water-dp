@@ -22,6 +22,9 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Ensure pgcrypto is available for gen_random_uuid()
+    op.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto")
+
     # 1. Add authorization_provider_group_name to projects
     op.add_column(
         "projects",

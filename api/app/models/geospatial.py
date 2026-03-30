@@ -54,6 +54,7 @@ class GeoLayer(Base, BaseModel):
         Index("idx_layer_workspace", "workspace"),
         Index("idx_layer_type", "layer_type"),
         Index("idx_layer_published", "is_published"),
+        {"schema": "water_dp"},
     )
 
 
@@ -84,6 +85,7 @@ class GeoFeature(Base, BaseModel):
         Index("idx_feature_active", "is_active"),
         Index("idx_feature_valid_from", "valid_from"),
         Index("idx_feature_geometry", "geometry", postgresql_using="gist"),
+        {"schema": "water_dp"},
     )
 
 

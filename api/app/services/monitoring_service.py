@@ -22,9 +22,25 @@ _SFTP_INGEST_TYPES = {"sftp", "extsftp"}
 
 class MonitoringService:
     def __init__(self, db: Session = None):
+        self._own_session = db is None
         self.db = db or SessionLocal()
         self.timeio_db = TimeIODatabase()
         self.stats = {}
+
+    def close(self) -> None:
+        if self._own_session and self.db is not None:
+            try:
+                self.db.close()
+            except Exception:
+                logger.exception("Error closing MonitoringService DB session")
+            finally:
+                self.db = None
+
+    def __enter__(self) -> "MonitoringService":
+        return self
+
+    def __exit__(self, exc_type, exc, exc_tb) -> None:
+        self.close()
 
     # ------------------------------------------------------------------
     # MQTT event handler: called on every data_parsed message
@@ -185,7 +201,7 @@ class MonitoringService:
                 message=f"Sensor '{thing_name}' is inactive. Last data: {last_seen}",
                 details={"thing_name": thing_name, "last_activity": last_seen},
                 status="active",
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
             )
             self.db.add(alert)
             self.db.commit()
@@ -206,7 +222,7 @@ class MonitoringService:
             existing.status = "resolved"
             existing.details = {
                 **(existing.details or {}),
-                "resolved_at": datetime.utcnow().isoformat(),
+                "resolved_at": datetime.now(timezone.utc).isoformat(),
             }
             self.db.commit()
             logger.info("Resolved inactivity alert for %s", thing_name)
@@ -345,23 +361,28 @@ class MonitoringService:
             import psycopg2
             from psycopg2 import sql as pgsql
 
-            conn = psycopg2.connect(
-                host=settings.timeio_db_host,
-                port=settings.timeio_db_port,
-                dbname=settings.timeio_db_name,
-                user=settings.timeio_db_user,
-                password=settings.timeio_db_password,
-            )
-            with conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        pgsql.SQL(
-                            "SELECT name FROM {schema}.thing WHERE uuid = %s"
-                        ).format(schema=pgsql.Identifier(schema)),
-                        (thing_uuid,),
-                    )
-                    row = cur.fetchone()
-            conn.close()
+            conn = None
+            row = None
+            try:
+                conn = psycopg2.connect(
+                    host=settings.timeio_db_host,
+                    port=settings.timeio_db_port,
+                    dbname=settings.timeio_db_name,
+                    user=settings.timeio_db_user,
+                    password=settings.timeio_db_password,
+                )
+                with conn:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            pgsql.SQL(
+                                "SELECT name FROM {schema}.thing WHERE uuid = %s"
+                            ).format(schema=pgsql.Identifier(schema)),
+                            (thing_uuid,),
+                        )
+                        row = cur.fetchone()
+            finally:
+                if conn is not None:
+                    conn.close()
             return row[0] if row else None
         except Exception:
             logger.exception("_get_thing_name: DB lookup failed for %s", thing_uuid)

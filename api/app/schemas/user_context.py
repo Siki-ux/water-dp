@@ -148,9 +148,9 @@ class SensorDetail(BaseModel):
     status: str
     last_activity: Optional[datetime] = None
     updated_at: Optional[datetime] = None
-    latest_data: List[SensorDataPoint] = []
+    latest_data: List[SensorDataPoint] = Field(default_factory=list)
     station_type: str = "unknown"
-    properties: Dict[str, Any] = {}
+    properties: Dict[str, Any] = Field(default_factory=dict)
 
 
 class SensorCreate(BaseModel):

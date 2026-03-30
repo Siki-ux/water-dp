@@ -2,6 +2,7 @@
 Security module for JWT verification against Keycloak.
 """
 
+import json
 import logging
 import time
 from typing import Any, Dict, List, Optional, Tuple
@@ -81,7 +82,7 @@ async def verify_token(token: str) -> Dict[str, Any]:
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        public_key = jwt.algorithms.RSAAlgorithm.from_jwk(rsa_key_data)
+        public_key = jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(rsa_key_data))
 
         payload = jwt.decode(
             token,

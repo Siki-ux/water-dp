@@ -2,7 +2,7 @@
 Computation schemas.
 """
 
-from pydantic import UUID4, BaseModel
+from pydantic import UUID4, BaseModel, Field
 
 
 class ComputationScriptRead(BaseModel):
@@ -17,7 +17,7 @@ class ComputationScriptRead(BaseModel):
 
 
 class ComputationRequest(BaseModel):
-    params: dict = {}
+    params: dict = Field(default_factory=dict)
 
 
 class TaskSubmissionResponse(BaseModel):

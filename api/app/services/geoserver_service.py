@@ -51,9 +51,13 @@ class GeoServerService:
                 response.raise_for_status()
             return response
         except requests.exceptions.RequestException as e:
-            err_detail = f"GeoServer request failed: {e}"
             if hasattr(e, "response") and e.response is not None:
-                err_detail += f"\nResponse body: {e.response.text}"
+                logger.debug(
+                    "GeoServer error response (status: %s): %.1000s",
+                    e.response.status_code,
+                    e.response.text or "",
+                )
+            err_detail = f"GeoServer request failed: {e}"
             logger.error(err_detail)
             raise GeoServerException(err_detail)
 

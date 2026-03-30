@@ -2,7 +2,7 @@
 Tests for security core module and API dependencies.
 """
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -33,21 +33,27 @@ async def test_verify_token_valid(mock_jwks):
     mock_payload = {
         "sub": "user-123",
         "realm_access": {"roles": ["user"]},
-        "iss": "http://localhost:8081/realms/timeio",
+        "iss": "http://keycloak:8081/keycloak/realms/timeio",
     }
+    mock_settings = MagicMock()
+    mock_settings.keycloak_url = "http://keycloak:8081/keycloak"
+    mock_settings.keycloak_realm = "timeio"
+    mock_settings.keycloak_external_url = None
+
     with patch("app.core.security.get_jwks", new_callable=AsyncMock) as mock_get_jwks:
         mock_get_jwks.return_value = mock_jwks
-        with patch(
-            "app.core.security.jwt.get_unverified_header",
-            return_value={"kid": "test-kid"},
-        ):
+        with patch("app.core.security.settings", mock_settings):
             with patch(
-                "app.core.security.jwt.algorithms.RSAAlgorithm.from_jwk",
-                return_value="mock-key",
+                "app.core.security.jwt.get_unverified_header",
+                return_value={"kid": "test-kid"},
             ):
-                with patch("app.core.security.jwt.decode", return_value=mock_payload):
-                    payload = await verify_token("valid-token")
-                    assert payload["sub"] == "user-123"
+                with patch(
+                    "app.core.security.jwt.algorithms.RSAAlgorithm.from_jwk",
+                    return_value="mock-key",
+                ):
+                    with patch("app.core.security.jwt.decode", return_value=mock_payload):
+                        payload = await verify_token("valid-token")
+                        assert payload["sub"] == "user-123"
 
 
 @pytest.mark.asyncio

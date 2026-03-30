@@ -50,18 +50,9 @@ class ComputationContext:
                 project_name = project.schema_name
 
         if not project_name:
-            # Fallback or Error?
-            # Only if we can't find the project, we might fail or use a default.
-            # However, FrostClient NEEDS a project_name.
-            # Let's log a warning and maybe try a default if configured, or fail gracefully.
-            logger.warning(
-                f"Could not resolve project schema for script {script_id}. defaulting to 'god_mode' or failing."
+            raise RuntimeError(
+                f"Cannot initialize ComputationContext: could not resolve project schema for script {script_id}."
             )
-            # If no schema found, maybe we shouldn't init the client or init with dummy?
-            # But subsequent calls will fail.
-            # Let's guess 'timeio' or similar if nothing found?
-            # Or better, let it fail at request time if not set?
-            pass
 
         self._frost_client = FrostClient(
             base_url=settings.frost_url,

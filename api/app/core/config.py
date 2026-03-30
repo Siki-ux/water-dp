@@ -37,7 +37,7 @@ class Settings(BaseSettings):
         default="http://localhost:8080/geoserver", alias="GEOSERVER_URL"
     )
     geoserver_username: str = Field(default="admin", alias="GEOSERVER_USERNAME")
-    geoserver_password: str = Field(alias="GEOSERVER_PASSWORD")
+    geoserver_password: str = Field(default="geoserver", alias="GEOSERVER_PASSWORD")
     geoserver_workspace: str = Field(default="water_data", alias="GEOSERVER_WORKSPACE")
     geoserver_timeout: int = Field(default=30, alias="GEOSERVER_TIMEOUT")
     geoserver_db_schema: str = Field(

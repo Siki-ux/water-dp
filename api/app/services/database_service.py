@@ -270,7 +270,7 @@ class DatabaseService:
 
             combined = unary_union(polygons)
             minx, miny, maxx, maxy = combined.bounds
-            print(f"DEBUG_GEO: Layer {layer_name} BBOX: {minx}, {miny}, {maxx}, {maxy}")
+            logger.debug(f"Layer {layer_name} BBOX: {minx}, {miny}, {maxx}, {maxy}")
             logger.info(
                 f"Layer {layer_name} BBOX: minx={minx}, miny={miny}, maxx={maxx}, maxy={maxy}"
             )

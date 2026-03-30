@@ -40,11 +40,13 @@ class ThingService:
         return self.timeio_db.get_thing_id_from_uuid(sensor_uuid)
 
     def get_thing(
-        self, sensor_uuid: str, expand: List[str] = ["Locations", "Datastreams"]
-    ) -> Thing:
+        self, sensor_uuid: str, expand: Optional[List[str]] = None
+    ) -> Optional[Thing]:
         """
         Fetch a sensor for a project with full human-readable details.
         """
+        if expand is None:
+            expand = ["Locations", "Datastreams"]
         thing_id = self.get_thing_id_from_uuid(sensor_uuid)
         if thing_id is None:
             raise ResourceNotFoundException("Thing not found")
@@ -56,15 +58,17 @@ class ThingService:
     @staticmethod
     def get_all_things(
         schema_name: str,
-        expand: List[str] = ["Locations", "Datastreams"],
-        filter: str = None,
-        top: int = None,
+        expand: Optional[List[str]] = None,
+        filter_expr: Optional[str] = None,
+        top: Optional[int] = None,
     ) -> List[Thing]:
         """
         Fetch all sensors for a project with full human-readable details.
         """
+        if expand is None:
+            expand = ["Locations", "Datastreams"]
         logger.info(
-            f"Fetching things for project {schema_name} with expand {expand}, filter {filter}"
+            f"Fetching things for project {schema_name} with expand {expand}, filter {filter_expr}"
         )
         frost_client = get_cached_frost_client(
             base_url=settings.frost_url,
@@ -73,7 +77,7 @@ class ThingService:
             frost_server=settings.frost_server,
         )
         things_data = frost_client.get_things(
-            expand=",".join(expand), filter=filter, top=top
+            expand=",".join(expand), filter=filter_expr, top=top
         )
         logger.info(f"Fetched {len(things_data)} things for project {schema_name}")
         if not things_data:
@@ -83,18 +87,20 @@ class ThingService:
 
     def get_things(
         self,
-        expand: List[str] = ["Locations", "Datastreams"],
-        filter: str = None,
-        top: int = None,
+        expand: Optional[List[str]] = None,
+        filter_expr: Optional[str] = None,
+        top: Optional[int] = None,
     ) -> List[Thing]:
         """
         Fetch all sensors for a project with full human-readable details.
         """
+        if expand is None:
+            expand = ["Locations", "Datastreams"]
         logger.info(
-            f"Fetching things for project {self.schema_name} with expand {expand}, filter {filter}"
+            f"Fetching things for project {self.schema_name} with expand {expand}, filter {filter_expr}"
         )
         things_data = self.frost_client.get_things(
-            expand=",".join(expand), filter=filter, top=top
+            expand=",".join(expand), filter=filter_expr, top=top
         )
         logger.info(f"Fetched {len(things_data)} things for project {self.schema_name}")
         if not things_data:

@@ -5,6 +5,7 @@ from fastapi import UploadFile
 from minio import Minio
 from minio.error import S3Error
 
+from app.core.config import settings
 from app.core.exceptions import AppException, ResourceNotFoundException
 from app.services.timeio.timeio_db import TimeIODatabase
 
@@ -39,14 +40,12 @@ class IngestionService:
         # Assuming settings has keys. If not, we might need to rely on env vars or internal defaults.
         # Docker Compose says: object-storage ports 9000.
 
-        minio_endpoint = "object-storage:9000"  # Internal connection
-
         try:
             client = Minio(
-                minio_endpoint,
+                settings.minio_url,
                 access_key=access_key,
                 secret_key=secret_key,
-                secure=False,  # Internal usually HTTP
+                secure=settings.minio_secure,
             )
 
             # 3. Read File Content

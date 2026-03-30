@@ -42,8 +42,7 @@ def get_url():
 def include_object(object, name, type_, reflected, compare_to):
     """Filter objects to only include those in the water_dp schema."""
     if type_ == "table":
-        # Only include tables from water_dp schema
-        return object.schema == SCHEMA or object.schema is None
+        return object.schema == SCHEMA
     return True
 
 

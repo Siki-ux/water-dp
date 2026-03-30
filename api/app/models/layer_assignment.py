@@ -24,4 +24,5 @@ class LayerProjectAssignment(Base):
         Index("idx_lpa_layer", "layer_name"),
         Index("idx_lpa_project", "project_id"),
         Index("uq_lpa_layer_project", "layer_name", "project_id", unique=True),
+        {"schema": "water_dp"},
     )

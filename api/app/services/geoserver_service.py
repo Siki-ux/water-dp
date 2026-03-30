@@ -378,9 +378,14 @@ class GeoServerService:
                             "nativeBoundingBox", {}
                         )
                         # Copy to avoid mutating original and remove non-float 'crs' param
-                        bounds = {
-                            k: float(v) for k, v in raw_bounds.items() if k != "crs"
-                        }
+                        bounds = {}
+                        for k, v in raw_bounds.items():
+                            if k == "crs":
+                                continue
+                            try:
+                                bounds[k] = float(v)
+                            except (TypeError, ValueError):
+                                logger.warning("Non-numeric bound value for %s: %r", k, v)
 
                         srs = ft_data.get("srs", srs)
                         native_srs = ft_data.get("nativeCRS", native_srs)

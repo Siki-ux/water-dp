@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     # WARNING: CORS_ORIGINS set to "*" is for development only.
     # In production, specify exact allowed origins (e.g., "https://myapp.com").
     cors_origins: str = Field(default="*", alias="CORS_ORIGINS")
+    # Comma-separated list of allowed hosts for TrustedHostMiddleware.
+    # Defaults to "*" (allow all) for local dev — set explicitly in production.
+    allowed_hosts: str = Field(default="*", alias="ALLOWED_HOSTS")
 
     # Database
     database_url: str = Field(alias="DATABASE_URL")
@@ -133,6 +136,13 @@ class Settings(BaseSettings):
     def admin_roles_list(self) -> List[str]:
         """Parse comma-separated admin roles."""
         return [r.strip() for r in self.admin_roles.split(",") if r.strip()]
+
+    @property
+    def allowed_hosts_list(self) -> List[str]:
+        """Convert ALLOWED_HOSTS string to list."""
+        if self.allowed_hosts == "*":
+            return ["*"]
+        return [h.strip() for h in self.allowed_hosts.split(",") if h.strip()]
 
     @property
     def cors_origins_list(self) -> List[str]:

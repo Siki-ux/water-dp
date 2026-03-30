@@ -310,7 +310,7 @@ class DatabaseService:
                     # Use the newly added filter support
                     project_things = thing_service.get_things(
                         expand=["Locations", "Datastreams"],
-                        filter=filter_param,
+                        filter_expr=filter_param,
                         top=1000,  # Limit per project for safety
                     )
 

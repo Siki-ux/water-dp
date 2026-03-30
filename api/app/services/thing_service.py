@@ -131,7 +131,7 @@ class ThingService:
 
     def get_sensor_datastream(
         self, sensor_uuid: str, datastream_name: str
-    ) -> Datastream:
+    ) -> Optional[Datastream]:
         """
         Get a specific datastream for a sensor via FROST.
         """

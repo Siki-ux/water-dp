@@ -73,7 +73,10 @@ def init_db() -> None:
                 Dashboard,
                 GeoFeature,
                 GeoLayer,
+                LayerProjectAssignment,
                 Project,
+                ProjectMember,
+                SensorActivityConfig,
                 Simulation,
             )
 

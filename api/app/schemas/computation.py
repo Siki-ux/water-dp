@@ -2,18 +2,17 @@
 Computation schemas.
 """
 
-from pydantic import UUID4, BaseModel, Field
+from pydantic import UUID4, BaseModel, ConfigDict, Field
 
 
 class ComputationScriptRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID4
     name: str
     description: str | None
     project_id: UUID4
     filename: str
-
-    class ConfigDict:
-        from_attributes = True
 
 
 class ComputationRequest(BaseModel):
@@ -26,6 +25,8 @@ class TaskSubmissionResponse(BaseModel):
 
 
 class ComputationJobRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     script_id: UUID4
     user_id: str
@@ -36,9 +37,6 @@ class ComputationJobRead(BaseModel):
     error: str | None
     logs: str | None
     created_by: str | None
-
-    class ConfigDict:
-        from_attributes = True
 
 
 class ScriptContentUpdate(BaseModel):

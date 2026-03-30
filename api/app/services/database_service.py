@@ -311,7 +311,6 @@ class DatabaseService:
                     project_things = thing_service.get_things(
                         expand=["Locations", "Datastreams"],
                         filter_expr=filter_param,
-                        top=1000,  # Limit per project for safety
                     )
 
                     for thing_model in project_things:

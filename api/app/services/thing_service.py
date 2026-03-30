@@ -61,12 +61,16 @@ class ThingService:
         expand: Optional[List[str]] = None,
         filter_expr: Optional[str] = None,
         top: Optional[int] = None,
+        max_total: Optional[int] = None,
     ) -> List[Thing]:
         """
         Fetch all sensors for a project with full human-readable details.
+        Paginates via @iot.nextLink up to max_total items.
         """
         if expand is None:
             expand = ["Locations", "Datastreams"]
+        if max_total is None:
+            max_total = settings.max_sensors_per_project
         logger.info(
             f"Fetching things for project {schema_name} with expand {expand}, filter {filter_expr}"
         )
@@ -77,7 +81,7 @@ class ThingService:
             frost_server=settings.frost_server,
         )
         things_data = frost_client.get_things(
-            expand=",".join(expand), filter=filter_expr, top=top
+            expand=",".join(expand), filter=filter_expr, top=top, max_total=max_total
         )
         logger.info(f"Fetched {len(things_data)} things for project {schema_name}")
         if not things_data:
@@ -90,17 +94,21 @@ class ThingService:
         expand: Optional[List[str]] = None,
         filter_expr: Optional[str] = None,
         top: Optional[int] = None,
+        max_total: Optional[int] = None,
     ) -> List[Thing]:
         """
         Fetch all sensors for a project with full human-readable details.
+        Paginates via @iot.nextLink up to max_total items.
         """
         if expand is None:
             expand = ["Locations", "Datastreams"]
+        if max_total is None:
+            max_total = settings.max_sensors_per_project
         logger.info(
             f"Fetching things for project {self.schema_name} with expand {expand}, filter {filter_expr}"
         )
         things_data = self.frost_client.get_things(
-            expand=",".join(expand), filter=filter_expr, top=top
+            expand=",".join(expand), filter=filter_expr, top=top, max_total=max_total
         )
         logger.info(f"Fetched {len(things_data)} things for project {self.schema_name}")
         if not things_data:

@@ -168,12 +168,23 @@ class FrostClient:
         return data.get("value", [])
 
     def get_things(
-        self, expand: str = None, filter: str = None, top: int = None
+        self,
+        expand: str = None,
+        filter: str = None,
+        top: int = None,
+        max_total: int = None,
     ) -> List[Dict[str, Any]]:
         """
-        Get all things with optional filtering and expansion.
+        Get Things with pagination via @iot.nextLink.
+
+        Args:
+            expand: FROST $expand value
+            filter: FROST $filter expression
+            top: Page size per request (default: FROST server default)
+            max_total: Hard cap on total results across all pages.
+                       Pagination stops once this many items are collected.
+                       None means no cap (fetch all pages).
         """
-        path = "Things"
         params = {}
         if expand:
             params["$expand"] = expand
@@ -182,10 +193,44 @@ class FrostClient:
         if top:
             params["$top"] = top
 
-        data = self._request("GET", path, params=params)
-        if not data:
-            return []
-        return data.get("value", [])
+        all_items: List[Dict[str, Any]] = []
+        path = "Things"
+        next_url: Optional[str] = None
+
+        while True:
+            if next_url:
+                try:
+                    logger.debug(f"FROST paginated request: GET {next_url}")
+                    resp = self._session.get(next_url, timeout=self.timeout)
+                    resp.raise_for_status()
+                    data = resp.json()
+                except Exception as e:
+                    logger.error(f"FROST pagination error: {next_url} - {e}")
+                    break
+            else:
+                data = self._request("GET", path, params=params)
+
+            if not data:
+                break
+
+            page_items = data.get("value", [])
+            if not page_items:
+                break
+
+            all_items.extend(page_items)
+
+            if max_total is not None and len(all_items) >= max_total:
+                all_items = all_items[:max_total]
+                logger.info(
+                    f"Reached max_total cap of {max_total} Things — stopping pagination."
+                )
+                break
+
+            next_url = data.get("@iot.nextLink")
+            if not next_url:
+                break
+
+        return all_items
 
 
 @lru_cache(maxsize=128)

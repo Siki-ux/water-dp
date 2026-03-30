@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     # Time Data Processing
     time_zone: str = Field(default="UTC", alias="TIME_ZONE")
     max_time_range_days: int = Field(default=365, alias="MAX_TIME_RANGE_DAYS")
+    max_sensors_per_project: int = Field(default=10000, alias="MAX_SENSORS_PER_PROJECT")
     frost_url: str = Field(default="http://frost:8080", alias="FROST_URL")
     frost_server: str = Field(default="sta", alias="FROST_SERVER")
     frost_version: str = Field(default="v1.1", alias="FROST_VERSION")

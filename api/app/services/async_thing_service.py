@@ -100,19 +100,23 @@ class AsyncThingService:
         expand: List[str] = None,
         filter_expr: str = None,
         top: int = None,
+        max_total: int = None,
     ) -> List[Thing]:
         """
         Fetch all sensors for this schema with optional filtering.
+        Paginates via @iot.nextLink up to max_total items.
         """
         if expand is None:
             expand = ["Locations", "Datastreams"]
+        if max_total is None:
+            max_total = settings.max_sensors_per_project
 
         logger.info(
             f"Fetching things for {self.schema_name} with expand={expand}, filter={filter_expr}"
         )
 
         things_data = await self.frost_client.get_things(
-            expand=",".join(expand), filter=filter_expr, top=top
+            expand=",".join(expand), filter=filter_expr, top=top, max_total=max_total
         )
 
         logger.info(f"Fetched {len(things_data)} things for {self.schema_name}")

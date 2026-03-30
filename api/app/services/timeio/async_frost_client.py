@@ -109,10 +109,22 @@ class AsyncFrostClient:
         return await self._request("GET", path, params=params)
 
     async def get_things(
-        self, expand: str = None, filter: str = None, top: int = None
+        self,
+        expand: str = None,
+        filter: str = None,
+        top: int = None,
+        max_total: int = None,
     ) -> List[Dict[str, Any]]:
-        """Get all things with optional filtering and expansion."""
-        path = "Things"
+        """
+        Get Things with pagination via @iot.nextLink.
+
+        Args:
+            expand: FROST $expand value
+            filter: FROST $filter expression
+            top: Page size per request
+            max_total: Hard cap on total results across all pages.
+                       None means no cap (fetch all pages).
+        """
         params = {}
         if expand:
             params["$expand"] = expand
@@ -121,10 +133,45 @@ class AsyncFrostClient:
         if top:
             params["$top"] = top
 
-        data = await self._request("GET", path, params=params)
-        if not data:
-            return []
-        return data.get("value", [])
+        all_items: List[Dict[str, Any]] = []
+        path = "Things"
+        next_url: Optional[str] = None
+
+        while True:
+            if next_url:
+                try:
+                    logger.debug(f"FROST paginated request: GET {next_url}")
+                    async with httpx.AsyncClient(timeout=self.timeout) as client:
+                        resp = await client.get(next_url)
+                    resp.raise_for_status()
+                    data = resp.json()
+                except Exception as e:
+                    logger.error(f"FROST async pagination error: {next_url} - {e}")
+                    break
+            else:
+                data = await self._request("GET", path, params=params)
+
+            if not data:
+                break
+
+            page_items = data.get("value", [])
+            if not page_items:
+                break
+
+            all_items.extend(page_items)
+
+            if max_total is not None and len(all_items) >= max_total:
+                all_items = all_items[:max_total]
+                logger.info(
+                    f"Reached max_total cap of {max_total} Things — stopping pagination."
+                )
+                break
+
+            next_url = data.get("@iot.nextLink")
+            if not next_url:
+                break
+
+        return all_items
 
     async def get_things_paginated(
         self,

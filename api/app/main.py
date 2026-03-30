@@ -110,7 +110,7 @@ async def health_check(response: Response):
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# Middleware Stack (Executed Top to Bottom)
+# Middleware Stack: FastAPI applies middleware in reverse order of addition (last added runs first)
 
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts_list)
 

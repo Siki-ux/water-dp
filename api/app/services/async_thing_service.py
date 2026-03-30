@@ -160,7 +160,7 @@ class AsyncThingService:
         Static method to fetch all things for a given schema.
         """
         service = AsyncThingService(schema_name)
-        return await service.get_things(expand=expand, filter=filter, top=top)
+        return await service.get_things(expand=expand, filter_expr=filter, top=top)
 
     # ─────────────────────────────────────────────────────────────────────
     # Datastream Operations

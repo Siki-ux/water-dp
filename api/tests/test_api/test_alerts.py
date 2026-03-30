@@ -17,21 +17,21 @@ def test_create_alert_definition(client, mock_db_session: Session):
         def add_side_effect(obj):
             if not getattr(obj, "id", None):
                 import uuid
-                from datetime import datetime
+                from datetime import datetime, timezone
 
                 obj.id = uuid.uuid4()
-                obj.created_at = datetime.utcnow()
-                obj.updated_at = datetime.utcnow()
+                obj.created_at = datetime.now(timezone.utc)
+                obj.updated_at = datetime.now(timezone.utc)
 
                 # Force timestamp for Alert
                 # Use string check to avoid import issues inside function if shadowed, but checking class name is safe
                 if type(obj).__name__ == "Alert":
                     if not getattr(obj, "timestamp", None):
-                        obj.timestamp = datetime.utcnow()
+                        obj.timestamp = datetime.now(timezone.utc)
                     if getattr(obj, "details", None) is None:
                         obj.details = {}
                 elif hasattr(obj, "timestamp") and not getattr(obj, "timestamp", None):
-                    obj.timestamp = datetime.utcnow()
+                    obj.timestamp = datetime.now(timezone.utc)
 
                 # Defaults for AlertDefinition if missing
                 if (
@@ -153,7 +153,7 @@ def test_get_alert_history(client, mock_db_session: Session):
 
     pid = uuid.uuid4()
 
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     aid = uuid.uuid4()
     did = uuid.uuid4()
@@ -163,7 +163,7 @@ def test_get_alert_history(client, mock_db_session: Session):
         status="active",
         message="Triggered",
         details={"info": "trigger"},
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
     )
     # Mock the relationship
     alert.definition = AlertDefinition(

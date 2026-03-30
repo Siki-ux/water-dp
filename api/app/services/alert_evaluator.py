@@ -220,7 +220,7 @@ class AlertEvaluator:
                 "window_hours": 24     # how far back to look
             }
         """
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
 
         import psycopg2
         from psycopg2 import sql as pgsql
@@ -274,7 +274,7 @@ class AlertEvaluator:
                         window_hours = int(conditions.get("window_hours", 24))
                         min_flag_value = FLAG_THRESHOLDS.get(flag_level, 255.0)
 
-                        since = datetime.utcnow() - timedelta(hours=window_hours)
+                        since = datetime.now(timezone.utc) - timedelta(hours=window_hours)
 
                         with conn.cursor() as cur:
                             cur.execute(
@@ -337,7 +337,7 @@ class AlertEvaluator:
         Called when TSM publishes a qaqc_done MQTT message, so evaluation is
         event-driven rather than on a polling schedule.
         """
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
 
         import psycopg2
         from psycopg2 import sql as pgsql
@@ -391,7 +391,7 @@ class AlertEvaluator:
                         window_hours = int(conditions.get("window_hours", 24))
                         min_flag_value = FLAG_THRESHOLDS.get(flag_level, 255.0)
 
-                        since = datetime.utcnow() - timedelta(hours=window_hours)
+                        since = datetime.now(timezone.utc) - timedelta(hours=window_hours)
 
                         with conn.cursor() as cur:
                             # Join via datastream to filter to the specific thing
@@ -456,7 +456,7 @@ class AlertEvaluator:
             logger.error(f"Error evaluating QA/QC alerts for thing {thing_uuid}: {e}")
 
     def _create_alert(self, definition: AlertDefinition, value: Any):
-        from datetime import datetime
+        from datetime import datetime, timezone
 
         # Deduplication: Check if an active alert already exists for this definition
         existing_active = (
@@ -473,7 +473,7 @@ class AlertEvaluator:
             definition_id=definition.id,
             message=f"Alert '{definition.name}' triggered: {value}",
             details={"value": value, "rule": definition.conditions},
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             status="active",
         )
         self.db.add(alert)

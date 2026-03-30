@@ -161,7 +161,7 @@ def process_single_simulation(mqtt_client: mqtt.Client, config: Any, mqtt_user: 
 
         payload_data[name] = val
 
-    final_payload = {"object": payload_data, "time": datetime.utcnow().isoformat()}
+    final_payload = {"object": payload_data, "time": datetime.now(timezone.utc).isoformat()}
     logger.info(f"Final payload: {final_payload}")
     if mqtt_user:
         topic = f"mqtt_ingest/{mqtt_user}/data"

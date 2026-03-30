@@ -1,7 +1,7 @@
 import ast
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from celery.result import AsyncResult
@@ -212,7 +212,7 @@ async def run_computation(
         script_id=script.id,
         user_id=user.get("sub"),
         status="PENDING",
-        start_time=datetime.utcnow().isoformat(),
+        start_time=datetime.now(timezone.utc).isoformat(),
         created_by=user.get("preferred_username", "unknown"),
         updated_by=user.get("preferred_username", "unknown"),
     )
@@ -296,7 +296,7 @@ async def list_script_jobs(
             task_result = AsyncResult(job.id, app=celery_app)
             if task_result.ready():
                 job.status = task_result.status
-                job.end_time = datetime.utcnow().isoformat()
+                job.end_time = datetime.now(timezone.utc).isoformat()
 
                 if task_result.successful():
                     task_result_data = task_result.result
@@ -355,7 +355,7 @@ async def get_computation_status(
         import json
 
         job.status = task_result.status
-        job.end_time = datetime.utcnow().isoformat()
+        job.end_time = datetime.now(timezone.utc).isoformat()
 
         if task_result.successful():
             task_result_data = task_result.result

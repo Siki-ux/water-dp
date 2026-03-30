@@ -47,6 +47,7 @@ def upgrade() -> None:
         "ix_project_members_user_id",
         "project_members",
         ["user_id"],
+        schema="water_dp",
     )
 
     # 3. Backfill project_members: insert 'owner' rows for all existing projects
@@ -81,7 +82,7 @@ def downgrade() -> None:
         """
     )
 
-    op.drop_index("ix_project_members_user_id", table_name="project_members")
+    op.drop_index("ix_project_members_user_id", table_name="project_members", schema="water_dp")
 
     op.drop_index(
         "ix_projects_auth_group_name",

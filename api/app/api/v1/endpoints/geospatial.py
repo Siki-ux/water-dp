@@ -5,7 +5,7 @@ Geospatial API endpoints.
 import json
 import logging
 import uuid as uuid_module
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
@@ -122,8 +122,8 @@ async def get_geo_layers(
                             "geometry_type": "polygon",
                             "is_published": True,
                             "is_public": True,
-                            "created_at": datetime.utcnow(),
-                            "updated_at": datetime.utcnow(),
+                            "created_at": datetime.now(timezone.utc),
+                            "updated_at": datetime.now(timezone.utc),
                         }
                     )
         except Exception as gs_err:

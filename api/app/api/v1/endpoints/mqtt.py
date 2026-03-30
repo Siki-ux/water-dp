@@ -22,7 +22,7 @@ timeio_db = TimeIODatabase()
 )
 async def publish_generic(
     payload: MQTTPublishGeneric,
-    user: dict = Depends(deps.get_current_user),
+    user: dict = Depends(deps.get_current_active_superuser),
 ):
     """
     Publish a generic MQTT message.

@@ -5,13 +5,14 @@ Datasets are Things with ingest_type=sftp, designed for CSV file uploads.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.exceptions import ResourceNotFoundException
 from app.models.user_context import Project, project_sensors
 from app.services.minio_service import minio_service
 from app.services.thing_service import ThingService
@@ -53,7 +54,7 @@ class DatasetService:
         # Get project
         project = db.query(Project).filter(Project.id == project_id).first()
         if not project:
-            raise ValueError(f"Project {project_id} not found")
+            raise ResourceNotFoundException(f"Project {project_id} not found")
 
         # Get authorization group name for project
         project_group = project.name
@@ -95,7 +96,7 @@ class DatasetService:
 
         if not existing:
             stmt = project_sensors.insert().values(
-                project_id=project_id, thing_uuid=thing_uuid, added_at=datetime.utcnow()
+                project_id=project_id, thing_uuid=thing_uuid, added_at=datetime.now(timezone.utc)
             )
             db.execute(stmt)
             db.commit()

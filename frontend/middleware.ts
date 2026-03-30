@@ -12,7 +12,9 @@ export default auth((req) => {
 
     // Redirect unauthenticated users to sign in
     if (!req.auth) {
-        const signInUrl = new URL("/auth/signin", req.url)
+        const signInUrl = req.nextUrl.clone()
+        signInUrl.pathname = "/auth/signin"
+        signInUrl.search = ""
         signInUrl.searchParams.set("callbackUrl", pathname)
         return NextResponse.redirect(signInUrl)
     }

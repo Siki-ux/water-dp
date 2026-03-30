@@ -28,7 +28,7 @@ export function IdleMonitor() {
             setIsIdle(true);
             // Start force logout timer
             forceLogoutTimerRef.current = setTimeout(() => {
-                signOut({ callbackUrl: "/portal/auth/signin" });
+                signOut({ callbackUrl: `${window.location.origin}/portal/auth/signin` });
             }, FORCE_LOGOUT_MS);
         }, IDLE_TIMEOUT_MS);
     }, [isIdle]);
@@ -62,7 +62,7 @@ export function IdleMonitor() {
     // Handle token expiration: NextAuth sets error="RefreshAccessTokenError"
     useEffect(() => {
         if (session?.error === "RefreshAccessTokenError") {
-            signOut({ callbackUrl: "/portal/auth/signin" });
+            signOut({ callbackUrl: `${window.location.origin}/portal/auth/signin` });
         }
     }, [session]);
 
@@ -113,7 +113,7 @@ export function IdleMonitor() {
 
                     <div className="flex gap-3 w-full mt-2">
                         <button
-                            onClick={() => signOut({ callbackUrl: "/portal/auth/signin" })}
+                            onClick={() => signOut({ callbackUrl: `${window.location.origin}/portal/auth/signin` })}
                             className="flex-1 py-2.5 px-4 bg-muted hover:bg-muted/80 text-[var(--foreground)]/70 hover:text-[var(--foreground)] rounded-lg transition-colors flex items-center justify-center gap-2 font-medium"
                         >
                             <LogOut className="w-4 h-4" />

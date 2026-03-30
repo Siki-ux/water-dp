@@ -35,7 +35,6 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
     postgresql-client \
     gdal-bin \
-    libgdal34 \
     libpq5 \
     libgeos-c1v5 \
     && rm -rf /var/lib/apt/lists/*

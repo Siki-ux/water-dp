@@ -47,7 +47,7 @@ export function AppHeader() {
                 </Link>
 
                 <button
-                    onClick={() => signOut({ callbackUrl: "/portal/auth/signin" })}
+                    onClick={() => signOut({ callbackUrl: `${window.location.origin}/portal/auth/signin` })}
                     className="p-2 text-[var(--foreground)]/60 hover:text-red-400 transition-colors"
                     title={t('header.signOut')}
                 >

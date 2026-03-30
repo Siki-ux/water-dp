@@ -7,7 +7,11 @@ from app.core.exceptions import AppException, ResourceNotFoundException
 from app.services.ingestion_service import IngestionService
 
 
-def _make_upload_file(content: bytes = b"content", filename: str = "test.csv", content_type: str = "text/csv") -> MagicMock:
+def _make_upload_file(
+    content: bytes = b"content",
+    filename: str = "test.csv",
+    content_type: str = "text/csv",
+) -> MagicMock:
     """Create a MagicMock UploadFile with a real BytesIO backing file for seek/tell support."""
     upload_file = MagicMock()
     upload_file.filename = filename

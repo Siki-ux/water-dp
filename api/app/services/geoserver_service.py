@@ -385,7 +385,9 @@ class GeoServerService:
                             try:
                                 bounds[k] = float(v)
                             except (TypeError, ValueError):
-                                logger.warning("Non-numeric bound value for %s: %r", k, v)
+                                logger.warning(
+                                    "Non-numeric bound value for %s: %r", k, v
+                                )
 
                         srs = ft_data.get("srs", srs)
                         native_srs = ft_data.get("nativeCRS", native_srs)

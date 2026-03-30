@@ -2,11 +2,13 @@
 Geospatial API endpoints.
 """
 
+import json
 import logging
+import uuid as uuid_module
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, has_role
@@ -68,7 +70,9 @@ async def get_geo_layers(
         if layer_type:
             q = q.filter(GeoLayerModel.layer_type == layer_type)
         if is_published is not None:
-            q = q.filter(GeoLayerModel.is_published == ("true" if is_published else "false"))
+            q = q.filter(
+                GeoLayerModel.is_published == ("true" if is_published else "false")
+            )
         if is_public is not None:
             q = q.filter(GeoLayerModel.is_public == ("true" if is_public else "false"))
 
@@ -78,21 +82,23 @@ async def get_geo_layers(
 
         for layer in db_layers:
             seen_names.add(layer.layer_name)
-            mapped_layers.append({
-                "id": layer.id,
-                "layer_name": layer.layer_name,
-                "title": layer.title,
-                "description": layer.description,
-                "workspace": layer.workspace,
-                "store_name": layer.store_name,
-                "srs": layer.srs,
-                "layer_type": layer.layer_type,
-                "geometry_type": layer.geometry_type,
-                "is_published": layer.is_published == "true",
-                "is_public": layer.is_public == "true",
-                "created_at": layer.created_at,
-                "updated_at": layer.updated_at,
-            })
+            mapped_layers.append(
+                {
+                    "id": layer.id,
+                    "layer_name": layer.layer_name,
+                    "title": layer.title,
+                    "description": layer.description,
+                    "workspace": layer.workspace,
+                    "store_name": layer.store_name,
+                    "srs": layer.srs,
+                    "layer_type": layer.layer_type,
+                    "geometry_type": layer.geometry_type,
+                    "is_published": layer.is_published == "true",
+                    "is_public": layer.is_public == "true",
+                    "created_at": layer.created_at,
+                    "updated_at": layer.updated_at,
+                }
+            )
 
         # 2. Also fetch from GeoServer (merge in any that aren't already in DB)
         try:
@@ -103,32 +109,37 @@ async def get_geo_layers(
             for index, gs_layer in enumerate(gs_layers):
                 if gs_layer.name not in seen_names:
                     seen_names.add(gs_layer.name)
-                    mapped_layers.append({
-                        "id": 10000 + index,
-                        "layer_name": gs_layer.name,
-                        "title": gs_layer.title,
-                        "description": gs_layer.abstract,
-                        "workspace": gs_layer.workspace,
-                        "store_name": gs_layer.store,
-                        "srs": gs_layer.srs,
-                        "layer_type": "vector",
-                        "geometry_type": "polygon",
-                        "is_published": True,
-                        "is_public": True,
-                        "created_at": datetime.utcnow(),
-                        "updated_at": datetime.utcnow(),
-                    })
+                    mapped_layers.append(
+                        {
+                            "id": 10000 + index,
+                            "layer_name": gs_layer.name,
+                            "title": gs_layer.title,
+                            "description": gs_layer.abstract,
+                            "workspace": gs_layer.workspace,
+                            "store_name": gs_layer.store,
+                            "srs": gs_layer.srs,
+                            "layer_type": "vector",
+                            "geometry_type": "polygon",
+                            "is_published": True,
+                            "is_public": True,
+                            "created_at": datetime.utcnow(),
+                            "updated_at": datetime.utcnow(),
+                        }
+                    )
         except Exception as gs_err:
-            logger.warning(f"GeoServer not reachable, returning DB layers only: {gs_err}")
+            logger.warning(
+                f"GeoServer not reachable, returning DB layers only: {gs_err}"
+            )
 
         # 3. Paginate
         total = len(mapped_layers)
-        paged = mapped_layers[skip: skip + limit]
+        paged = mapped_layers[skip : skip + limit]
 
         return LayerListResponse(layers=paged, total=total, skip=skip, limit=limit)
 
     except Exception as error:
         import traceback
+
         traceback.print_exc()
         logger.error(f"Failed to fetch layers: {error}")
         raise HTTPException(status_code=500, detail=f"Error: {str(error)}")
@@ -299,7 +310,7 @@ async def unpublish_layer_from_geoserver(
 
 @router.get("/geoserver/layers")
 async def get_geoserver_layers(
-    workspace: Optional[str] = Query(None, description="Filter by workspace")
+    workspace: Optional[str] = Query(None, description="Filter by workspace"),
 ):
     """Get layers from GeoServer."""
     try:
@@ -444,11 +455,11 @@ async def get_layer_geojson(
         features = geoserver_service.get_wfs_features(
             layer_name=layer_name, workspace=workspace
         )
-        
+
         # Remove CRS field - GeoServer WFS returns a CRS that MapLibre rejects
         if isinstance(features, dict) and "crs" in features:
             del features["crs"]
-            
+
         return features
     except HTTPException:
         raise
@@ -482,7 +493,7 @@ async def get_sensors_in_layer(
                     schema_name = project.schema_name
             except Exception:
                 db.rollback()
-                pass # tenant is likely not a UUID, use it as schema_name
+                pass  # tenant is likely not a UUID, use it as schema_name
 
         sensors = db_service.get_sensors_in_layer(layer_name, schema_name=schema_name)
         return sensors
@@ -511,6 +522,7 @@ async def get_layer_bbox(
 
 
 # ─── Layer-Project Assignment ───────────────────────────────────────────
+
 
 @router.post("/layers/{layer_name}/assign", status_code=201)
 async def assign_layer_to_project(
@@ -573,11 +585,7 @@ async def get_layer_assignments(
     """Get all project assignments for a layer."""
     from app.models.layer_assignment import LayerProjectAssignment
 
-    rows = (
-        db.query(LayerProjectAssignment)
-        .filter_by(layer_name=layer_name)
-        .all()
-    )
+    rows = db.query(LayerProjectAssignment).filter_by(layer_name=layer_name).all()
     return {
         "layer_name": layer_name,
         "project_ids": [r.project_id for r in rows],
@@ -621,28 +629,28 @@ async def get_project_layers(
         matched = []
         for gs_layer in all_layers:
             if gs_layer.name in layer_names:
-                matched.append({
-                    "layer_name": gs_layer.name,
-                    "title": gs_layer.title,
-                    "workspace": gs_layer.workspace,
-                    "is_public": True,
-                })
+                matched.append(
+                    {
+                        "layer_name": gs_layer.name,
+                        "title": gs_layer.title,
+                        "workspace": gs_layer.workspace,
+                        "is_public": True,
+                    }
+                )
 
         return {"layers": matched, "total": len(matched)}
     except Exception as e:
         logger.error(f"Failed to fetch project layers from GeoServer: {e}")
         # Fallback: return just names
         return {
-            "layers": [{"layer_name": n, "title": n, "is_public": True} for n in layer_names],
+            "layers": [
+                {"layer_name": n, "title": n, "is_public": True} for n in layer_names
+            ],
             "total": len(layer_names),
         }
 
 
 # ─── GeoJSON Layer Creation ─────────────────────────────────────────────
-
-from fastapi import File, Form, UploadFile
-import json
-import uuid as uuid_module
 
 
 @router.post("/layers/from-geojson", status_code=201)
@@ -696,7 +704,12 @@ async def create_layer_from_geojson(
         raise HTTPException(status_code=400, detail="GeoJSON has no features")
 
     # 2. Determine layer metadata
-    safe_name = (layer_name or f"layer_{uuid_module.uuid4().hex[:8]}").replace(" ", "_").lower()
+    import re
+
+    raw_name = (
+        (layer_name or f"layer_{uuid_module.uuid4().hex[:8]}").replace(" ", "_").lower()
+    )
+    safe_name = re.sub(r"[^a-z0-9_]", "", raw_name)
     layer_title = title or safe_name
 
     # Detect geometry type from first feature
@@ -704,9 +717,10 @@ async def create_layer_from_geojson(
     geom_type = first_geom.get("type", "Polygon").lower()
 
     # 3. Create layer record in DB
-    from app.models.geospatial import GeoLayer, GeoFeature
     from geoalchemy2.shape import from_shape
     from shapely.geometry import shape
+
+    from app.models.geospatial import GeoFeature, GeoLayer
 
     existing = db.query(GeoLayer).filter_by(layer_name=safe_name).first()
     if existing:
@@ -764,8 +778,10 @@ async def create_layer_from_geojson(
             geoserver_service.create_workspace(workspace)
 
             # Initialize datastore if missing
-            from sqlalchemy.engine.url import make_url
             import socket
+
+            from sqlalchemy.engine.url import make_url
+
             db_url = make_url(settings.database_url)
             db_host_name = db_url.host or "database"
             try:
@@ -785,11 +801,15 @@ async def create_layer_from_geojson(
                     "dbtype": "postgis",
                     "schema": "water_dp",
                     "Expose primary keys": "true",
-                }
+                },
             )
 
             # Publish as SQL view pointing to geo_features table
-            sql = f"SELECT gf.feature_id, gf.geometry, gf.properties FROM geo_features gf WHERE gf.layer_id = '{safe_name}' AND gf.is_active = 'true'"
+            sql = (
+                "SELECT gf.feature_id, gf.geometry, gf.properties FROM geo_features gf WHERE gf.layer_id = '"
+                + safe_name
+                + "' AND gf.is_active = 'true'"
+            )
             geoserver_service.publish_sql_view(
                 layer_name=safe_name,
                 store_name="water_dp_geo",
@@ -804,11 +824,13 @@ async def create_layer_from_geojson(
         try:
             db.delete(layer_record)
             db.commit()
-        except:
-            pass
+        except Exception as rollback_err:
+            logger.error(
+                f"Rollback failed after GeoServer publish error: {rollback_err}"
+            )
         raise HTTPException(
             status_code=500,
-            detail=f"Layer saved to DB but failed to publish to GeoServer: {e}"
+            detail="Layer saved to DB but failed to publish to GeoServer",
         )
 
     return {
@@ -817,4 +839,3 @@ async def create_layer_from_geojson(
         "features_count": len(features),
         "geometry_type": geom_type,
     }
-

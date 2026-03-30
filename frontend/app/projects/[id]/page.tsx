@@ -27,8 +27,6 @@ async function getProjectSensors(id: string) {
     if (!session?.accessToken) return { sensors: [], error: "No session" };
 
     const apiUrl = getApiUrl();
-    console.log(`[ProjectMap] Fetching sensors from: ${apiUrl}/projects/${id}/sensors`);
-
     try {
         const res = await fetch(`${apiUrl}/projects/${id}/sensors`, {
             headers: { Authorization: `Bearer ${session.accessToken}` },
@@ -42,8 +40,6 @@ async function getProjectSensors(id: string) {
         }
 
         const things: any[] = await res.json();
-        console.log(`[ProjectMap] Fetched ${things.length} sensors.`);
-
         // Map API 'Thing' -> Frontend 'Sensor'
         const ACTIVE_THRESHOLD_MS = 24 * 60 * 60 * 1000;
         const now = Date.now();

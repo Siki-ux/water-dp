@@ -27,9 +27,18 @@ from uuid import UUID
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import AuthorizationException, ResourceNotFoundException, ValidationException
+from app.core.exceptions import (
+    AuthorizationException,
+    ResourceNotFoundException,
+    ValidationException,
+)
 from app.models.user_context import Project, ProjectMember
-from app.schemas.rbac import PermissionsResponse, ProjectMemberCreate, ProjectMemberResponse, ProjectMemberUpdate
+from app.schemas.rbac import (
+    PermissionsResponse,
+    ProjectMemberCreate,
+    ProjectMemberResponse,
+    ProjectMemberUpdate,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +84,9 @@ def parse_group_roles(jwt_groups: List[str]) -> Dict[str, str]:
             role = SUBGROUP_TO_ROLE[parts[-1]]
             # Keep highest role if somehow two subgroup paths exist for same parent
             existing = result.get(parent)
-            if existing is None or ROLE_ORDER.get(role, 0) > ROLE_ORDER.get(existing, 0):
+            if existing is None or ROLE_ORDER.get(role, 0) > ROLE_ORDER.get(
+                existing, 0
+            ):
                 result[parent] = role
         else:
             # Legacy flat group membership → default viewer
@@ -106,9 +117,9 @@ def is_realm_admin(user: Dict[str, Any]) -> bool:
 class EffectivePermissions:
     # Tier info
     is_realm_admin: bool
-    group_role: Optional[str]       # Tier 1 role for this project's Keycloak group
-    project_role: Optional[str]     # Tier 2 role from project_members table
-    effective_role: str             # Resolved final role
+    group_role: Optional[str]  # Tier 1 role for this project's Keycloak group
+    project_role: Optional[str]  # Tier 2 role from project_members table
+    effective_role: str  # Resolved final role
 
     # Project-level capabilities
     can_view: bool
@@ -161,7 +172,9 @@ class EffectivePermissions:
         )
 
     @classmethod
-    def no_access(cls, *, is_realm_admin_: bool = False, highest_group_role: Optional[str] = None) -> "EffectivePermissions":
+    def no_access(
+        cls, *, is_realm_admin_: bool = False, highest_group_role: Optional[str] = None
+    ) -> "EffectivePermissions":
         hr = highest_group_role or ""
         sms_access = is_realm_admin_ or hr in (ROLE_EDITOR, "admin")
         return cls(
@@ -212,7 +225,9 @@ class PermissionResolver:
     """
 
     @staticmethod
-    def resolve(user: Dict[str, Any], project: Project, db: Session) -> EffectivePermissions:
+    def resolve(
+        user: Dict[str, Any], project: Project, db: Session
+    ) -> EffectivePermissions:
         user_sub = str(user.get("sub", ""))
         jwt_groups: List[str] = user.get("groups", [])
 
@@ -306,6 +321,7 @@ class PermissionResolver:
         # Legacy: try to fetch from Keycloak and cache in the column
         try:
             from app.services.keycloak_service import KeycloakService
+
             group = KeycloakService.get_group(project.authorization_provider_group_id)
             if group and group.get("name"):
                 name = group["name"]
@@ -417,9 +433,7 @@ class RBACService:
             raise AuthorizationException(message="Not authorized to view this project")
 
         members = (
-            db.query(ProjectMember)
-            .filter(ProjectMember.project_id == project_id)
-            .all()
+            db.query(ProjectMember).filter(ProjectMember.project_id == project_id).all()
         )
 
         result = []
@@ -429,6 +443,7 @@ class RBACService:
             email = None
             try:
                 from app.services.keycloak_service import KeycloakService
+
                 kc_user = KeycloakService.get_user_by_id(m.user_id)
                 if kc_user:
                     username = kc_user.get("username")
@@ -471,6 +486,7 @@ class RBACService:
 
         if not target_user_id and target_username:
             from app.services.keycloak_service import KeycloakService
+
             kc_user = KeycloakService.get_user_by_username(target_username)
             if not kc_user:
                 raise ResourceNotFoundException(
@@ -481,6 +497,7 @@ class RBACService:
         elif target_user_id:
             try:
                 from app.services.keycloak_service import KeycloakService
+
                 kc_user = KeycloakService.get_user_by_id(target_user_id)
                 if kc_user:
                     target_username = kc_user.get("username")
@@ -559,6 +576,7 @@ class RBACService:
         email = None
         try:
             from app.services.keycloak_service import KeycloakService
+
             kc_user = KeycloakService.get_user_by_id(target_user_id)
             if kc_user:
                 username = kc_user.get("username")

@@ -2,6 +2,7 @@
 """
 Start the Water Data Platform server with Swagger documentation.
 """
+
 import sys
 import time
 import webbrowser

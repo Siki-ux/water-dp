@@ -153,11 +153,29 @@ services:
     networks:
       - water_dp_network
 
+  # Water Data Platform Frontend
+  frontend:
+    image: ghcr.io/${GITHUB_REPOSITORY_LOWER}/water_dp_frontend:latest
+    container_name: water-dp-frontend
+    restart: unless-stopped
+    environment:
+      - NEXTAUTH_URL=http://${PUBLIC_HOSTNAME:-localhost}:3000/portal
+      - NEXTAUTH_SECRET=${SECRET_KEY}
+      - NEXT_PUBLIC_API_URL=http://${PUBLIC_HOSTNAME:-localhost}:8000
+      - NEXT_PUBLIC_GEOSERVER_URL=http://${PUBLIC_HOSTNAME:-localhost}:8080/geoserver
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - water_dp_network
+
   # --- TimeIO Services ---
 
   # MQTT Broker (Mosquitto)
   mqtt-broker:
-    image: iegomez/mosquitto-go-auth:latest
+    image: iegomez/mosquitto-go-auth:2.1.0
     container_name: timeio_mqtt
     restart: unless-stopped
     env_file:
@@ -234,7 +252,7 @@ services:
 
   # FROST (SensorThings API)
   frost:
-    image: fraunhoferiosb/frost-server:latest
+    image: fraunhoferiosb/frost-server:2.5.3
     container_name: timeio_frost
     restart: unless-stopped
     env_file:

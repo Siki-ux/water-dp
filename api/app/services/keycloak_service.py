@@ -199,19 +199,29 @@ class KeycloakService:
             return None
 
     @classmethod
-    def create_user(cls, username: str, email: str, password: str, first_name: str = "", last_name: str = "") -> str:
+    def create_user(
+        cls,
+        username: str,
+        email: str,
+        password: str,
+        first_name: str = "",
+        last_name: str = "",
+    ) -> str:
         """Create a new Keycloak user and return their UUID."""
         from fastapi import HTTPException
+
         try:
             admin = cls.get_admin_client()
-            user_id = admin.create_user({
-                "username": username,
-                "email": email,
-                "firstName": first_name,
-                "lastName": last_name,
-                "enabled": True,
-                "emailVerified": True,
-            })
+            user_id = admin.create_user(
+                {
+                    "username": username,
+                    "email": email,
+                    "firstName": first_name,
+                    "lastName": last_name,
+                    "enabled": True,
+                    "emailVerified": True,
+                }
+            )
             # Explicitly set password — some python-keycloak versions ignore
             # the credentials field in the create payload.
             admin.set_user_password(user_id, password, temporary=False)
@@ -220,12 +230,24 @@ class KeycloakService:
             error_msg = str(e)
             logger.error(f"Error creating user '{username}': {error_msg}")
             cls._admin_client = None
-            if "409" in error_msg or "Conflict" in error_msg or "already exists" in error_msg.lower():
-                raise HTTPException(status_code=400, detail="Username or email already exists")
+            if (
+                "409" in error_msg
+                or "Conflict" in error_msg
+                or "already exists" in error_msg.lower()
+            ):
+                raise HTTPException(
+                    status_code=400, detail="Username or email already exists"
+                )
             raise HTTPException(status_code=500, detail="Failed to create user")
 
     @classmethod
-    def update_profile(cls, user_id: str, first_name: Optional[str], last_name: Optional[str], email: Optional[str]):
+    def update_profile(
+        cls,
+        user_id: str,
+        first_name: Optional[str],
+        last_name: Optional[str],
+        email: Optional[str],
+    ):
         """Update a user's profile fields in Keycloak."""
         try:
             admin = cls.get_admin_client()
@@ -481,8 +503,12 @@ class KeycloakService:
             for k, v in attributes.items():
                 existing_attrs[k] = [str(v)] if not isinstance(v, list) else v
 
-            admin.update_group(group_id=group_id, payload={"attributes": existing_attrs})
-            logger.info(f"Set attributes on group {group_id}: {list(attributes.keys())}")
+            admin.update_group(
+                group_id=group_id, payload={"attributes": existing_attrs}
+            )
+            logger.info(
+                f"Set attributes on group {group_id}: {list(attributes.keys())}"
+            )
         except Exception as e:
             logger.error(f"Error setting attributes on group {group_id}: {e}")
             cls._admin_client = None

@@ -76,7 +76,6 @@ class Project(Base, BaseModel):
         "ProjectMember", back_populates="project", cascade="all, delete-orphan"
     )
 
-
     # We can't use a standard relationship for sensors easily because they aren't in this DB (conceptually),
     # but we can store the association. If we want to query them, we'd use the association table.
     # To make it accessible as a list of IDs:
@@ -90,8 +89,6 @@ class Project(Base, BaseModel):
     # To actually access the sensor_ids, we might not need a relationship property
     # unless we map 'sensor_id' to a class.
     # Let's just use the table for joins.
-
-
 
 
 class Dashboard(Base, BaseModel):

@@ -1,5 +1,5 @@
 """
-Application configuration management using Pydantic Settings.
+Application configuration using Pydantic Settings.
 """
 
 from typing import List, Optional
@@ -9,7 +9,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    """Application settings with environment variable support."""
+    """Application settings loaded from environment variables."""
 
     # Application
     app_name: str = Field(default="Water Data Platform", alias="APP_NAME")
@@ -37,7 +37,7 @@ class Settings(BaseSettings):
         default="http://localhost:8080/geoserver", alias="GEOSERVER_URL"
     )
     geoserver_username: str = Field(default="admin", alias="GEOSERVER_USERNAME")
-    geoserver_password: str = Field(default="geoserver", alias="GEOSERVER_PASSWORD")
+    geoserver_password: str = Field(alias="GEOSERVER_PASSWORD")
     geoserver_workspace: str = Field(default="water_data", alias="GEOSERVER_WORKSPACE")
     geoserver_timeout: int = Field(default=30, alias="GEOSERVER_TIMEOUT")
     geoserver_db_schema: str = Field(
@@ -76,8 +76,9 @@ class Settings(BaseSettings):
         default=None, alias="KEYCLOAK_ADMIN_PASSWORD"
     )
 
-    # Monitoring
-    sentry_dsn: Optional[str] = Field(default=None, alias="SENTRY_DSN")
+    # Admin roles (configurable instead of hardcoded)
+    admin_roles: str = Field(default="admin", alias="ADMIN_ROLES")
+
     # Monitoring
     sentry_dsn: Optional[str] = Field(default=None, alias="SENTRY_DSN")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
@@ -102,28 +103,36 @@ class Settings(BaseSettings):
     timeio_db_host: str = Field(default="localhost", alias="TIMEIO_DB_HOST")
     timeio_db_port: int = Field(default=5432, alias="TIMEIO_DB_PORT")
     timeio_db_user: str = Field(default="postgres", alias="TIMEIO_DB_USER")
-    timeio_db_password: str = Field(default="postgres", alias="TIMEIO_DB_PASSWORD")
+    timeio_db_password: str = Field(alias="TIMEIO_DB_PASSWORD")
     timeio_db_name: str = Field(default="postgres", alias="TIMEIO_DB_NAME")
     mqtt_broker_host: str = Field(default="mqtt-broker", alias="MQTT_BROKER_HOST")
     mqtt_username: str = Field(default="frontendbus", alias="MQTT_USERNAME")
-    mqtt_password: str = Field(default="frontendbus", alias="MQTT_PASSWORD")
+    mqtt_password: str = Field(alias="MQTT_PASSWORD")
     mqtt_topic_qaqc_done: str = Field(default="qaqc_done", alias="MQTT_TOPIC_QAQC_DONE")
-    mqtt_topic_data_parsed: str = Field(default="data_parsed", alias="MQTT_TOPIC_DATA_PARSED")
+    mqtt_topic_data_parsed: str = Field(
+        default="data_parsed", alias="MQTT_TOPIC_DATA_PARSED"
+    )
     topic_config_db_update: str = Field(
         default="configdb_update", alias="TOPIC_CONFIG_DB_UPDATE"
     )
-    fernet_encryption_secret: str = Field(
-        default="CKoB---DEFAULT-DUMMY-SECRET---0exKVH0QDLy1B=",
-        alias="FERNET_ENCRYPTION_SECRET",
-    )
+    fernet_encryption_secret: str = Field(alias="FERNET_ENCRYPTION_SECRET")
 
-    # MinIO Configuration
+    # MinIO
     minio_url: str = Field(default="minio:9000", alias="MINIO_URL")
-    minio_access_key: str = Field(default="minioadmin", alias="MINIO_ACCESS_KEY")
-    minio_secret_key: str = Field(default="minioadmin", alias="MINIO_SECRET_KEY")
+    minio_access_key: str = Field(alias="MINIO_ACCESS_KEY")
+    minio_secret_key: str = Field(alias="MINIO_SECRET_KEY")
     minio_secure: bool = Field(default=False, alias="MINIO_SECURE")
 
-    model_config = {"env_file": ".env", "case_sensitive": False, "extra": "ignore"}
+    model_config = {
+        "env_file": ("../.env", ".env"),
+        "case_sensitive": False,
+        "extra": "ignore",
+    }
+
+    @property
+    def admin_roles_list(self) -> List[str]:
+        """Parse comma-separated admin roles."""
+        return [r.strip() for r in self.admin_roles.split(",") if r.strip()]
 
     @property
     def cors_origins_list(self) -> List[str]:
@@ -136,7 +145,6 @@ class Settings(BaseSettings):
             try:
                 return json.loads(self.cors_origins)
             except json.JSONDecodeError:
-                # Fallback to comma split if json parse fails
                 pass
         return [origin.strip() for origin in self.cors_origins.split(",")]
 
@@ -148,17 +156,10 @@ class Settings(BaseSettings):
         try:
             return make_url(self.database_url).database
         except Exception:
-            # Fallback for simple string parsing if sqlalchemy fails or url is invalid
             if "/" in self.database_url:
                 with_params = self.database_url.split("/")[-1]
                 return with_params.split("?")[0]
             return "water_app"
 
-    # Thing Management & Verification
-    thing_management_api_url: str = Field(
-        default="http://thing-management-api:8002", alias="THING_MANAGEMENT_API_URL"
-    )
 
-
-# Global settings instance
 settings = Settings()

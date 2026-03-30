@@ -53,7 +53,9 @@ class AlertEvaluator:
                 schema_map[schema].append(d)
 
             for schema_name, schema_definitions in schema_map.items():
-                logger.debug(f"Evaluating {len(schema_definitions)} rules for schema {schema_name}")
+                logger.debug(
+                    f"Evaluating {len(schema_definitions)} rules for schema {schema_name}"
+                )
                 thing_service = ThingService(schema_name)
 
                 for definition in schema_definitions:
@@ -61,8 +63,7 @@ class AlertEvaluator:
                         # Fetch latest observations for the datastream
                         # We only need the latest 1
                         observations = thing_service.get_observations(
-                            datastream_uuid=definition.datastream_id,
-                            limit=1
+                            datastream_uuid=definition.datastream_id, limit=1
                         )
 
                         if not observations:
@@ -72,7 +73,9 @@ class AlertEvaluator:
                         self._evaluate_sensor_definition(definition, latest_obs.result)
 
                     except Exception as e:
-                        logger.error(f"Failed to evaluate rule {definition.id} for datastream {definition.datastream_id}: {e}")
+                        logger.error(
+                            f"Failed to evaluate rule {definition.id} for datastream {definition.datastream_id}: {e}"
+                        )
 
         except Exception as e:
             logger.error(f"Error in periodic alert evaluation: {e}")
@@ -217,10 +220,11 @@ class AlertEvaluator:
                 "window_hours": 24     # how far back to look
             }
         """
-        import json
+        from datetime import datetime, timedelta
+
         import psycopg2
         from psycopg2 import sql as pgsql
-        from datetime import datetime, timedelta
+
         from app.core.config import settings
 
         # Flag level → minimum annotation float value
@@ -256,7 +260,11 @@ class AlertEvaluator:
             try:
                 for definition in definitions:
                     try:
-                        schema = definition.project.schema_name if definition.project else None
+                        schema = (
+                            definition.project.schema_name
+                            if definition.project
+                            else None
+                        )
                         if not schema:
                             continue
 
@@ -302,7 +310,10 @@ class AlertEvaluator:
                             # Resolve active alert if condition no longer met
                             existing = (
                                 self.db.query(Alert)
-                                .filter(Alert.definition_id == definition.id, Alert.status == "active")
+                                .filter(
+                                    Alert.definition_id == definition.id,
+                                    Alert.status == "active",
+                                )
                                 .first()
                             )
                             if existing:
@@ -310,7 +321,9 @@ class AlertEvaluator:
                                 self.db.commit()
 
                     except Exception as e:
-                        logger.error(f"Failed to evaluate QA/QC rule {definition.id}: {e}")
+                        logger.error(
+                            f"Failed to evaluate QA/QC rule {definition.id}: {e}"
+                        )
             finally:
                 conn.close()
 
@@ -324,9 +337,11 @@ class AlertEvaluator:
         Called when TSM publishes a qaqc_done MQTT message, so evaluation is
         event-driven rather than on a polling schedule.
         """
-        import psycopg2
         from datetime import datetime, timedelta
+
+        import psycopg2
         from psycopg2 import sql as pgsql
+
         from app.core.config import settings
 
         FLAG_THRESHOLDS = {
@@ -362,7 +377,11 @@ class AlertEvaluator:
             try:
                 for definition in definitions:
                     try:
-                        schema = definition.project.schema_name if definition.project else None
+                        schema = (
+                            definition.project.schema_name
+                            if definition.project
+                            else None
+                        )
                         if not schema:
                             continue
 
@@ -393,7 +412,12 @@ class AlertEvaluator:
                                     AND o.result_time >= %s
                                     """
                                 ).format(schema=pgsql.Identifier(schema)),
-                                (min_flag_value, int(definition.datastream_id), thing_uuid, since),
+                                (
+                                    min_flag_value,
+                                    int(definition.datastream_id),
+                                    thing_uuid,
+                                    since,
+                                ),
                             )
                             row = cur.fetchone()
 
@@ -411,7 +435,10 @@ class AlertEvaluator:
                         else:
                             existing = (
                                 self.db.query(Alert)
-                                .filter(Alert.definition_id == definition.id, Alert.status == "active")
+                                .filter(
+                                    Alert.definition_id == definition.id,
+                                    Alert.status == "active",
+                                )
                                 .first()
                             )
                             if existing:
@@ -419,7 +446,9 @@ class AlertEvaluator:
                                 self.db.commit()
 
                     except Exception as e:
-                        logger.error(f"Failed to evaluate QA/QC rule {definition.id} for thing {thing_uuid}: {e}")
+                        logger.error(
+                            f"Failed to evaluate QA/QC rule {definition.id} for thing {thing_uuid}: {e}"
+                        )
             finally:
                 conn.close()
 

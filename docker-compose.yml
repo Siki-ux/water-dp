@@ -192,7 +192,7 @@ services:
       dockerfile: Dockerfile
     container_name: water-dp-worker
     # restart: unless-stopped
-    command: celery -A app.core.celery_app.celery_app worker -B --loglevel=debug -Q imports,computations,celery
+    command: celery -A app.core.celery_app.celery_app worker -B --loglevel=info -Q imports,computations,celery
     env_file: .env
     environment:
       - DATABASE_URL=postgresql://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-postgres}@postgres-app:5432/water_app

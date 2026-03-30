@@ -10,7 +10,6 @@ import json
 import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-from uuid import UUID
 
 import psycopg2
 from psycopg2.extras import RealDictCursor

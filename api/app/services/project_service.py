@@ -26,7 +26,11 @@ from app.schemas.user_context import (
     ProjectUpdate,
 )
 from app.services.keycloak_service import KeycloakService
-from app.services.rbac_service import PermissionResolver, is_realm_admin, parse_group_roles
+from app.services.rbac_service import (
+    PermissionResolver,
+    is_realm_admin,
+    parse_group_roles,
+)
 from app.services.thing_service import ThingService
 
 # Import TimeIO service layer for enhanced operations
@@ -41,12 +45,11 @@ logger = logging.getLogger(__name__)
 # Legacy helpers (kept for backward compat, not used in hot path)
 # ------------------------------------------------------------------
 
+
 def _is_project_admin(user: Dict[str, Any]) -> bool:
     """Check if user has 'admin' client role on timeIO-client (legacy check)."""
     client_roles = (
-        user.get("resource_access", {})
-        .get("timeIO-client", {})
-        .get("roles", [])
+        user.get("resource_access", {}).get("timeIO-client", {}).get("roles", [])
     )
     return "admin" in client_roles
 
@@ -88,16 +91,28 @@ class ProjectService:
         perms = PermissionResolver.resolve(user, project, db)
 
         if required_role == "viewer" and not perms.can_view:
-            logger.warning(f"Access denied for user {user.get('sub')} on project {project_id}")
-            raise AuthorizationException(message="Not authorized to access this project")
+            logger.warning(
+                f"Access denied for user {user.get('sub')} on project {project_id}"
+            )
+            raise AuthorizationException(
+                message="Not authorized to access this project"
+            )
 
         if required_role == "editor" and not perms.can_edit_settings:
-            logger.warning(f"Edit access denied for user {user.get('sub')} on project {project_id}")
-            raise AuthorizationException(message="Editor access required for this operation")
+            logger.warning(
+                f"Edit access denied for user {user.get('sub')} on project {project_id}"
+            )
+            raise AuthorizationException(
+                message="Editor access required for this operation"
+            )
 
         if required_role == "owner" and not perms.can_delete:
-            logger.warning(f"Owner access denied for user {user.get('sub')} on project {project_id}")
-            raise AuthorizationException(message="Owner access required for this operation")
+            logger.warning(
+                f"Owner access denied for user {user.get('sub')} on project {project_id}"
+            )
+            raise AuthorizationException(
+                message="Owner access required for this operation"
+            )
 
         # Lazy resolve schema name if missing
         ProjectService._ensure_schema_name(db, project)
@@ -138,8 +153,7 @@ class ProjectService:
                 input_group_id in group_roles
                 or (group_name_for_check and group_name_for_check in group_roles)
                 or any(
-                    input_group_id in (path, path.lstrip("/"))
-                    for path in jwt_groups
+                    input_group_id in (path, path.lstrip("/")) for path in jwt_groups
                 )
             )
             if not in_group:
@@ -152,7 +166,9 @@ class ProjectService:
 
         # Resolve schema AND definitive Group ID (ensure we store UUID if possible)
         # We need a new internal version of resolve_schema_for_group that returns both
-        schema, resolved_group_id = ProjectService._resolve_schema_and_id_for_group(input_group_id)
+        schema, resolved_group_id = ProjectService._resolve_schema_and_id_for_group(
+            input_group_id
+        )
 
         # Default to input if resolution fails (backward compatibility)
         final_group_id = resolved_group_id or input_group_id
@@ -164,11 +180,15 @@ class ProjectService:
         # Resolve group name for JWT matching (avoid per-request Admin API calls later)
         group_name = None
         try:
-            group_data = KeycloakService.get_group(final_group_id) if final_group_id else None
+            group_data = (
+                KeycloakService.get_group(final_group_id) if final_group_id else None
+            )
             if group_data:
                 group_name = group_data.get("name")
         except Exception as e:
-            logger.warning(f"Could not resolve group name for group {final_group_id}: {e}")
+            logger.warning(
+                f"Could not resolve group name for group {final_group_id}: {e}"
+            )
 
         db_project = Project(
             name=project_in.name,
@@ -185,6 +205,7 @@ class ProjectService:
         # they have owner-equivalent access everywhere via is_realm_admin check).
         if not is_realm_admin(user):
             import uuid as _uuid
+
             owner_member = ProjectMember(
                 id=_uuid.uuid4(),
                 project_id=db_project.id,
@@ -198,14 +219,22 @@ class ProjectService:
         return db_project
 
     @staticmethod
-    def _resolve_schema_and_id_for_group(group_id: str) -> tuple[Optional[str], Optional[str]]:
+    def _resolve_schema_and_id_for_group(
+        group_id: str,
+    ) -> tuple[Optional[str], Optional[str]]:
         """
         Resolve schema name AND definitive Keycloak ID for a Keycloak group.
         Returns: (schema_name, resolved_group_uuid)
         """
         # 1. Detection: Is it a UUID?
         import re
-        is_uuid = bool(re.match(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", group_id.lower()))
+
+        is_uuid = bool(
+            re.match(
+                r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                group_id.lower(),
+            )
+        )
 
         schema = None
         keycloak_group_data = None
@@ -218,7 +247,9 @@ class ProjectService:
         else:
             # It's likely a name or path string
             clean_name = group_id.split(":")[-1].split("/")[-1]
-            logger.info(f"Resolution: Input '{group_id}' looks like a name/path. Searching by '{clean_name}'...")
+            logger.info(
+                f"Resolution: Input '{group_id}' looks like a name/path. Searching by '{clean_name}'..."
+            )
             keycloak_group_data = KeycloakService.get_group_by_name(clean_name)
             if keycloak_group_data:
                 # Update schema from attribute if it exists on the found group
@@ -237,7 +268,9 @@ class ProjectService:
                 else:
                     schema_name = raw_name
 
-                logger.info(f"Resolved project context from Keycloak group: {schema_name}")
+                logger.info(
+                    f"Resolved project context from Keycloak group: {schema_name}"
+                )
 
                 timeio_db = TimeIODatabase()
                 config_project = timeio_db.get_config_project_by_name(schema_name)
@@ -247,15 +280,22 @@ class ProjectService:
                     resolved_id = keycloak_group_data.get("id")
                     if resolved_id:
                         try:
-                            KeycloakService.set_group_attributes(resolved_id, {
-                                "schema_name": schema,
-                                "config_project_uuid": str(config_project.get("uuid", "")),
-                            })
+                            KeycloakService.set_group_attributes(
+                                resolved_id,
+                                {
+                                    "schema_name": schema,
+                                    "config_project_uuid": str(
+                                        config_project.get("uuid", "")
+                                    ),
+                                },
+                            )
                             logger.info(
                                 f"Stored schema_name '{schema}' as group attribute on {resolved_id}"
                             )
                         except Exception as e:
-                            logger.warning(f"Could not store schema as group attribute: {e}")
+                            logger.warning(
+                                f"Could not store schema as group attribute: {e}"
+                            )
                 else:
                     # No config_db entry — pre-derive a clean schema name
                     clean = schema_name.lower().strip()
@@ -268,9 +308,12 @@ class ProjectService:
                     resolved_id = keycloak_group_data.get("id")
                     if resolved_id:
                         try:
-                            KeycloakService.set_group_attributes(resolved_id, {
-                                "schema_name": schema,
-                            })
+                            KeycloakService.set_group_attributes(
+                                resolved_id,
+                                {
+                                    "schema_name": schema,
+                                },
+                            )
                         except Exception as e:
                             logger.warning(f"Could not store pre-derived schema: {e}")
             elif not is_uuid:
@@ -280,10 +323,16 @@ class ProjectService:
                 clean = re.sub(r"[^a-z0-9_]", "_", clean)
                 clean = re.sub(r"_+", "_", clean).strip("_")
                 schema = f"user_{clean}"
-                logger.info(f"No Keycloak group found for '{group_id}'; derived schema '{schema}' from string.")
-        
+                logger.info(
+                    f"No Keycloak group found for '{group_id}'; derived schema '{schema}' from string."
+                )
+
         # Return both
-        resolved_group_uuid = keycloak_group_data.get("id") if keycloak_group_data else (group_id if is_uuid else None)
+        resolved_group_uuid = (
+            keycloak_group_data.get("id")
+            if keycloak_group_data
+            else (group_id if is_uuid else None)
+        )
         return schema, resolved_group_uuid
 
     @staticmethod
@@ -306,18 +355,26 @@ class ProjectService:
         if not project.authorization_provider_group_id:
             return None
 
-        logger.info(f"Lazily resolving schema for project {project.id} from group {project.authorization_provider_group_id}")
-        schema = ProjectService._resolve_schema_for_group(project.authorization_provider_group_id)
-        
+        logger.info(
+            f"Lazily resolving schema for project {project.id} from group {project.authorization_provider_group_id}"
+        )
+        schema = ProjectService._resolve_schema_for_group(
+            project.authorization_provider_group_id
+        )
+
         if schema:
             project.schema_name = schema
             try:
                 db.commit()
-                logger.info(f"Persisted lazily resolved schema '{schema}' to project {project.id}")
+                logger.info(
+                    f"Persisted lazily resolved schema '{schema}' to project {project.id}"
+                )
             except Exception as e:
                 db.rollback()
-                logger.warning(f"Failed to persist lazily resolved schema for project {project.id}: {e}")
-        
+                logger.warning(
+                    f"Failed to persist lazily resolved schema for project {project.id}: {e}"
+                )
+
         return schema
 
     @staticmethod
@@ -456,7 +513,9 @@ class ProjectService:
     @staticmethod
     def delete_project(db: Session, project_id: UUID, user: Dict[str, Any]) -> Project:
         # Requires can_delete (owner, group admin, or realm admin)
-        project = ProjectService._check_access(db, project_id, user, required_role="owner")
+        project = ProjectService._check_access(
+            db, project_id, user, required_role="owner"
+        )
         db.delete(project)
         db.commit()
         return project

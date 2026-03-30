@@ -39,8 +39,6 @@ async function refreshAccessToken(token: JWT): Promise<JWT> {
         }
 
     } catch (error) {
-        console.error("Error refreshing access token", error)
-
         return {
             ...token,
             error: "RefreshAccessTokenError",
@@ -69,7 +67,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     params.append('password', credentials.password as string);
                     params.append('grant_type', 'password'); // Required by OAuth2PasswordRequestForm
 
-                    console.log(`Authorize called for user: ${credentials.username}`);
                     const response = await axios.post(`${apiUrl}/auth/token`, params, {
                         headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
                     })
@@ -99,7 +96,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     } else if (error instanceof Error) {
                         msg = error.message;
                     }
-                    console.error("Auth error:", msg);
                     return null
                 }
             }
@@ -112,7 +108,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         async jwt({ token, user, account }) {
             // Initial sign in
             if (user && account) {
-                console.log("Initial sign in, expiresAt:", user.expiresAt);
                 return {
                     accessToken: user.accessToken,
                     refreshToken: user.refreshToken,
@@ -125,13 +120,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             // Subtracting 10 seconds for safety margin
             const now = Date.now();
             const expiry = (token.expiresAt as number) * 1000;
-            console.log(`Checking token expiry: Now=${now}, Expiry=${expiry}, Diff=${expiry - now}`);
-
             if (token.expiresAt && now < (expiry - 10000)) {
                 return token
             }
 
-            console.log("Token expired, refreshing...");
             // Access token has expired, try to update it
             return refreshAccessToken(token)
         },
@@ -149,6 +141,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
     },
     trustHost: true,
-    debug: true,
+    debug: process.env.NODE_ENV === 'development',
     basePath: "/api/auth",
 })

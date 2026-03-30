@@ -29,8 +29,9 @@ def test_run_computation_task_success(
     mock_module_from_spec.return_value = mock_module
 
     # Run task (ComputationContext will be created internally)
-    with patch("app.computations.context.ComputationContext"), patch(
-        "app.core.database.SessionLocal"
+    with (
+        patch("app.computations.context.ComputationContext"),
+        patch("app.core.database.SessionLocal"),
     ):
         result = run_computation_task("mock_script", {})
 

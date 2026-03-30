@@ -38,7 +38,6 @@ export default function SensorLinkModal({
             });
             if (!res.ok) throw new Error("Failed to fetch available sensors");
             const data = await res.json();
-            console.log("Available sensors data:", data);
             setAvailableSensors(data);
         } catch (err: any) {
             setError(err.message);

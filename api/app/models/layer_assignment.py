@@ -3,6 +3,7 @@ Layer-Project assignment model for associating GeoServer layers with projects.
 """
 
 from sqlalchemy import Column, DateTime, Index, Integer, String, func
+
 from app.core.database import Base
 
 

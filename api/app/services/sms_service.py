@@ -2,17 +2,18 @@
 SMS Service
 Orchestrates SMS-related operations, aggregating data from FROST and ConfigDB.
 """
-import logging
+
 import asyncio
+import logging
 from typing import Any, Dict, List, Optional
 
+from app.core.database import SessionLocal
 from app.services.async_thing_service import AsyncThingService
+from app.services.project_service import ProjectService
+from app.services.rbac_service import is_realm_admin, parse_group_roles
+
 # from app.services.timeio.timeio_db import TimeIODatabase  # Moved locally to break circularity
 from app.services.timeio.crypto_utils import decrypt_password
-from app.schemas.sms import SensorSMS
-from app.services.project_service import ProjectService
-from app.services.rbac_service import parse_group_roles, is_realm_admin
-from app.core.database import SessionLocal
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +59,7 @@ class SMSService:
         If user is provided, filters to only schemas accessible via their Keycloak groups.
         """
         from app.services.timeio.timeio_db import TimeIODatabase
+
         db = TimeIODatabase()
         offset = (page - 1) * page_size
 
@@ -70,37 +72,40 @@ class SMSService:
 
         # Fetch from ConfigDB with optional schema filter
         db_result = db.get_all_sensors_paginated(
-            limit=page_size, offset=offset, schemas=accessible_schemas,
-            search=search, ingest_type=ingest_type,
+            limit=page_size,
+            offset=offset,
+            schemas=accessible_schemas,
+            search=search,
+            ingest_type=ingest_type,
         )
         items_db = db_result["items"]
         total = db_result["total"]
 
         if not items_db:
-             return {"items": [], "total": total}
+            return {"items": [], "total": total}
 
         # 2. Enrich with FROST Data (Optional but good for completeness)
         # We need 'properties' which are not in config_db.thing.
         # We have schema_name for each item.
-        # Strategy: distinct schemas -> async fetch tasks? 
-        # Or just return what we have? 
+        # Strategy: distinct schemas -> async fetch tasks?
+        # Or just return what we have?
         # User said "view details". Properties might be important.
         # Let's try to fetch properties for each item.
         # Since items are mingled, valid strategy:
         # Group by schema -> Fetch list of IDs -> Merge.
         # But we already have the PAGE. We just need to enrich these specific 20 items.
-        
+
         enriched_items = []
-        
+
         # We will loop and fetch. For 20 items, 20 async calls is acceptable.
         # We can optimize by grouping by schema if needed.
-        
+
         async def fetch_frost_details(item):
             schema = item["schema_name"]
             uuid = item["uuid"]
             if not schema:
-                return {} # No schema, no FROST data
-                
+                return {}  # No schema, no FROST data
+
             try:
                 service = AsyncThingService(schema)
                 # We only need properties and location?
@@ -110,23 +115,27 @@ class SMSService:
                     return {
                         "properties": thing.properties,
                         "latitude": thing.location.latitude if thing.location else None,
-                        "longitude": thing.location.longitude if thing.location else None
+                        "longitude": thing.location.longitude
+                        if thing.location
+                        else None,
                     }
             except Exception as e:
-                logger.warning(f"Failed to fetch FROST data for {uuid} in {schema}: {e}")
+                logger.warning(
+                    f"Failed to fetch FROST data for {uuid} in {schema}: {e}"
+                )
             return {}
 
         # Run concurrently
         tasks = [fetch_frost_details(item) for item in items_db]
         frost_results = await asyncio.gather(*tasks)
-        
+
         for item, frost_data in zip(items_db, frost_results):
             # Merge
             sensor_data = {
                 "uuid": item["uuid"],
                 "name": item["name"],
                 "description": item["description"],
-                "project_name": item["project_name"], # Extra useful info
+                "project_name": item["project_name"],  # Extra useful info
                 "schema_name": item["schema_name"],
                 "ingest_type": item.get("ingest_type"),
                 # Extended ConfigDB fields
@@ -138,14 +147,14 @@ class SMSService:
                 # Defaults
                 "latitude": None,
                 "longitude": None,
-                "properties": {}
+                "properties": {},
             }
             # Overlay FROST data
             if frost_data:
                 sensor_data.update(frost_data)
-            
+
             enriched_items.append(sensor_data)
-            
+
         return {"items": enriched_items, "total": total}
 
     @staticmethod
@@ -155,31 +164,40 @@ class SMSService:
         Project Agnostic (UUID lookup).
         """
         from app.services.timeio.timeio_db import TimeIODatabase
+
         db = TimeIODatabase()
-        
+
         # 1. Fetch ConfigDB Data (includes schema_name)
         config = db.get_sensor_config_details(uuid)
         if not config:
             return None
-            
+
         schema_name = config.get("schema_name")
-        
+
         # 2. Fetch FROST Data
         frost_data = {}
         if schema_name:
             try:
                 service = AsyncThingService(schema_name)
-                thing = await service.get_thing(uuid, expand=["Locations", "Datastreams"])
+                thing = await service.get_thing(
+                    uuid, expand=["Locations", "Datastreams"]
+                )
                 if thing:
                     frost_data = {
                         "properties": thing.properties,
-                        "latitude": thing.location.coordinates.latitude if thing.location and thing.location.coordinates else None,
-                        "longitude": thing.location.coordinates.longitude if thing.location and thing.location.coordinates else None,
-                        "datastreams": [ds.dict() for ds in thing.datastreams] if thing.datastreams else []
+                        "latitude": thing.location.coordinates.latitude
+                        if thing.location and thing.location.coordinates
+                        else None,
+                        "longitude": thing.location.coordinates.longitude
+                        if thing.location and thing.location.coordinates
+                        else None,
+                        "datastreams": [ds.dict() for ds in thing.datastreams]
+                        if thing.datastreams
+                        else [],
                     }
             except Exception as e:
                 logger.error(f"Failed to fetch FROST details for {uuid}: {e}")
-                
+
         # 3. Fetch Structured SMS Metadata
         sms_metadata = []
         try:
@@ -220,8 +238,8 @@ class SMSService:
             elif "location" in props and isinstance(props["location"], dict):
                 loc = props["location"]
                 if "latitude" in loc and "longitude" in loc:
-                     lat = loc["latitude"]
-                     lon = loc["longitude"]
+                    lat = loc["latitude"]
+                    lon = loc["longitude"]
 
         result = {
             # Basic defaults from config
@@ -232,7 +250,9 @@ class SMSService:
             "schema_name": schema_name,
             # Extended fields
             "mqtt_username": config["mqtt_username"],
-            "mqtt_password": decrypt_password(config["mqtt_password"]) if config.get("mqtt_password") else None,
+            "mqtt_password": decrypt_password(config["mqtt_password"])
+            if config.get("mqtt_password")
+            else None,
             "mqtt_topic": config["mqtt_topic"],
             "device_type": config["device_type"],
             "device_type_id": config.get("device_type_id"),
@@ -251,18 +271,23 @@ class SMSService:
             # FROST / Computed fields
             "latitude": lat,
             "longitude": lon,
-            "properties": frost_data.get("properties") or config.get("properties") or {},
+            "properties": frost_data.get("properties")
+            or config.get("properties")
+            or {},
             "datastreams": frost_data.get("datastreams", []),
-            "datastream_metadata": sms_metadata
+            "datastream_metadata": sms_metadata,
         }
         return result
 
     @staticmethod
-    async def update_sensor(uuid: str, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    async def update_sensor(
+        uuid: str, update_data: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         """
         Update sensor details (ConfigDB and optionally structured SMS metadata).
         """
         from app.services.timeio.timeio_db import TimeIODatabase
+
         db = TimeIODatabase()
 
         # Extract external source data before passing to basic config updater
@@ -270,7 +295,9 @@ class SMSService:
         external_sftp_data = update_data.pop("external_sftp", None)
         latitude = update_data.pop("latitude", None)
         longitude = update_data.pop("longitude", None)
-        logger.info(f"update_sensor {uuid}: ext_api={'present' if external_api_data else 'None'}, ext_sftp={'present' if external_sftp_data else 'None'}")
+        logger.info(
+            f"update_sensor {uuid}: ext_api={'present' if external_api_data else 'None'}, ext_sftp={'present' if external_sftp_data else 'None'}"
+        )
 
         # 1. Update basic ConfigDB config
         updated_config = db.update_sensor_config(uuid, update_data)
@@ -313,6 +340,7 @@ class SMSService:
         if external_api_data is not None or external_sftp_data is not None:
             try:
                 from app.services.timeio.orchestrator import TimeIOOrchestrator
+
                 orchestrator = TimeIOOrchestrator()
                 orchestrator.sync_sensor(uuid)
             except Exception as e:
@@ -320,7 +348,9 @@ class SMSService:
 
         # 5. Update structured SMS metadata if provided in update_data
         # This handles cases where we want to update metadata for multiple datastreams at once
-        if "datastreams" in update_data and isinstance(update_data["datastreams"], list):
+        if "datastreams" in update_data and isinstance(
+            update_data["datastreams"], list
+        ):
             for ds in update_data["datastreams"]:
                 if "id" in ds:
                     await SMSService.update_datastream_metadata(uuid, ds["id"], ds)
@@ -335,6 +365,7 @@ class SMSService:
         Resolves its project_id and calls ProjectService.remove_sensor.
         """
         from app.services.timeio.timeio_db import TimeIODatabase
+
         db = TimeIODatabase()
         config = db.get_sensor_config_details(uuid)
         if not config or not config.get("schema_name"):
@@ -342,29 +373,34 @@ class SMSService:
             return False
 
         schema_name = config["schema_name"]
-        
+
         # We need a DB session for ProjectService and to find our local Project
         with SessionLocal() as session:
             # Resolve the local Project ID from schema_name
             from app.models.user_context import Project
-            local_project = session.query(Project).filter(Project.schema_name == schema_name).first()
-            
+
+            local_project = (
+                session.query(Project)
+                .filter(Project.schema_name == schema_name)
+                .first()
+            )
+
             if not local_project:
                 logger.warning(f"No local project found for schema track {schema_name}")
                 return False
 
             project_id = local_project.id
-            
+
             # Passing a minimal admin user object to bypass specific ownership check if admin
             admin_user = {"sub": "admin", "realm_access": {"roles": ["admin"]}}
-            
+
             try:
                 ProjectService.remove_sensor(
                     db=session,
                     project_id=project_id,
                     thing_uuid=uuid,
                     user=admin_user,
-                    delete_from_source=delete_from_source
+                    delete_from_source=delete_from_source,
                 )
                 return True
             except Exception as e:
@@ -373,21 +409,22 @@ class SMSService:
 
     @staticmethod
     async def update_datastream_metadata(
-        thing_uuid: str, 
-        datastream_id: int, 
-        metadata: Dict[str, Any]
+        thing_uuid: str, datastream_id: int, metadata: Dict[str, Any]
     ) -> bool:
         """
         Update structured metadata for a single datastream.
         """
         from app.services.timeio.timeio_db import TimeIODatabase
+
         db = TimeIODatabase()
-        
+
         # Extract fields from metadata dict
         unit = metadata.get("unit_of_measurement") or {}
         unit_symbol = unit.get("symbol") or metadata.get("unit_symbol")
-        op_name = (metadata.get("observed_property") or {}).get("name") or metadata.get("op_name")
-        
+        op_name = (metadata.get("observed_property") or {}).get("name") or metadata.get(
+            "op_name"
+        )
+
         success = db.upsert_datastream_metadata(
             thing_uuid=thing_uuid,
             datastream_id=datastream_id,
@@ -397,9 +434,9 @@ class SMSService:
             resolution=metadata.get("resolution"),
             measuring_range_min=metadata.get("measuring_range_min"),
             measuring_range_max=metadata.get("measuring_range_max"),
-            aggregation_type=metadata.get("aggregation_type")
+            aggregation_type=metadata.get("aggregation_type"),
         )
-        
+
         if success:
             # Propagate name(label) and description to project database
             # This ensures display names update in the UI/FROST
@@ -410,23 +447,27 @@ class SMSService:
                     datastream_id=datastream_id,
                     name=metadata.get("name"),
                     description=metadata.get("description"),
-                    unit_of_measurement=unit
+                    unit_of_measurement=unit,
                 )
-                
+
         return success
 
     @staticmethod
     def get_all_device_types(page: int = 1, page_size: int = 100) -> Dict[str, Any]:
         """Get paginated device types."""
         from app.services.timeio.timeio_db import TimeIODatabase
+
         db = TimeIODatabase()
         offset = (page - 1) * page_size
         return db.get_all_mqtt_device_types(limit=page_size, offset=offset)
 
     @staticmethod
-    def get_all_parsers(group_id: str, page: int = 1, page_size: int = 100) -> Dict[str, Any]:
+    def get_all_parsers(
+        group_id: str, page: int = 1, page_size: int = 100
+    ) -> Dict[str, Any]:
         """Get paginated parsers."""
         from app.services.timeio.timeio_db import TimeIODatabase
+
         db = TimeIODatabase()
         offset = (page - 1) * page_size
         return db.get_parsers_by_group(group_id, limit=page_size, offset=offset)
@@ -438,10 +479,11 @@ class SMSService:
         timestamp_column: int = 0,
         timestamp_format: str = "%Y-%m-%dT%H:%M:%S%z",
         header_line: int = 0,
-        extra_params: Optional[Dict[str, Any]] = None
+        extra_params: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict[str, Any]]:
         """Create new CSV parser."""
         from app.services.timeio.timeio_db import TimeIODatabase
+
         db = TimeIODatabase()
         return db.create_csv_parser(
             name=name,
@@ -449,28 +491,35 @@ class SMSService:
             timestamp_column=timestamp_column,
             timestamp_format=timestamp_format,
             header_line=header_line,
-            extra_params=extra_params
+            extra_params=extra_params,
         )
 
     @staticmethod
     def get_parser_details(uuid: str) -> Optional[Dict[str, Any]]:
         """Get parser details by UUID."""
         from app.services.timeio.timeio_db import TimeIODatabase
+
         db = TimeIODatabase()
         return db.get_parser(uuid)
 
     @staticmethod
-    def update_parser(uuid: str, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def update_parser(
+        uuid: str, update_data: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         """Update parser details."""
         from app.services.timeio.timeio_db import TimeIODatabase
+
         db = TimeIODatabase()
         # Separate name and settings if needed, but db.update_parser handles it
-        return db.update_parser(uuid, update_data.get("name"), update_data.get("settings"))
+        return db.update_parser(
+            uuid, update_data.get("name"), update_data.get("settings")
+        )
 
     @staticmethod
     def delete_parser(parser_id: int) -> Dict[str, Any]:
         """Delete a parser. Returns result dict with success status and linked sensors if any."""
         from app.services.timeio.timeio_db import TimeIODatabase
+
         db = TimeIODatabase()
         return db.delete_parser(parser_id)
 
@@ -480,38 +529,41 @@ class SMSService:
         Get device type details, including code if applicable.
         """
         from app.services.timeio.timeio_db import TimeIODatabase
+
         db = TimeIODatabase()
         device_type = db.get_mqtt_device_type(id)
-        
+
         if not device_type:
             return None
-            
+
         # Check for custom parser script
         properties = device_type.get("properties") or {}
         script_bucket = properties.get("script_bucket")
         script_path = properties.get("script_path")
-        
+
         if script_bucket and script_path:
             try:
                 from app.services.minio_service import minio_service
+
                 content = minio_service.get_file_content(script_bucket, script_path)
                 if content:
                     device_type["code"] = content.decode("utf-8")
             except Exception as e:
                 logger.error(f"Failed to fetch parser code for {id}: {e}")
                 device_type["code_error"] = str(e)
-        
+
         # If no custom code, check hardcoded parsers
         if "code" not in device_type:
             try:
                 import os
+
                 HARDCODED_PARSERS_DIR = "/app/hardcoded_parsers"
                 if os.path.exists(HARDCODED_PARSERS_DIR):
                     name = device_type.get("name", "")
                     candidates = [f"{name}.py"]
                     if name.endswith("_api"):
                         candidates.append(f"{name[:-4]}.py")
-                    
+
                     for filename in candidates:
                         filepath = os.path.join(HARDCODED_PARSERS_DIR, filename)
                         if os.path.exists(filepath):
@@ -529,6 +581,7 @@ class SMSService:
         Delete a device type and its associated script.
         """
         from app.services.timeio.timeio_db import TimeIODatabase
+
         db = TimeIODatabase()
         # Get details first to find script
         device_type = db.get_mqtt_device_type(id)
@@ -539,19 +592,21 @@ class SMSService:
         properties = device_type.get("properties") or {}
         script_bucket = properties.get("script_bucket")
         script_path = properties.get("script_path")
-        
+
         if script_bucket and script_path:
             try:
                 from app.services.minio_service import minio_service
+
                 minio_service.remove_file(script_bucket, script_path)
             except Exception as e:
                 logger.error(f"Failed to delete script for {id}: {e}")
                 # Continue to delete from DB even if script deletion fails?
                 # Probably yes, to avoid orphan records.
-        
+
     @staticmethod
     def get_all_ingest_types() -> List[Dict[str, Any]]:
         """Get all available ingest types."""
         from app.services.timeio.timeio_db import TimeIODatabase
+
         db = TimeIODatabase()
         return db.get_all_ingest_types()

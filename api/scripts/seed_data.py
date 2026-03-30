@@ -41,13 +41,33 @@ LOCATIONS_CZECH = [
 
 # Morava River Locations
 LOCATIONS_MORAVA = [
-    {"name": "Morava - Trojmedzie SK/CZ/AT", "lat": 48.61678679157393, "lon": 16.940155043648446},
-    {"name": "Morava - Pohraničie so SK", "lat": 48.8782835118391, "lon": 17.202200887542453},
-    {"name": "Morava - Uherské Hradiště", "lat": 49.073066418801204, "lon": 17.458410026447893},
+    {
+        "name": "Morava - Trojmedzie SK/CZ/AT",
+        "lat": 48.61678679157393,
+        "lon": 16.940155043648446,
+    },
+    {
+        "name": "Morava - Pohraničie so SK",
+        "lat": 48.8782835118391,
+        "lon": 17.202200887542453,
+    },
+    {
+        "name": "Morava - Uherské Hradiště",
+        "lat": 49.073066418801204,
+        "lon": 17.458410026447893,
+    },
     {"name": "Morava - Olomouc", "lat": 49.597293659473586, "lon": 17.267434853226355},
-    {"name": "Morava - Hanušovice, Branná", "lat": 50.07668057933876, "lon": 16.93454987969328},
+    {
+        "name": "Morava - Hanušovice, Branná",
+        "lat": 50.07668057933876,
+        "lon": 16.93454987969328,
+    },
     {"name": "Morava - Prameň", "lat": 50.20514843813213, "lon": 16.849219008675586},
-    {"name": "Morava - Moravičanské jezero", "lat": 49.77603658549506, "lon": 16.968263374073388},
+    {
+        "name": "Morava - Moravičanské jezero",
+        "lat": 49.77603658549506,
+        "lon": 16.968263374073388,
+    },
     {"name": "Morava - Kroměříž ", "lat": 49.30344147051559, "lon": 17.39851656181459},
 ]
 
@@ -125,7 +145,7 @@ EXTERNAL_SOURCES_SENSORS = [
     {
         "name": "Berlin Weather (Open-Meteo API)",
         "description": "Hourly weather data from Open-Meteo free API for Berlin, Germany. "
-                       "Uses custom uploaded syncer script.",
+        "Uses custom uploaded syncer script.",
         "lat": 52.52,
         "lon": 13.41,
         "ingest_type": "extapi",
@@ -171,8 +191,8 @@ EXTERNAL_SOURCES_SENSORS = [
     {
         "name": "Local Water Quality SFTP",
         "description": "Demo sensor pulling CSV water quality data from the local test SFTP server. "
-                       "Data is parsed with a CSV parser to extract pH, dissolved oxygen, temperature, "
-                       "and conductivity measurements.",
+        "Data is parsed with a CSV parser to extract pH, dissolved oxygen, temperature, "
+        "and conductivity measurements.",
         "lat": 51.3397,
         "lon": 12.3731,
         "ingest_type": "extsftp",
@@ -189,7 +209,11 @@ EXTERNAL_SOURCES_SENSORS = [
         },
         "properties": [
             {"name": "pH", "unit": "pH", "label": "pH"},
-            {"name": "dissolved_oxygen_mg_l", "unit": "mg/L", "label": "Dissolved Oxygen"},
+            {
+                "name": "dissolved_oxygen_mg_l",
+                "unit": "mg/L",
+                "label": "Dissolved Oxygen",
+            },
             {"name": "temperature_c", "unit": "°C", "label": "Water Temperature"},
             {"name": "conductivity_us_cm", "unit": "µS/cm", "label": "Conductivity"},
         ],
@@ -207,7 +231,7 @@ PROJECTS_CONFIG = [
         "creator": {"username": "alice", "password": "alice"},
         "members": [
             {"username": "carol", "role": "editor"},
-            {"username": "dave",  "role": "viewer"},
+            {"username": "dave", "role": "viewer"},
         ],
     },
     {
@@ -230,7 +254,7 @@ EXTERNAL_SOURCES_PROJECT = {
     "creator": {"username": "eva", "password": "eva"},
     "members": [
         {"username": "dave", "role": "editor"},
-        {"username": "bob",  "role": "editor"},
+        {"username": "bob", "role": "editor"},
     ],
 }
 
@@ -243,11 +267,15 @@ def get_access_token(username=None, password=None, retries=10):
     payload = {"username": username, "password": password}
     for attempt in range(retries):
         try:
-            logging.info(f"Authenticating as {username} at {url} (attempt {attempt+1}/{retries})...")
+            logging.info(
+                f"Authenticating as {username} at {url} (attempt {attempt+1}/{retries})..."
+            )
             response = requests.post(url, json=payload, timeout=10)
             if response.status_code == 200:
                 return response.json()["access_token"]
-            logger.warning(f"Auth attempt {attempt+1} failed ({response.status_code}): {response.text}")
+            logger.warning(
+                f"Auth attempt {attempt+1} failed ({response.status_code}): {response.text}"
+            )
         except Exception as e:
             logger.warning(f"Auth attempt {attempt+1} error: {e}")
         time.sleep(5)
@@ -308,11 +336,15 @@ def seed_project_members(headers, project_id, members):
             json={"username": m["username"], "role": m["role"]},
         )
         if res.status_code in (200, 201):
-            logger.info(f"  Added {m['username']} as {m['role']} to project {project_id}")
+            logger.info(
+                f"  Added {m['username']} as {m['role']} to project {project_id}"
+            )
         elif res.status_code == 409:
             logger.info(f"  {m['username']} already a member (skipped)")
         else:
-            logger.warning(f"  Failed to add {m['username']}: {res.status_code} {res.text[:120]}")
+            logger.warning(
+                f"  Failed to add {m['username']}: {res.status_code} {res.text[:120]}"
+            )
 
 
 def create_project(headers, group_id, project_name, description):
@@ -412,7 +444,9 @@ def create_simulated_sensor(headers, project_id, location_info, index):
                 if attempt < max_retries - 1:
                     time.sleep(5)
         except Exception as e:
-            logger.error(f"Error on attempt {attempt + 1}/{max_retries} for {name}: {e}")
+            logger.error(
+                f"Error on attempt {attempt + 1}/{max_retries} for {name}: {e}"
+            )
             if attempt < max_retries - 1:
                 time.sleep(5)
 
@@ -468,8 +502,14 @@ def register_open_meteo_api_type(headers):
         return False
 
 
-def create_csv_parser(headers, name, delimiter=",", timestamp_column=0,
-                      timestamp_format="%Y-%m-%d %H:%M:%S", header_line=0):
+def create_csv_parser(
+    headers,
+    name,
+    delimiter=",",
+    timestamp_column=0,
+    timestamp_format="%Y-%m-%d %H:%M:%S",
+    header_line=0,
+):
     """Create a CSV parser via the SMS API and return its ID."""
     payload = {
         "name": name,
@@ -488,7 +528,9 @@ def create_csv_parser(headers, name, delimiter=",", timestamp_column=0,
             logger.info(f"Parser '{name}' already exists.")
             return None
         else:
-            logger.error(f"Failed to create parser '{name}': {res.status_code} - {res.text}")
+            logger.error(
+                f"Failed to create parser '{name}': {res.status_code} - {res.text}"
+            )
             return None
     except Exception as e:
         logger.error(f"Error creating CSV parser '{name}': {e}")
@@ -547,7 +589,9 @@ def create_external_source_sensor(headers, project_id, sensor_config):
                 if attempt < max_retries - 1:
                     time.sleep(5)
         except Exception as e:
-            logger.error(f"Error on attempt {attempt + 1}/{max_retries} for '{name}': {e}")
+            logger.error(
+                f"Error on attempt {attempt + 1}/{max_retries} for '{name}': {e}"
+            )
             if attempt < max_retries - 1:
                 time.sleep(5)
 
@@ -566,10 +610,14 @@ def seed_external_sources(headers, admin_headers=None):
     lookup_headers = admin_headers if admin_headers else headers
     group_id = get_group_id_by_name(lookup_headers, cfg["target_group_name"])
     if not group_id:
-        logger.error(f"Could not find group '{cfg['target_group_name']}'. Skipping external sources.")
+        logger.error(
+            f"Could not find group '{cfg['target_group_name']}'. Skipping external sources."
+        )
         return
 
-    project_id = create_project(headers, group_id, cfg["project_name"], cfg["description"])
+    project_id = create_project(
+        headers, group_id, cfg["project_name"], cfg["description"]
+    )
     if not project_id:
         logger.error("Could not create/find external sources project. Skipping.")
         return
@@ -582,9 +630,12 @@ def seed_external_sources(headers, admin_headers=None):
 
     # Step 2: Create CSV parser for SFTP sensor
     parser_id = create_csv_parser(
-        headers, "Water Quality CSV",
-        delimiter=",", timestamp_column=0,
-        timestamp_format="%Y-%m-%d %H:%M:%S", header_line=0,
+        headers,
+        "Water Quality CSV",
+        delimiter=",",
+        timestamp_column=0,
+        timestamp_format="%Y-%m-%d %H:%M:%S",
+        header_line=0,
     )
 
     # Give TSM a moment to process
@@ -607,6 +658,7 @@ def main():
 
     # --- Seed Keycloak users and groups first ---
     from seed_keycloak import seed_keycloak_users_and_groups
+
     seed_keycloak_users_and_groups()
 
     # admin-siki token — used for QA/QC seeding and as fallback
@@ -620,12 +672,16 @@ def main():
     # --- Simulated MQTT sensors ---
     for config in PROJECTS_CONFIG:
         target_group_name = config["target_group_name"]
-        logger.info(f"Processing project: {config['project_name']} for group: {target_group_name}")
+        logger.info(
+            f"Processing project: {config['project_name']} for group: {target_group_name}"
+        )
 
         # Use the project creator's token so they become the explicit owner
         creator = config.get("creator", {})
         if creator:
-            token = get_access_token(creator["username"], creator["password"], retries=5)
+            token = get_access_token(
+                creator["username"], creator["password"], retries=5
+            )
             headers = get_headers(token)
         else:
             headers = admin_headers
@@ -637,10 +693,14 @@ def main():
             logger.error(f"Could not find group '{target_group_name}'. Skipping.")
             continue
 
-        project_id = create_project(headers, group_id, config["project_name"], config["description"])
+        project_id = create_project(
+            headers, group_id, config["project_name"], config["description"]
+        )
 
         if not project_id:
-            logger.error(f"Could not create/find project for '{config['project_name']}'. Skipping.")
+            logger.error(
+                f"Could not create/find project for '{config['project_name']}'. Skipping."
+            )
             continue
 
         if config.get("members"):
@@ -650,7 +710,9 @@ def main():
         logger.info("Waiting 10s for TSM orchestration initialization...")
         time.sleep(10)
 
-        logger.info(f"Creating {len(config['locations'])} Simulated Sensors for {config['project_name']}...")
+        logger.info(
+            f"Creating {len(config['locations'])} Simulated Sensors for {config['project_name']}..."
+        )
         for i, loc in enumerate(config["locations"]):
             create_simulated_sensor(headers, project_id, loc, i)
 
@@ -658,7 +720,9 @@ def main():
     # Use the external sources project creator (eva) for that project
     ext_creator = EXTERNAL_SOURCES_PROJECT.get("creator", {})
     if ext_creator:
-        ext_token = get_access_token(ext_creator["username"], ext_creator["password"], retries=5)
+        ext_token = get_access_token(
+            ext_creator["username"], ext_creator["password"], retries=5
+        )
         ext_headers = get_headers(ext_token)
     else:
         ext_headers = admin_headers
@@ -668,6 +732,7 @@ def main():
     logger.info("Seeding QA/QC configurations and custom SaQC functions...")
     try:
         from app.core.seeding import seed_qaqc_configs
+
         seed_qaqc_configs()
     except Exception as exc:
         logger.warning(f"QA/QC seeding failed (non-fatal): {exc}")

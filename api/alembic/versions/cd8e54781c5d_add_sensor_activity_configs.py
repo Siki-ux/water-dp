@@ -7,7 +7,6 @@ Create Date: 2026-03-22 00:00:00.000000
 """
 
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
@@ -29,13 +28,16 @@ def upgrade() -> None:
             sa.ForeignKey("water_dp.projects.id", ondelete="CASCADE"),
             nullable=False,
         ),
-        sa.Column("track_activity", sa.Boolean(), nullable=False, server_default="true"),
         sa.Column(
-            "inactivity_threshold_hours", sa.Integer(), nullable=False, server_default="24"
+            "track_activity", sa.Boolean(), nullable=False, server_default="true"
         ),
         sa.Column(
-            "last_seen_at", sa.DateTime(timezone=True), nullable=True
+            "inactivity_threshold_hours",
+            sa.Integer(),
+            nullable=False,
+            server_default="24",
         ),
+        sa.Column("last_seen_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
         sa.Column("created_by", sa.String(length=100), nullable=True),

@@ -179,7 +179,9 @@ class AsyncFrostClient:
         # Return the datastream directly, not from "value"
         return data if "@iot.id" in data else data.get("value", [])
 
-    async def update_datastream(self, datastream_id: Any, payload: Dict[str, Any]) -> bool:
+    async def update_datastream(
+        self, datastream_id: Any, payload: Dict[str, Any]
+    ) -> bool:
         """Update Datastream details via PATCH."""
         path = f"Datastreams({datastream_id})"
         return await self._patch(path, payload)

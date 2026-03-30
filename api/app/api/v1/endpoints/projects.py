@@ -55,13 +55,18 @@ async def create_project(
 async def list_projects(
     skip: int = 0,
     limit: int = 100,
-    group_id: Optional[str] = Query(None, description="Filter by Keycloak group ID or name"),
+    group_id: Optional[str] = Query(
+        None, description="Filter by Keycloak group ID or name"
+    ),
     database: Session = Depends(get_db),
     user: dict = Depends(deps.get_current_user),
 ) -> Any:
     """List projects (owned or member of). Optionally filter by Keycloak group."""
     from app.services.rbac_service import PermissionResolver
-    projects = ProjectService.list_projects(database, user, skip=skip, limit=limit, group_id=group_id)
+
+    projects = ProjectService.list_projects(
+        database, user, skip=skip, limit=limit, group_id=group_id
+    )
     # Annotate each project with the requesting user's effective role (avoids N+1 on frontend)
     result = []
     for p in projects:
@@ -118,9 +123,6 @@ async def get_grafana_folder(
         ProjectService.get_grafana_folder_uid, database, project_id, user
     )
     return {"folder_uid": folder_uid}
-
-
-
 
 
 # --- Project Sensors ---

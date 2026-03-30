@@ -77,14 +77,14 @@ def test_service_error_timeseries(client):
     response = client.get("/service-error")
     assert response.status_code == 500
     data = response.json()
-    assert data["error"]["message"] == "Time series processing failed"
+    assert data["error"]["message"] == "Service failure"
 
 
 def test_service_error_database(client):
     response = client.get("/database-error")
     assert response.status_code == 500
     data = response.json()
-    assert data["error"]["message"] == "Database operation failed"
+    assert data["error"]["message"] == "DB failure"
 
 
 def test_service_error_geoserver(client):

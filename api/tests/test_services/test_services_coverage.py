@@ -110,9 +110,7 @@ class TestDatabaseServiceCoverage:
         """Test invalid BBOX handling (logs warning, doesn't crash)."""
         # Should just return base query if bbox fails
         # Mock query
-        service.db.query.return_value.filter.return_value.offset.return_value.limit.return_value.all.return_value = (
-            []
-        )
+        service.db.query.return_value.filter.return_value.offset.return_value.limit.return_value.all.return_value = []
 
         # Invalid BBOX (3 coords)
         res = service.get_geo_features("L1", bbox="10,20,30")

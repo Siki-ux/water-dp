@@ -34,7 +34,7 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ id: 
         if (session?.accessToken && id) {
             fetchProject();
         } else if (session && !session.accessToken) {
-            console.error("Session missing accessToken!", session);
+            // Session missing accessToken — handled by auth flow
         }
     }, [session, id]);
 

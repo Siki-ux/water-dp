@@ -1,9 +1,10 @@
 import io
 import logging
-from typing import Annotated, Any, Dict, List
+from typing import Annotated, Any, Dict
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 
+from app.api import deps
 from app.schemas.sensor import ExternalAPIConfig, ExternalSFTPConfig
 from app.services.minio_service import minio_service
 from app.services.timeio.crypto_utils import encrypt_password
@@ -19,21 +20,25 @@ CUSTOM_SYNCERS_BUCKET = "custom-syncers"
 
 
 @router.get("/api-types", response_model=Dict[str, Any])
-def list_ext_api_types(limit: int = 100, offset: int = 0):
+def list_ext_api_types(
+    limit: int = 100,
+    offset: int = 0,
+    user: dict = Depends(deps.get_current_user),
+):
     """List all available external API types (built-in and custom)."""
     try:
         db = TimeIODatabase()
         return db.get_all_ext_api_types(limit, offset)
     except Exception as e:
-        logger.error(f"Failed to list ext API types: {e}")
+        logger.error(f"Failed to list ext API types: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list API types: {str(e)}",
+            detail="Failed to list API types",
         )
 
 
 @router.get("/api-types/{id_or_name}", response_model=Dict[str, Any])
-def get_ext_api_type(id_or_name: str):
+def get_ext_api_type(id_or_name: str, user: dict = Depends(deps.get_current_user)):
     """Get details for an external API type, including syncer code if available."""
     db = TimeIODatabase()
     api_type = db.get_ext_api_type(id_or_name)
@@ -58,7 +63,7 @@ def get_ext_api_type(id_or_name: str):
 
 
 @router.post("/api-types", status_code=status.HTTP_201_CREATED)
-def create_ext_api_type(name: str):
+def create_ext_api_type(name: str, user: dict = Depends(deps.get_current_user)):
     """Register a new external API type (name only)."""
     try:
         db = TimeIODatabase()
@@ -73,15 +78,15 @@ def create_ext_api_type(name: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to create ext API type: {e}")
+        logger.error(f"Failed to create ext API type: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create API type: {str(e)}",
+            detail="Failed to create API type",
         )
 
 
 @router.delete("/api-types/{id_or_name}")
-def delete_ext_api_type(id_or_name: str):
+def delete_ext_api_type(id_or_name: str, user: dict = Depends(deps.get_current_user)):
     """Delete an external API type (only if not in use by any sensor)."""
     db = TimeIODatabase()
     result = db.delete_ext_api_type(id_or_name)
@@ -99,6 +104,7 @@ def delete_ext_api_type(id_or_name: str):
 async def upload_custom_syncer(
     api_type_name: Annotated[str, Form()],
     file: Annotated[UploadFile, File()],
+    user: dict = Depends(deps.get_current_user),
 ):
     """
     Upload a custom Python syncer script for an external API type.
@@ -106,29 +112,29 @@ async def upload_custom_syncer(
     The script must define a class inheriting from ExtApiSyncer with
     fetch_api_data() and do_parse() methods.
     """
-    if not file.filename.endswith(".py"):
+    import os
+
+    safe_filename = os.path.basename(file.filename or "upload.py")
+    if not safe_filename.endswith(".py"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only Python (.py) files are allowed.",
         )
 
     try:
-        # Ensure bucket exists
         if not minio_service.bucket_exists(CUSTOM_SYNCERS_BUCKET):
             logger.info(f"Bucket {CUSTOM_SYNCERS_BUCKET} not found, creating it.")
             minio_service.client.make_bucket(CUSTOM_SYNCERS_BUCKET)
 
         content = await file.read()
 
-        # Validate script contains ExtApiSyncer class
         if b"class" not in content or b"ExtApiSyncer" not in content:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Script must define a class inheriting from ExtApiSyncer.",
             )
 
-        # Upload to MinIO
-        file_path = f"{api_type_name}/{file.filename}"
+        file_path = f"{api_type_name}/{safe_filename}"
         file_obj = io.BytesIO(content)
         size = len(content)
 
@@ -156,10 +162,10 @@ async def upload_custom_syncer(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to upload syncer: {e}")
+        logger.error(f"Failed to upload syncer: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to upload syncer: {str(e)}",
+            detail="Failed to upload syncer",
         )
 
 
@@ -167,7 +173,9 @@ async def upload_custom_syncer(
 
 
 @router.get("/things/{thing_uuid}/config", response_model=Dict[str, Any])
-def get_thing_external_config(thing_uuid: str):
+def get_thing_external_config(
+    thing_uuid: str, user: dict = Depends(deps.get_current_user)
+):
     """Get external source configuration (API and/or SFTP) for a sensor."""
     db = TimeIODatabase()
     config = db.get_thing_external_config(thing_uuid)
@@ -177,16 +185,18 @@ def get_thing_external_config(thing_uuid: str):
 
 
 @router.put("/things/{thing_uuid}/external-api")
-def update_thing_external_api(thing_uuid: str, config: ExternalAPIConfig):
+def update_thing_external_api(
+    thing_uuid: str,
+    config: ExternalAPIConfig,
+    user: dict = Depends(deps.get_current_user),
+):
     """Configure or update external API source on an existing sensor."""
     db = TimeIODatabase()
 
     # Verify the API type exists
     api_type = db.get_ext_api_type(config.type)
     if not api_type:
-        raise HTTPException(
-            status_code=400, detail=f"Unknown API type: {config.type}"
-        )
+        raise HTTPException(status_code=400, detail=f"Unknown API type: {config.type}")
 
     # Encrypt sensitive settings
     encrypted_settings = dict(config.settings)
@@ -212,11 +222,18 @@ def update_thing_external_api(thing_uuid: str, config: ExternalAPIConfig):
     orchestrator = TimeIOOrchestrator()
     orchestrator.sync_sensor(thing_uuid)
 
-    return {"message": f"External API configured for sensor {thing_uuid}", "type": config.type}
+    return {
+        "message": f"External API configured for sensor {thing_uuid}",
+        "type": config.type,
+    }
 
 
 @router.put("/things/{thing_uuid}/external-sftp")
-def update_thing_external_sftp(thing_uuid: str, config: ExternalSFTPConfig):
+def update_thing_external_sftp(
+    thing_uuid: str,
+    config: ExternalSFTPConfig,
+    user: dict = Depends(deps.get_current_user),
+):
     """Configure or update external SFTP source on an existing sensor."""
     db = TimeIODatabase()
 
@@ -226,7 +243,9 @@ def update_thing_external_sftp(thing_uuid: str, config: ExternalSFTPConfig):
         "path": config.path,
         "username": config.username,
         "password": encrypt_password(config.password) if config.password else None,
-        "private_key": encrypt_password(config.private_key) if config.private_key else "",
+        "private_key": encrypt_password(config.private_key)
+        if config.private_key
+        else "",
         "public_key": config.public_key,
         "sync_interval": config.sync_interval,
         "sync_enabled": config.sync_enabled,
@@ -237,8 +256,10 @@ def update_thing_external_sftp(thing_uuid: str, config: ExternalSFTPConfig):
         if not success:
             raise HTTPException(status_code=404, detail="Thing not found")
     except Exception as e:
-        logger.error(f"Failed to update ext_sftp for {thing_uuid}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Failed to update ext_sftp for {thing_uuid}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500, detail="Failed to update SFTP configuration"
+        )
 
     # Trigger re-sync to update cron jobs
     orchestrator = TimeIOOrchestrator()
@@ -248,12 +269,16 @@ def update_thing_external_sftp(thing_uuid: str, config: ExternalSFTPConfig):
 
 
 @router.delete("/things/{thing_uuid}/external-api")
-def remove_thing_external_api(thing_uuid: str):
+def remove_thing_external_api(
+    thing_uuid: str, user: dict = Depends(deps.get_current_user)
+):
     """Remove external API configuration from a sensor."""
     db = TimeIODatabase()
     success = db.remove_thing_external_api(thing_uuid)
     if not success:
-        raise HTTPException(status_code=404, detail="Thing not found or no ext_api configured")
+        raise HTTPException(
+            status_code=404, detail="Thing not found or no ext_api configured"
+        )
 
     # Trigger re-sync
     orchestrator = TimeIOOrchestrator()
@@ -263,12 +288,16 @@ def remove_thing_external_api(thing_uuid: str):
 
 
 @router.delete("/things/{thing_uuid}/external-sftp")
-def remove_thing_external_sftp(thing_uuid: str):
+def remove_thing_external_sftp(
+    thing_uuid: str, user: dict = Depends(deps.get_current_user)
+):
     """Remove external SFTP configuration from a sensor."""
     db = TimeIODatabase()
     success = db.remove_thing_external_sftp(thing_uuid)
     if not success:
-        raise HTTPException(status_code=404, detail="Thing not found or no ext_sftp configured")
+        raise HTTPException(
+            status_code=404, detail="Thing not found or no ext_sftp configured"
+        )
 
     # Trigger re-sync
     orchestrator = TimeIOOrchestrator()

@@ -41,9 +41,6 @@ class Location(BaseModel):
         return cls(type="Unknown")
 
 
-
-
-
 class Thing(BaseModel):
     """
     Represents a Thing (Sensor) in the system.
@@ -73,7 +70,6 @@ class Thing(BaseModel):
     status: Optional[str] = Field(
         default="inactive", description="Status of the Thing (active/inactive)"
     )
-
 
     # Relations
     datastreams: List[Datastream] = Field(
@@ -141,5 +137,3 @@ class Thing(BaseModel):
             status=props.get("status", "inactive"),
             datastreams=parsed_datastreams,
         )
-
-

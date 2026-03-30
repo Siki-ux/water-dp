@@ -10,6 +10,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from app.api.v1.api import api_router
 from app.core.config import settings
@@ -17,13 +19,9 @@ from app.core.constants import API_DESCRIPTION
 from app.core.database import init_db
 from app.core.logging_config import setup_logging
 from app.core.middleware import ErrorHandlingMiddleware, LoggingMiddleware
+from app.core.rate_limit import limiter
 
-# Setup Centralized Logging
 setup_logging()
-
-# Note: No need for BasicConfig or getLogger here, logging_config handles it.
-# But we can still get a logger if we want.
-
 logger = logging.getLogger(__name__)
 
 
@@ -90,15 +88,7 @@ app = FastAPI(
 
 @app.get("/health", tags=["General"])
 async def health_check(response: Response):
-    """
-    ## Health Check
-
-    Check the health status of the Water Data Platform API.
-
-    Returns:
-    - **200 OK**: Service is healthy and fully seeded.
-    - **503 Service Unavailable**: Service is still initializing.
-    """
+    """Health check endpoint. Returns 503 while initializing."""
     if not getattr(app.state, "startup_complete", False):
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return {
@@ -116,8 +106,11 @@ async def health_check(response: Response):
     }
 
 
-# Middleware Stack (Executed Top to Bottom)
+# Rate limiter
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# Middleware Stack (Executed Top to Bottom)
 
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
 
@@ -135,13 +128,7 @@ app.add_middleware(LoggingMiddleware)
 
 @app.get("/docs", tags=["General"])
 async def redirect_to_swagger():
-    """
-    ## API Documentation
-
-    Redirects to the Swagger UI documentation.
-
-    This endpoint provides easy access to the interactive API documentation.
-    """
+    """Redirect to Swagger UI."""
     from fastapi.responses import RedirectResponse
 
     return RedirectResponse(url=f"{settings.api_prefix}/docs")
@@ -149,22 +136,7 @@ async def redirect_to_swagger():
 
 @app.get("/", tags=["General"])
 async def root():
-    """
-    ## Welcome to Water Data Platform API
-
-    This is the main entry point for the Water Data Platform API.
-
-    ### Quick Links:
-    - 📚 **API Documentation**: [Swagger UI](/api/v1/docs)
-    - 📖 **Alternative Docs**: [ReDoc](/api/v1/redoc)
-    - 🔍 **OpenAPI Schema**: [JSON Schema](/api/v1/openapi.json)
-    - ❤️ **Health Check**: [Health Status](/health)
-
-    ### Available Endpoints:
-    - **Sensors**: `/api/v1/things/` - Sensor management (replacement for water-data)
-    - **Geospatial**: `/api/v1/geospatial/` - Layers, features, GeoServer integration
-    - **Projects**: `/api/v1/projects/` - Project management
-    """
+    """Root endpoint with API information and links."""
     root_path = os.getenv("ROOT_PATH", "")
     api_prefix = settings.api_prefix
 

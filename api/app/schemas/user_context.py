@@ -6,7 +6,6 @@ from pydantic import BaseModel, Field
 
 from app.models.base import PydanticBase
 
-
 # --- Dashboard Schemas ---
 
 
@@ -76,7 +75,9 @@ class ProjectResponse(ProjectBase):
     created_at: datetime
     updated_at: datetime
     schema_name: Optional[str] = None
-    user_role: Optional[str] = None  # effective role for the requesting user (owner/editor/viewer)
+    user_role: Optional[str] = (
+        None  # effective role for the requesting user (owner/editor/viewer)
+    )
 
     @classmethod
     def model_validate(cls, obj: Any, **kwargs: Any) -> "ProjectResponse":
@@ -87,14 +88,16 @@ class ProjectResponse(ProjectBase):
         """
         # If it's already a dict (e.g. from ORM or model_dump)
         if isinstance(obj, dict):
-            if "authorization_provider_group_id" in obj and not obj.get("authorization_group_ids"):
+            if "authorization_provider_group_id" in obj and not obj.get(
+                "authorization_group_ids"
+            ):
                 obj["authorization_group_ids"] = (
                     [obj["authorization_provider_group_id"]]
                     if obj["authorization_provider_group_id"]
                     else []
                 )
             return super().model_validate(obj, **kwargs)
-        
+
         # If it's an ORM object
         data = {
             "id": obj.id,

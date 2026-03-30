@@ -102,7 +102,7 @@ def test_upload_dangerous_script(override_deps, mock_db_session, mock_current_us
 
         response = client.post("/api/v1/computations/upload", files=files, data=data)
         assert response.status_code == 400
-        assert "Security violation" in response.json()["detail"]
+        assert "not allowed" in response.json()["detail"]
 
 
 def test_upload_file_too_large(override_deps, mock_db_session, mock_current_user):
@@ -136,14 +136,16 @@ def test_run_computation_creates_job(override_deps, mock_db_session, mock_curren
         mock_script
     )
 
-    with patch(
-        "app.services.project_service.ProjectService._check_access", return_value=True
-    ), patch(
-        "app.api.v1.endpoints.computations.run_computation_task.delay"
-    ) as mock_task, patch(
-        "os.path.exists", return_value=True
+    with (
+        patch(
+            "app.services.project_service.ProjectService._check_access",
+            return_value=True,
+        ),
+        patch(
+            "app.api.v1.endpoints.computations.run_computation_task.delay"
+        ) as mock_task,
+        patch("os.path.exists", return_value=True),
     ):
-
         mock_task.return_value.id = mock_task_id
 
         response = client.post(

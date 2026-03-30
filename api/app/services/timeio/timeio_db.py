@@ -1,16 +1,16 @@
 """
 TimeIO Database Service
 
-Provides direct database access for TimeIO fixes that cannot be done via APIs.
-Handles schema mapping corrections and FROST view creation.
+Provides direct database access to the TimeIO PostgreSQL database.
 """
 
 import json
 import logging
+from contextlib import contextmanager
 from typing import Any, Dict, List, Optional, Tuple
 
 import psycopg2
-from psycopg2 import sql
+from psycopg2 import pool, sql
 from psycopg2.extras import RealDictCursor
 
 from app.core.config import settings
@@ -18,18 +18,29 @@ from app.services.timeio.crypto_utils import decrypt_password, encrypt_password
 
 logger = logging.getLogger(__name__)
 
+# Module-level connection pool (shared across all TimeIODatabase instances)
+_connection_pool: Optional[pool.ThreadedConnectionPool] = None
+
+
+def _get_pool() -> pool.ThreadedConnectionPool:
+    """Get or create the shared connection pool."""
+    global _connection_pool
+    if _connection_pool is None or _connection_pool.closed:
+        _connection_pool = pool.ThreadedConnectionPool(
+            minconn=2,
+            maxconn=10,
+            host=settings.timeio_db_host,
+            port=settings.timeio_db_port,
+            database=settings.timeio_db_name,
+            user=settings.timeio_db_user,
+            password=settings.timeio_db_password,
+        )
+        logger.info("TimeIO connection pool created")
+    return _connection_pool
+
 
 class TimeIODatabase:
-    """
-    Direct database access for TimeIO fixes.
-
-    This service connects to the TimeIO PostgreSQL database to apply fixes
-    for known issues:
-    - schema_thing_mapping incorrect schema names
-    - Missing FROST views (OBSERVATIONS, DATASTREAMS, THINGS)
-
-    Uses a separate connection from the main water_dp-api database.
-    """
+    """Direct database access for the TimeIO PostgreSQL database."""
 
     def __init__(
         self,
@@ -39,31 +50,43 @@ class TimeIODatabase:
         user: str = None,
         password: str = None,
     ):
-        """
-        Initialize TimeIO database connection parameters.
-
-        Args:
-            db_host: Database host (default: from settings or "localhost")
-            db_port: Database port (default: from settings or 5432)
-            database: Database name
-            user: Database user
-            password: Database password
-        """
-        self._db_host = db_host or getattr(settings, "timeio_db_host", "localhost")
-        self._db_port = db_port or getattr(settings, "timeio_db_port", 5432)
-        self.database = database or getattr(settings, "timeio_db_name", "postgres")
-        self.user = user or getattr(settings, "timeio_db_user", "postgres")
-        self.password = password or getattr(settings, "timeio_db_password", "postgres")
+        self._db_host = db_host or settings.timeio_db_host
+        self._db_port = db_port or settings.timeio_db_port
+        self.database = database or settings.timeio_db_name
+        self.user = user or settings.timeio_db_user
+        self.password = password or settings.timeio_db_password
+        self._custom_params = any([db_host, db_port, database, user, password])
 
     def _get_connection(self):
-        """Create database connection."""
-        return psycopg2.connect(
-            host=self._db_host,
-            port=self._db_port,
-            database=self.database,
-            user=self.user,
-            password=self.password,
-        )
+        """Get a connection from the pool, or create one if using custom params."""
+        if self._custom_params:
+            return psycopg2.connect(
+                host=self._db_host,
+                port=self._db_port,
+                database=self.database,
+                user=self.user,
+                password=self.password,
+            )
+        return _get_pool().getconn()
+
+    def _release_connection(self, conn):
+        """Return a connection to the pool."""
+        if self._custom_params:
+            conn.close()
+        else:
+            try:
+                _get_pool().putconn(conn)
+            except Exception:
+                conn.close()
+
+    @contextmanager
+    def connection(self):
+        """Context manager for database connections."""
+        conn = self._get_connection()
+        try:
+            yield conn
+        finally:
+            self._release_connection(conn)
 
     # ========== Schema Mapping Fixes ==========
 
@@ -83,7 +106,7 @@ class TimeIODatabase:
                 rows = cursor.fetchall()
                 return [{"schema": row[0], "thing_uuid": row[1]} for row in rows]
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def get_user_schemas(self) -> List[str]:
         """
@@ -103,7 +126,7 @@ class TimeIODatabase:
                 )
                 return [row[0] for row in cursor.fetchall()]
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def fix_schema_mapping(self, thing_uuid: str, correct_schema: str) -> bool:
         """
@@ -126,7 +149,7 @@ class TimeIODatabase:
                 connection.commit()
                 return cursor.rowcount > 0
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def get_schema_for_thing(self, thing_uuid: str) -> Optional[str]:
         """
@@ -142,7 +165,7 @@ class TimeIODatabase:
                 result = cursor.fetchone()
                 return result[0] if result else None
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def fix_all_schema_mappings(self) -> Tuple[int, List[str]]:
         """
@@ -198,7 +221,7 @@ class TimeIODatabase:
                 return len(fixed_uuids), fixed_uuids
 
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     # ========== FROST Views ==========
 
@@ -229,7 +252,7 @@ class TimeIODatabase:
                         return False
                 return True
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def create_frost_views(self, schema: str) -> bool:
         """
@@ -451,7 +474,7 @@ class TimeIODatabase:
             connection.rollback()
             return False
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def ensure_frost_views(self, schema: str) -> bool:
         """
@@ -518,7 +541,7 @@ class TimeIODatabase:
                 rows = cursor.fetchall()
                 return [str(row[0]) for row in rows]
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def get_all_things_with_ingest_type(self) -> List[Dict[str, str]]:
         """
@@ -539,10 +562,9 @@ class TimeIODatabase:
                 rows = cursor.fetchall()
                 return [{"uuid": str(row[0]), "ingest_type": row[1]} for row in rows]
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def _get_parser_type_id(self, type_name: str) -> int:
-
         """Get parser type ID from config_db."""
         connection = self._get_connection()
         try:
@@ -558,7 +580,7 @@ class TimeIODatabase:
                     return row[0]
                 raise ValueError(f"Parser type '{type_name}' not found")
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def create_parser(
         self,
@@ -651,105 +673,7 @@ class TimeIODatabase:
             logger.error(f"Failed to create parser: {e}")
             raise
         finally:
-            connection.close()
-
-    def get_parsers_by_group(self, group_id: str) -> List[Dict[str, Any]]:
-        """
-        Get all parsers associated with a project (via UUID matching).
-        """
-        # Since parsers are stored with a UUID derived from ProjectUUID, we technically can't query by Project ID easily
-        # unless we parse all UUIDs?
-        # NO, `file_parser` table does NOT have `project_id`.
-        # It ONLY has `uuid`.
-        # And the UUID is `uuid5(NAMESPACE_DNS, name + group_id)`.
-        # This makes it hard to "List all parsers for a group" efficiently without a reverse lookup or extra table.
-        # BUT, `config_db.s3_store` links `file_parser_id`.
-        # And `thing` links `s3_store` which links `project`.
-        # So we can find parsers CURRENTLY USED by things in the project.
-        # But "Unused" parsers created via API? We can't easily find them if we rely only on the UUID hash.
-        # Wait, create_thing_config: `uuid_base = f"{parser['name']}{proj_uuid}"`.
-        # If we list ALL parsers, we can't tell which ones belong to which project easily.
-
-        # User requirement: "input should be our water-dp-api project_uuid which should be used to resolve group".
-        # If I can't filter by group in DB, I return ALL?
-        # Or I add a column/table?
-        # I can't change schema easily (migrations).
-
-        # Alternative: We store the project_id in `params`?
-
-        # For now, I will list ALL parsers and filter in Python if possible,
-        # OR just list logic:
-        # User can only see parsers linked to Things in their project?
-        # The user wants to CREATE a parser then Link it.
-        # If I return all parsers, it might be messy.
-
-        # Let's verify `file_parser` columns again. Maybe I missed `project_id`?
-        # configdb.py: columns=["file_parser_type_id", "name", "params", "uuid"]
-        # No project_id.
-
-        # WORKAROUND:
-        # Query `file_parser`.
-        # For each parser, try to match UUID check against `uuid5(name + group_id)`.
-        # If match, it belongs to this group.
-        # This is CPU intensive if many parsers, but for current scale likely fine.
-
-        import uuid as uuid_pkg
-
-        connection = self._get_connection()
-        try:
-            with connection.cursor(cursor_factory=RealDictCursor) as cursor:
-                cursor.execute(
-                    """
-                    SELECT
-                        fp.id, fp.name, fp.params, fp.uuid, fpt.name as type
-                    FROM config_db.file_parser fp
-                    JOIN config_db.file_parser_type fpt ON fp.file_parser_type_id = fpt.id
-                    """
-                )
-                rows = cursor.fetchall()
-
-                results = []
-                for row in rows:
-                    # Check if this parser belongs to the requested group
-                    # Reconstruct UUID
-                    if group_id:
-                        expected_uuid = str(
-                            uuid_pkg.uuid5(
-                                uuid_pkg.NAMESPACE_DNS, f"{row['name']}{group_id}"
-                            )
-                        )
-                        if expected_uuid != str(row["uuid"]):
-                            continue  # Skip if uuid doesn't match this group derivation
-
-                    # Map params back to settings schema
-                    params = (
-                        row["params"]
-                        if isinstance(row["params"], dict)
-                        else json.loads(row["params"])
-                    )
-
-                    results.append(
-                        {
-                            "id": row["id"],
-                            "name": row["name"],
-                            "group_id": group_id,  # Can't know for sure if no group_id passed, but here we filtered
-                            "type": (
-                                "CsvParser"
-                                if row["type"] == "csvparser"
-                                else row["type"]
-                            ),
-                            "settings": {
-                                "delimiter": params.get("delimiter"),
-                                "exclude_headlines": params.get("skiprows"),
-                                "exclude_footlines": params.get("skipfooter"),
-                                "timestamp_columns": params.get("timestamp_columns"),
-                                "pandas_read_csv": params.get("pandas_read_csv"),
-                            },
-                        }
-                    )
-                return results
-        finally:
-            connection.close()
+            self._release_connection(connection)
 
     def link_thing_to_parser(self, thing_uuid: str, parser_id: int) -> bool:
         """
@@ -790,7 +714,7 @@ class TimeIODatabase:
             )
             return False
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     # Deprecated / Revert helpers
     # def create_legacy_thing... (Removed as we pivot to config_db)
@@ -822,7 +746,7 @@ class TimeIODatabase:
             )
             return None
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def get_tsm_db_schema_by_name(self, name: str) -> Optional[str]:
         """Fetch project schema by name from thing_management_db."""
@@ -843,7 +767,7 @@ class TimeIODatabase:
             logger.debug(f"Failed to fetch TSM project by name '{name}': {error}")
             return None
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def get_all_ingest_types(self) -> List[Dict[str, Any]]:
         """Get all available ingest types from config_db."""
@@ -856,7 +780,7 @@ class TimeIODatabase:
             logger.error(f"Failed to fetch ingest types: {error}")
             return []
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def get_sensor_config_details(self, thing_uuid: str) -> Optional[Dict[str, Any]]:
         """Fetch full sensor configuration including ingest type, MQTT/S3 info, and schema context."""
@@ -891,7 +815,9 @@ class TimeIODatabase:
                 if result:
                     # Decrypt passwords if present
                     if result.get("mqtt_password"):
-                        result["mqtt_password"] = decrypt_password(result["mqtt_password"])
+                        result["mqtt_password"] = decrypt_password(
+                            result["mqtt_password"]
+                        )
                     if result.get("s3_pass"):
                         result["s3_pass"] = decrypt_password(result["s3_pass"])
                     return dict(result)
@@ -900,9 +826,11 @@ class TimeIODatabase:
             logger.error(f"Failed to fetch sensor config {thing_uuid}: {error}")
             return None
         finally:
-            connection.close()
+            self._release_connection(connection)
 
-    def update_sensor_config(self, thing_uuid: str, update_data: Dict[str, Any]) -> bool:
+    def update_sensor_config(
+        self, thing_uuid: str, update_data: Dict[str, Any]
+    ) -> bool:
         """Update sensor configuration (name, description, mqtt, parser, etc.)."""
         connection = self._get_admin_connection()
         try:
@@ -910,12 +838,12 @@ class TimeIODatabase:
                 # 1. Get current IDs
                 cursor.execute(
                     "SELECT id, mqtt_id, s3_store_id FROM config_db.thing WHERE uuid = %s",
-                    (thing_uuid,)
+                    (thing_uuid,),
                 )
                 row = cursor.fetchone()
                 if not row:
                     return False
-                
+
                 thing_id, mqtt_id, s3_store_id = row
 
                 # 2. Update Thing (Name, Description, Ingest Type)
@@ -930,27 +858,11 @@ class TimeIODatabase:
                 if "ingest_type_id" in update_data:
                     thing_updates["ingest_type_id"] = "%s"
                     thing_values.append(update_data["ingest_type_id"])
-                
-                if thing_updates:
-                    set_clause = sql.SQL(", ").join(
-                        [sql.SQL("{} = %s").format(sql.Identifier(k)) for k in thing_updates.keys()]
-                    )
-                    # We need to construct the query string manually or with psycopg2.sql correctly
-                    # The above list comprehension is wrong because it uses %s for values but appends to list
-                    # Let's fix this using explicit sql.Identifier and sql.Placeholder? No, simpler:
-                    
-                    set_items = []
-                    values = []
-                    for k, v in thing_updates.items():
-                        # v is just placeholder string "%s", real value is in thing_values matching index
-                        # Wait, the loop above already populated thing_values correctly?
-                        # Yes: name -> append value.
-                        pass
 
-                    # Re-do cleaner:
+                if thing_updates:
                     set_parts = []
                     query_values = []
-                    
+
                     if "name" in update_data:
                         set_parts.append(sql.SQL("name = %s"))
                         query_values.append(update_data["name"])
@@ -960,48 +872,52 @@ class TimeIODatabase:
                     if "ingest_type_id" in update_data:
                         set_parts.append(sql.SQL("ingest_type_id = %s"))
                         query_values.append(update_data["ingest_type_id"])
-                    
+
                     if set_parts:
-                        query = sql.SQL("UPDATE config_db.thing SET {} WHERE id = %s").format(
-                            sql.SQL(", ").join(set_parts)
-                        )
+                        query = sql.SQL(
+                            "UPDATE config_db.thing SET {} WHERE id = %s"
+                        ).format(sql.SQL(", ").join(set_parts))
                         cursor.execute(query, query_values + [thing_id])
 
                 # 3. Update MQTT (Topic, User, Device Type, Password)
                 if mqtt_id:
                     mqtt_parts = []
                     mqtt_values = []
-                    
+
                     if "mqtt_topic" in update_data:
                         mqtt_parts.append(sql.SQL("topic = %s"))
                         mqtt_values.append(update_data["mqtt_topic"])
                     if "mqtt_username" in update_data:
-                        mqtt_parts.append(sql.SQL("\"user\" = %s"))
+                        mqtt_parts.append(sql.SQL('"user" = %s'))
                         mqtt_values.append(update_data["mqtt_username"])
                     if "mqtt_device_type_id" in update_data:
                         mqtt_parts.append(sql.SQL("mqtt_device_type_id = %s"))
                         mqtt_values.append(update_data["mqtt_device_type_id"])
                     if "mqtt_password" in update_data and update_data["mqtt_password"]:
-                         encrypted = encrypt_password(update_data["mqtt_password"])
-                         mqtt_parts.append(sql.SQL("password = %s"))
-                         mqtt_values.append(encrypted)
-                         # Also update hash/plaintext? Legacy reasons.
-                         # Assuming password_hashed is NOT used or mirrored. 
-                         # Let's check schema/history? Or just update password column.
-                         # Looking at `get_sensor_config_details`, it reads `password` and decrypts it.
-                         # So `password` column holds encrypted string.
+                        encrypted = encrypt_password(update_data["mqtt_password"])
+                        mqtt_parts.append(sql.SQL("password = %s"))
+                        mqtt_values.append(encrypted)
+                        # Also update hash/plaintext? Legacy reasons.
+                        # Assuming password_hashed is NOT used or mirrored.
+                        # Let's check schema/history? Or just update password column.
+                        # Looking at `get_sensor_config_details`, it reads `password` and decrypts it.
+                        # So `password` column holds encrypted string.
 
                     if mqtt_parts:
-                        query = sql.SQL("UPDATE config_db.mqtt SET {} WHERE id = %s").format(
-                            sql.SQL(", ").join(mqtt_parts)
-                        )
+                        query = sql.SQL(
+                            "UPDATE config_db.mqtt SET {} WHERE id = %s"
+                        ).format(sql.SQL(", ").join(mqtt_parts))
                         cursor.execute(query, mqtt_values + [mqtt_id])
 
                 # 4. Update S3 Store (File Parser) - only if a valid parser_id is provided
-                if s3_store_id and "file_parser_id" in update_data and update_data["file_parser_id"] is not None:
+                if (
+                    s3_store_id
+                    and "file_parser_id" in update_data
+                    and update_data["file_parser_id"] is not None
+                ):
                     cursor.execute(
                         "UPDATE config_db.s3_store SET file_parser_id = %s WHERE id = %s",
-                        (update_data["file_parser_id"], s3_store_id)
+                        (update_data["file_parser_id"], s3_store_id),
                     )
 
                 connection.commit()
@@ -1011,8 +927,7 @@ class TimeIODatabase:
             logger.error(f"Failed to update sensor config {thing_uuid}: {error}")
             return False
         finally:
-            connection.close()
-
+            self._release_connection(connection)
 
     def get_thing_config_by_uuid(self, thing_uuid: str) -> Optional[Dict[str, Any]]:
         """Legacy wrapper for MQTT credentials."""
@@ -1021,7 +936,14 @@ class TimeIODatabase:
             return {"mqtt_user": config["mqtt_user"], "mqtt_pass": config["mqtt_pass"]}
         return None
 
-    def get_all_sensors_paginated(self, limit: int = 20, offset: int = 0, schemas: list = None, search: str = None, ingest_type: str = None) -> Dict[str, Any]:
+    def get_all_sensors_paginated(
+        self,
+        limit: int = 20,
+        offset: int = 0,
+        schemas: list = None,
+        search: str = None,
+        ingest_type: str = None,
+    ) -> Dict[str, Any]:
         """Fetch sensors with pagination, optionally filtered by accessible schemas, search term, and ingest type."""
         connection = self._get_admin_connection()
         try:
@@ -1035,7 +957,9 @@ class TimeIODatabase:
                     params.append(schemas)
 
                 if search:
-                    conditions.append("(t.name ILIKE %s OR t.uuid::text ILIKE %s OR p.name ILIKE %s OR m.topic ILIKE %s)")
+                    conditions.append(
+                        "(t.name ILIKE %s OR t.uuid::text ILIKE %s OR p.name ILIKE %s OR m.topic ILIKE %s)"
+                    )
                     like = f"%{search}%"
                     params.extend([like, like, like, like])
 
@@ -1043,21 +967,27 @@ class TimeIODatabase:
                     conditions.append("it.name = %s")
                     params.append(ingest_type)
 
-                where_clause = (" WHERE " + " AND ".join(conditions)) if conditions else ""
+                where_clause = (
+                    (" WHERE " + " AND ".join(conditions)) if conditions else ""
+                )
 
                 # Count total (with filters)
-                count_query = """
+                count_query = (
+                    """
                     SELECT COUNT(*) FROM config_db.thing t
                     LEFT JOIN config_db.ingest_type it ON t.ingest_type_id = it.id
                     LEFT JOIN config_db.project p ON t.project_id = p.id
                     LEFT JOIN config_db.database d ON p.database_id = d.id
                     LEFT JOIN config_db.mqtt m ON t.mqtt_id = m.id
-                """ + where_clause
+                """
+                    + where_clause
+                )
                 cursor.execute(count_query, params)
                 total = cursor.fetchone()["count"]
 
                 # Fetch page with ingest_type and schema info
-                query = """
+                query = (
+                    """
                     SELECT
                         t.uuid, t.name, t.description, t.ingest_type_id,
                         it.name as ingest_type,
@@ -1074,10 +1004,13 @@ class TimeIODatabase:
                     LEFT JOIN config_db.mqtt_device_type dt ON m.mqtt_device_type_id = dt.id
                     LEFT JOIN config_db.s3_store s ON t.s3_store_id = s.id
                     LEFT JOIN config_db.file_parser pa ON s.file_parser_id = pa.id
-                """ + where_clause + """
+                """
+                    + where_clause
+                    + """
                     ORDER BY t.id DESC
                     LIMIT %s OFFSET %s
                 """
+                )
                 cursor.execute(query, params + [limit, offset])
                 items = cursor.fetchall()
                 return {"items": [dict(i) for i in items], "total": total}
@@ -1085,27 +1018,7 @@ class TimeIODatabase:
             logger.error(f"Failed to fetch paginated sensors: {error}")
             return {"items": [], "total": 0}
         finally:
-            connection.close()
-
-    def get_all_mqtt_device_types(self, limit: int = 100, offset: int = 0) -> Dict[str, Any]:
-        """Fetch all MQTT device types."""
-        connection = self._get_admin_connection()
-        try:
-            with connection.cursor(cursor_factory=RealDictCursor) as cursor:
-                cursor.execute("SELECT COUNT(*) FROM config_db.mqtt_device_type")
-                total = cursor.fetchone()["count"]
-
-                cursor.execute(
-                    "SELECT id, name, properties FROM config_db.mqtt_device_type ORDER BY name LIMIT %s OFFSET %s",
-                    (limit, offset)
-                )
-                items = cursor.fetchall()
-                return {"items": [dict(i) for i in items], "total": total}
-        except Exception as error:
-            logger.error(f"Failed to fetch device types: {error}")
-            return {"items": [], "total": 0}
-        finally:
-            connection.close()
+            self._release_connection(connection)
 
     def get_mqtt_device_type(self, id_or_name: str) -> Optional[Dict[str, Any]]:
         """Fetch a single MQTT device type by ID or name."""
@@ -1113,43 +1026,22 @@ class TimeIODatabase:
         try:
             with connection.cursor(cursor_factory=RealDictCursor) as cursor:
                 if id_or_name.isdigit():
-                    cursor.execute("SELECT * FROM config_db.mqtt_device_type WHERE id = %s", (int(id_or_name),))
+                    cursor.execute(
+                        "SELECT * FROM config_db.mqtt_device_type WHERE id = %s",
+                        (int(id_or_name),),
+                    )
                 else:
-                    cursor.execute("SELECT * FROM config_db.mqtt_device_type WHERE name = %s", (id_or_name,))
+                    cursor.execute(
+                        "SELECT * FROM config_db.mqtt_device_type WHERE name = %s",
+                        (id_or_name,),
+                    )
                 result = cursor.fetchone()
                 return dict(result) if result else None
         except Exception as error:
             logger.error(f"Failed to fetch device type {id_or_name}: {error}")
             return None
         finally:
-            connection.close()
-
-    def get_parsers_by_group(self, group_id: str, limit: int = 100, offset: int = 0) -> Dict[str, Any]:
-        """Fetch parsers by group (project UUID)."""
-        connection = self._get_admin_connection()
-        try:
-            with connection.cursor(cursor_factory=RealDictCursor) as cursor:
-                # Find project id
-                cursor.execute("SELECT id FROM config_db.project WHERE uuid = %s", (group_id,))
-                p_row = cursor.fetchone()
-                if not p_row:
-                    return {"items": [], "total": 0}
-                
-                p_id = p_row["id"]
-                cursor.execute("SELECT COUNT(*) FROM config_db.parser WHERE project_id = %s", (p_id,))
-                total = cursor.fetchone()["count"]
-
-                cursor.execute(
-                    "SELECT * FROM config_db.parser WHERE project_id = %s ORDER BY name LIMIT %s OFFSET %s",
-                    (p_id, limit, offset)
-                )
-                items = cursor.fetchall()
-                return {"items": [dict(i) for i in items], "total": total}
-        except Exception as error:
-            logger.error(f"Failed to fetch parsers for {group_id}: {error}")
-            return {"items": [], "total": 0}
-        finally:
-            connection.close()
+            self._release_connection(connection)
 
     def get_parser(self, uuid: str) -> Optional[Dict[str, Any]]:
         """Fetch parser by UUID from config_db.file_parser."""
@@ -1177,9 +1069,11 @@ class TimeIODatabase:
             logger.error(f"Failed to fetch parser {uuid}: {error}")
             return None
         finally:
-            connection.close()
+            self._release_connection(connection)
 
-    def update_parser(self, uuid: str, name: Optional[str] = None, settings: Optional[Dict] = None) -> Optional[Dict[str, Any]]:
+    def update_parser(
+        self, uuid: str, name: Optional[str] = None, settings: Optional[Dict] = None
+    ) -> Optional[Dict[str, Any]]:
         """Update a parser's name and/or settings in config_db.file_parser."""
         connection = self._get_admin_connection()
         try:
@@ -1213,8 +1107,7 @@ class TimeIODatabase:
             logger.error(f"Failed to update parser {uuid}: {error}")
             return None
         finally:
-            connection.close()
-
+            self._release_connection(connection)
 
     def get_datastream_metadata(self, thing_uuid: str) -> List[Dict[str, Any]]:
         """Fetch structured metadata for all datastreams of a thing from sms schema."""
@@ -1222,7 +1115,7 @@ class TimeIODatabase:
         try:
             with connection.cursor(cursor_factory=RealDictCursor) as cursor:
                 query = """
-                    SELECT 
+                    SELECT
                         dp.id, dp.datastream_name, dp.unit_name, dp.unit_symbol,
                         dp.op_name, dp.accuracy, dp.resolution,
                         dp.measuring_range_min, dp.measuring_range_max,
@@ -1237,11 +1130,13 @@ class TimeIODatabase:
             logger.warning(f"Failed to fetch datastream metadata for {thing_uuid}: {e}")
             return []
         finally:
-            connection.close()
+            self._release_connection(connection)
 
-    def upsert_datastream_metadata(self, thing_uuid: str, datastream_id: int, **kwargs) -> bool:
+    def upsert_datastream_metadata(
+        self, thing_uuid: str, datastream_id: int, **kwargs
+    ) -> bool:
         """Upsert metadata in sms schema and link to datastream."""
-        # This one is complex. Implementation omitted for brevity in this step, 
+        # This one is complex. Implementation omitted for brevity in this step,
         # but I'll add a minimal version to avoid crashes.
         return True
 
@@ -1329,9 +1224,7 @@ class TimeIODatabase:
                         f"Updated datastream {datastream_id} metadata in {schema}"
                     )
                 else:
-                    logger.warning(
-                        f"Datastream {datastream_id} not found in {schema}"
-                    )
+                    logger.warning(f"Datastream {datastream_id} not found in {schema}")
                 return updated
 
         except Exception as e:
@@ -1341,7 +1234,7 @@ class TimeIODatabase:
             )
             return False
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def get_thing_configs_by_uuids(
         self, thing_uuids: List[str]
@@ -1373,7 +1266,7 @@ class TimeIODatabase:
             logger.error(f"Failed to fetch thing configs batch: {error}")
             return {}
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def get_active_simulations(self) -> List[Dict[str, Any]]:
         """Fetch all things that have simulation configuration."""
@@ -1405,7 +1298,7 @@ class TimeIODatabase:
             logger.error(f"Failed to fetch active simulations: {error}")
             return []
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def get_config_project_by_name(self, name: str) -> Optional[Dict[str, Any]]:
         """Fetch project details (id, db_schema) by name from config_db."""
@@ -1428,7 +1321,7 @@ class TimeIODatabase:
             logger.error(f"Failed to fetch config project by name '{name}': {error}")
             return None
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def find_project_schema(self, project_slug: str) -> Optional[str]:
         """
@@ -1457,7 +1350,7 @@ class TimeIODatabase:
                 row = cursor.fetchone()
                 return row[0] if row else None
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def clone_schema_structure(self, source_schema: str, target_schema: str) -> bool:
         """
@@ -1554,7 +1447,7 @@ class TimeIODatabase:
             connection.rollback()
             return False
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def get_next_project_schema_number(self, project_slug: str) -> int:
         """
@@ -1591,7 +1484,7 @@ class TimeIODatabase:
 
                 return max(numbers) + 1 if numbers else 1
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def create_legacy_thing(
         self, uuid: str, name: str, description: str = ""
@@ -1631,7 +1524,7 @@ class TimeIODatabase:
             logger.error(f"Failed to create legacy thing {uuid}: {e}")
             return None
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     # ========== User Management ==========
 
@@ -1812,7 +1705,7 @@ class TimeIODatabase:
                 cursor.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", (username,))
                 return bool(cursor.fetchone())
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def check_thing_exists(self, uuid: str) -> bool:
         """Check if a thing UUID already exists in config_db or tsm_thing."""
@@ -1823,7 +1716,7 @@ class TimeIODatabase:
                 cursor.execute("SELECT 1 FROM config_db.thing WHERE uuid = %s", [uuid])
                 return bool(cursor.fetchone())
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def check_schema_exists(self, schema_name: str) -> bool:
         """Check if a schema exists in the database."""
@@ -1836,7 +1729,7 @@ class TimeIODatabase:
                 )
                 return bool(cursor.fetchone())
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def create_user(self, username: str, password: str) -> bool:
         """Create a database user."""
@@ -1857,7 +1750,7 @@ class TimeIODatabase:
             connection.rollback()
             return False
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def grant_schema_access(
         self, schema: str, username: str, write: bool = False
@@ -1919,7 +1812,7 @@ class TimeIODatabase:
             connection.rollback()
             return False
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def ensure_frost_user(self, schema: str, ro_user: str, ro_password: str) -> bool:
         """
@@ -1985,7 +1878,7 @@ class TimeIODatabase:
             logger.error(f"Failed to fetch last observation times: {error}")
             return {}  # Fail gracefully (return empty dict means no updates shown)
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     # ========== ConfigDB Management (v3) ==========
 
@@ -2013,7 +1906,7 @@ class TimeIODatabase:
                 result = cursor.fetchone()
                 return result[0] if result else None
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def get_or_create_config_project(
         self,
@@ -2086,7 +1979,7 @@ class TimeIODatabase:
             logger.error(f"Failed to create config project: {error}")
             raise
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def create_thing_config(
         self,
@@ -2218,7 +2111,7 @@ class TimeIODatabase:
             logger.error(f"Failed to create thing config: {error}")
             raise
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def register_sensor_metadata(
         self, thing_uuid: str, properties: List[Dict[str, str]]
@@ -2267,7 +2160,7 @@ class TimeIODatabase:
             logger.error(f"Failed to register sensor metadata: {error}")
             raise
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     # ========== Utility ==========
 
@@ -2277,7 +2170,7 @@ class TimeIODatabase:
             connection = self._get_connection()
             with connection.cursor() as cursor:
                 cursor.execute("SELECT 1")
-            connection.close()
+            self._release_connection(connection)
             return True
         except Exception:
             return False
@@ -2302,9 +2195,11 @@ class TimeIODatabase:
                 row = cursor.fetchone()
                 return row[0] if row else None
         finally:
-            connection.close()
+            self._release_connection(connection)
 
-    def get_thing_properties(self, schema: str, thing_uuid: str) -> Optional[Dict[str, Any]]:
+    def get_thing_properties(
+        self, schema: str, thing_uuid: str
+    ) -> Optional[Dict[str, Any]]:
         """Read current properties JSON from {schema}.thing for a given UUID."""
         connection = self._get_connection()
         try:
@@ -2318,14 +2213,17 @@ class TimeIODatabase:
                     props = row["properties"]
                     if isinstance(props, str):
                         import json
+
                         return json.loads(props)
                     return dict(props) if props else {}
                 return {}
         except Exception as e:
-            logger.error(f"Failed to get thing properties for {thing_uuid} in {schema}: {e}")
+            logger.error(
+                f"Failed to get thing properties for {thing_uuid} in {schema}: {e}"
+            )
             return {}
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def update_thing_properties(
         self, schema: Optional[str], thing_uuid: str, updates: Dict[str, Any]
@@ -2391,7 +2289,7 @@ class TimeIODatabase:
             logger.error(f"Failed to update thing {thing_uuid} in schema {schema}: {e}")
             raise
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def upsert_thing_to_project_db(
         self,
@@ -2428,7 +2326,7 @@ class TimeIODatabase:
             logger.error(f"Failed to upsert thing to project db: {error}")
             return None
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def get_thing_id_in_project_db(self, schema: str, thing_uuid: str) -> Optional[int]:
         """Get database ID of a thing in project DB. Returns None if not found or schema missing."""
@@ -2449,7 +2347,7 @@ class TimeIODatabase:
             logger.debug(f"Thing lookup failed for {thing_uuid} in {schema}: {e}")
             return None
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def get_project_uuid_by_schema(self, schema_name: str) -> Optional[Dict[str, Any]]:
         """
@@ -2473,7 +2371,7 @@ class TimeIODatabase:
                     return {"uuid": row[0], "name": row[1]}
                 return None
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def get_database_config(self, schema_name: str) -> Optional[Dict[str, Any]]:
         """
@@ -2503,7 +2401,7 @@ class TimeIODatabase:
                     }
                 return None
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def ensure_datastreams_in_project_db(
         self, schema: str, thing_uuid: str, properties: List[Dict[str, str]]
@@ -2564,7 +2462,7 @@ class TimeIODatabase:
             logger.error(f"Failed to ensure datastreams in project db: {error}")
             return False
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def get_sensors_by_uuids(
         self, schema: str, uuids: List[str], skip: int = 0, limit: int = 100
@@ -2622,7 +2520,7 @@ class TimeIODatabase:
             )
             return []
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def get_all_sensors_basic(self, schema: str) -> List[Dict[str, Any]]:
         """Fetch basic metadata for all sensors in a project schema, including location from SMS joins."""
@@ -2665,7 +2563,7 @@ class TimeIODatabase:
             )
             return []
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def get_sensor_rich(self, thing_uuid: str) -> Optional[Dict[str, Any]]:
         """Fetch a single sensor with rich metadata including location."""
@@ -2759,7 +2657,7 @@ class TimeIODatabase:
             logger.error(f"Failed to fetch rich sensor {thing_uuid}: {error}")
             return None
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def get_s3_config(self, thing_uuid: str) -> Optional[Dict[str, Any]]:
         """
@@ -2794,7 +2692,7 @@ class TimeIODatabase:
             logger.error(f"Failed to fetch S3 config for {thing_uuid}: {error}")
             return None
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def get_schema_from_uuid(self, uuid: str) -> Optional[str]:
         connection = self._get_admin_connection()
@@ -2808,7 +2706,7 @@ class TimeIODatabase:
             logger.error(f"Failed to fetch schema for {uuid}: {error}")
             return None
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def get_thing_id_from_uuid(self, uuid: str) -> Optional[str]:
         connection = self._get_admin_connection()
@@ -2823,7 +2721,7 @@ class TimeIODatabase:
             logger.error(f"Failed to fetch thing ID for {uuid}: {error}")
             return None
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def get_locations_from_project_uuid(
         self, project_uuid: str
@@ -2839,7 +2737,7 @@ class TimeIODatabase:
             logger.error(f"Failed to fetch locations for {project_uuid}: {error}")
             return None
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def get_thing_observations(
         self,
@@ -2897,7 +2795,8 @@ class TimeIODatabase:
             )
             return []
         finally:
-            connection.close()
+            self._release_connection(connection)
+
     def create_csv_parser(
         self,
         name: str,
@@ -2905,20 +2804,23 @@ class TimeIODatabase:
         timestamp_column: int,
         timestamp_format: str,
         header_line: int,
-        extra_params: Optional[Dict[str, Any]] = None
+        extra_params: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict[str, Any]]:
         """Create a new CSV parser in config_db."""
         import json
+
         connection = self._get_admin_connection()
         try:
             with connection.cursor(cursor_factory=RealDictCursor) as cursor:
                 # 1. Get CSV Type ID
-                cursor.execute("SELECT id FROM config_db.file_parser_type WHERE name ILIKE 'csvparser' OR name ILIKE 'csv' OR name ILIKE 'delimited'")
+                cursor.execute(
+                    "SELECT id FROM config_db.file_parser_type WHERE name ILIKE 'csvparser' OR name ILIKE 'csv' OR name ILIKE 'delimited'"
+                )
                 row = cursor.fetchone()
                 if not row:
                     logger.error("CSV file_parser_type not found")
                     return None
-                type_id = row['id']
+                type_id = row["id"]
 
                 # 2. Construct Params
                 params = {
@@ -2938,20 +2840,20 @@ class TimeIODatabase:
                     VALUES (%s, %s, %s)
                     RETURNING id, uuid, name, params
                     """,
-                    (name, type_id, json.dumps(params))
+                    (name, type_id, json.dumps(params)),
                 )
                 result = cursor.fetchone()
                 connection.commit()
                 # Ensure result is dict and UUID is string
                 res_dict = dict(result)
-                if 'uuid' in res_dict:
-                    res_dict['uuid'] = str(res_dict['uuid'])
+                if "uuid" in res_dict:
+                    res_dict["uuid"] = str(res_dict["uuid"])
                 return res_dict
         except Exception as error:
             logger.error(f"Failed to create CSV parser: {error}")
             return None
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def get_parsers_by_group(
         self, group_id: str, limit: int = 100, offset: int = 0
@@ -2970,7 +2872,7 @@ class TimeIODatabase:
                 # Fetch items
                 cursor.execute(
                     """
-                    SELECT 
+                    SELECT
                         fp.id, fp.uuid, fp.name, fp.params,
                         pt.name as type_name
                     FROM config_db.file_parser fp
@@ -2985,13 +2887,13 @@ class TimeIODatabase:
                 for item in items:
                     if item.get("uuid"):
                         item["uuid"] = str(item["uuid"])
-                        
+
                 return {"items": [dict(item) for item in items], "total": total}
         except Exception as e:
             logger.error(f"Failed to fetch parsers: {e}")
             return {"items": [], "total": 0}
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def delete_parser(self, parser_id: int) -> Dict[str, Any]:
         """
@@ -3041,7 +2943,7 @@ class TimeIODatabase:
             logger.error(f"Failed to delete parser {parser_id}: {e}")
             return {"success": False, "reason": str(e)}
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def upsert_mqtt_device_type(self, name: str, properties: Dict[str, Any]) -> bool:
         """
@@ -3066,9 +2968,11 @@ class TimeIODatabase:
             logger.error(f"Failed to upsert device type {name}: {e}")
             raise
         finally:
-            connection.close()
+            self._release_connection(connection)
 
-    def get_all_mqtt_device_types(self, limit: int = 100, offset: int = 0) -> Dict[str, Any]:
+    def get_all_mqtt_device_types(
+        self, limit: int = 100, offset: int = 0
+    ) -> Dict[str, Any]:
         """
         Get all MQTT device types with pagination.
         """
@@ -3088,7 +2992,7 @@ class TimeIODatabase:
                     ORDER BY name
                     LIMIT %s OFFSET %s
                     """,
-                    (limit, offset)
+                    (limit, offset),
                 )
                 rows = cursor.fetchall()
                 return {"items": [dict(row) for row in rows], "total": total}
@@ -3096,7 +3000,7 @@ class TimeIODatabase:
             logger.error(f"Failed to fetch device types: {e}")
             return {"items": [], "total": 0}
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def get_thing_full_config(self, thing_uuid: str) -> Optional[Dict[str, Any]]:
         """
@@ -3113,28 +3017,24 @@ class TimeIODatabase:
         # details has 'project_name', and we added 'project_uuid' to the query.
         project_uuid = details.get("project_uuid")
         if not project_uuid:
-             logger.error(f"Thing {thing_uuid} has no project UUID associated")
-             return None
+            logger.error(f"Thing {thing_uuid} has no project UUID associated")
+            return None
 
         # 3. Get Database Credentials
         if not details.get("schema_name"):
-             logger.error(f"Thing {thing_uuid} has no schema associated")
-             return None
-             
+            logger.error(f"Thing {thing_uuid} has no schema associated")
+            return None
+
         db_config = self.get_database_config(details["schema_name"])
         if not db_config:
-             logger.error(f"Database config not found for schema {details['schema_name']}")
-             return None
+            logger.error(
+                f"Database config not found for schema {details['schema_name']}"
+            )
+            return None
 
         # 4. Construct Payload
         ingest_type = details.get("ingest_type", "mqtt")
-        
-        # Helper to construct parsers payload
-        parsers_payload = {"parsers": []}
-        # Ideally we would fetch parsers if this was a dataset, but for sensors usually default parser 0 or empty is fine
-        # We can implement fetching parsers later if strictly required. 
-        # For now, empty parsers list is acceptable for simple sensors.
-        
+
         mqtt_password_encrypted = None
         if details.get("mqtt_password"):
             # It was decrypted by get_sensor_config_details, so we re-encrypt it
@@ -3147,10 +3047,7 @@ class TimeIODatabase:
             "description": details["description"] or "",
             "ingest_type": ingest_type,
             "mqtt_device_type": details.get("device_type", "chirpstack_generic"),
-            "project": {
-                "name": details["project_name"],
-                "uuid": project_uuid
-            },
+            "project": {"name": details["project_name"], "uuid": project_uuid},
             "database": {
                 "schema": details["schema_name"],
                 "username": db_config["username"],
@@ -3170,7 +3067,9 @@ class TimeIODatabase:
             "raw_data_storage": {
                 "bucket_name": details.get("s3_bucket"),
                 "username": details.get("s3_user"),
-                "password": encrypt_password(details["s3_pass"]) if details.get("s3_pass") else None,
+                "password": encrypt_password(details["s3_pass"])
+                if details.get("s3_pass")
+                else None,
                 "filename_pattern": "*",
             },
             "parsers": {},
@@ -3203,12 +3102,14 @@ class TimeIODatabase:
                     "private_key": es.get("private_key") or "",
                     "public_key": es.get("public_key") or "",
                 }
-        
+
         return payload
 
     # ========== External API Type CRUD ==========
 
-    def get_all_ext_api_types(self, limit: int = 100, offset: int = 0) -> Dict[str, Any]:
+    def get_all_ext_api_types(
+        self, limit: int = 100, offset: int = 0
+    ) -> Dict[str, Any]:
         """Get all external API types with pagination."""
         connection = self._get_admin_connection()
         try:
@@ -3232,7 +3133,7 @@ class TimeIODatabase:
             logger.error(f"Failed to fetch ext API types: {e}")
             return {"items": [], "total": 0}
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def get_ext_api_type(self, id_or_name) -> Optional[Dict[str, Any]]:
         """Get a single external API type by ID or name."""
@@ -3256,7 +3157,7 @@ class TimeIODatabase:
             logger.error(f"Failed to fetch ext API type {id_or_name}: {e}")
             return None
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def upsert_ext_api_type(self, name: str, properties: Dict[str, Any] = None) -> bool:
         """Insert or update an external API type."""
@@ -3280,7 +3181,7 @@ class TimeIODatabase:
             logger.error(f"Failed to upsert ext API type {name}: {e}")
             raise
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def delete_ext_api_type(self, id_or_name) -> Dict[str, Any]:
         """Delete an external API type (only if not referenced by any thing)."""
@@ -3325,13 +3226,17 @@ class TimeIODatabase:
                 )
                 deleted = cursor.fetchone()
                 connection.commit()
-                return {"success": True} if deleted else {"success": False, "reason": "Type not found"}
+                return (
+                    {"success": True}
+                    if deleted
+                    else {"success": False, "reason": "Type not found"}
+                )
         except Exception as e:
             connection.rollback()
             logger.error(f"Failed to delete ext API type {id_or_name}: {e}")
             return {"success": False, "reason": str(e)}
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     # ========== External Config Read/Write for Things ==========
 
@@ -3401,9 +3306,11 @@ class TimeIODatabase:
             logger.error(f"Failed to get external config for {thing_uuid}: {e}")
             return None
         finally:
-            connection.close()
+            self._release_connection(connection)
 
-    def update_thing_external_api(self, thing_uuid: str, ext_api_data: Dict[str, Any]) -> bool:
+    def update_thing_external_api(
+        self, thing_uuid: str, ext_api_data: Dict[str, Any]
+    ) -> bool:
         """Update or create ext_api config for an existing thing."""
         connection = self._get_admin_connection()
         try:
@@ -3487,9 +3394,11 @@ class TimeIODatabase:
             logger.error(f"Failed to update ext_api for {thing_uuid}: {e}")
             raise
         finally:
-            connection.close()
+            self._release_connection(connection)
 
-    def update_thing_external_sftp(self, thing_uuid: str, ext_sftp_data: Dict[str, Any]) -> bool:
+    def update_thing_external_sftp(
+        self, thing_uuid: str, ext_sftp_data: Dict[str, Any]
+    ) -> bool:
         """Update or create ext_sftp config for an existing thing."""
         connection = self._get_admin_connection()
         try:
@@ -3581,7 +3490,7 @@ class TimeIODatabase:
             logger.error(f"Failed to update ext_sftp for {thing_uuid}: {e}")
             raise
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def remove_thing_external_api(self, thing_uuid: str) -> bool:
         """Remove ext_api config from a thing."""
@@ -3626,7 +3535,7 @@ class TimeIODatabase:
             logger.error(f"Failed to remove ext_api from {thing_uuid}: {e}")
             return False
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def remove_thing_external_sftp(self, thing_uuid: str) -> bool:
         """Remove ext_sftp config from a thing."""
@@ -3671,4 +3580,4 @@ class TimeIODatabase:
             logger.error(f"Failed to remove ext_sftp from {thing_uuid}: {e}")
             return False
         finally:
-            connection.close()
+            self._release_connection(connection)

@@ -30,20 +30,24 @@ def mock_jwks():
 @pytest.mark.asyncio
 async def test_verify_token_valid(mock_jwks):
     """Test verification of a valid token."""
-    # Mock get_jwks to be an async function returning mock_jwks
+    mock_payload = {
+        "sub": "user-123",
+        "realm_access": {"roles": ["user"]},
+        "iss": "http://localhost:8081/realms/timeio",
+    }
     with patch("app.core.security.get_jwks", new_callable=AsyncMock) as mock_get_jwks:
         mock_get_jwks.return_value = mock_jwks
-        with patch("jose.jwt.get_unverified_header", return_value={"kid": "test-kid"}):
+        with patch(
+            "app.core.security.jwt.get_unverified_header",
+            return_value={"kid": "test-kid"},
+        ):
             with patch(
-                "jose.jwt.decode",
-                return_value={
-                    "sub": "user-123",
-                    "realm_access": {"roles": ["user"]},
-                    "iss": "http://localhost:8081/realms/timeio",
-                },
+                "app.core.security.jwt.algorithms.RSAAlgorithm.from_jwk",
+                return_value="mock-key",
             ):
-                payload = await verify_token("valid-token")
-                assert payload["sub"] == "user-123"
+                with patch("app.core.security.jwt.decode", return_value=mock_payload):
+                    payload = await verify_token("valid-token")
+                    assert payload["sub"] == "user-123"
 
 
 @pytest.mark.asyncio

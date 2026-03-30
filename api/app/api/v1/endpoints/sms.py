@@ -1,14 +1,14 @@
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Depends, Query, HTTPException, status
-from sqlalchemy.orm import Session
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.api import deps
-from app.models.user_context import Project
-from app.schemas.sms import SensorSMS, PaginatedResponse, CSVParserCreate, ParserUpdate
-from app.services.sms_service import SMSService
 from app.core.exceptions import ResourceNotFoundException
+from app.schemas.sms import CSVParserCreate, PaginatedResponse, ParserUpdate, SensorSMS
+from app.services.sms_service import SMSService
 
 router = APIRouter()
+
 
 @router.get(
     "/sensors",
@@ -19,8 +19,12 @@ router = APIRouter()
 async def list_sensors_extended(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
-    search: Optional[str] = Query(None, description="Search by name, UUID, project, or MQTT topic"),
-    ingest_type: Optional[str] = Query(None, description="Filter by ingest type (mqtt, sftp, extapi, extsftp)"),
+    search: Optional[str] = Query(
+        None, description="Search by name, UUID, project, or MQTT topic"
+    ),
+    ingest_type: Optional[str] = Query(
+        None, description="Filter by ingest type (mqtt, sftp, extapi, extsftp)"
+    ),
     user: dict = Depends(deps.get_current_user),
 ):
     """
@@ -38,8 +42,9 @@ async def list_sensors_extended(
         "items": result["items"],
         "total": result["total"],
         "page": page,
-        "page_size": page_size
+        "page_size": page_size,
     }
+
 
 @router.get(
     "/sensors/{uuid}",
@@ -56,6 +61,7 @@ async def get_sensor_details(uuid: str):
         raise ResourceNotFoundException(f"Sensor {uuid} not found")
     return result
 
+
 @router.put(
     "/sensors/{uuid}",
     response_model=SensorSMS,
@@ -71,6 +77,7 @@ async def update_sensor(uuid: str, update_data: Dict[str, Any]):
         raise ResourceNotFoundException(f"Sensor {uuid} not found")
     return result
 
+
 @router.delete(
     "/sensors/{uuid}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -85,10 +92,15 @@ async def delete_sensor(
     """
     Delete a sensor.
     """
-    success = await SMSService.delete_sensor(uuid, delete_from_source=delete_from_source)
+    success = await SMSService.delete_sensor(
+        uuid, delete_from_source=delete_from_source
+    )
     if not success:
-        raise ResourceNotFoundException(f"Sensor {uuid} not found or could not be deleted")
+        raise ResourceNotFoundException(
+            f"Sensor {uuid} not found or could not be deleted"
+        )
     return None
+
 
 @router.get(
     "/attributes/device-types",
@@ -105,8 +117,9 @@ async def list_device_types(
         "items": result["items"],
         "total": result["total"],
         "page": page,
-        "page_size": page_size
+        "page_size": page_size,
     }
+
 
 @router.get(
     "/attributes/device-types/{id}",
@@ -130,8 +143,11 @@ async def delete_device_type(id: str):
     """
     success = SMSService.delete_device_type(id)
     if not success:
-        raise HTTPException(status_code=404, detail="Device type not found or could not be deleted")
+        raise HTTPException(
+            status_code=404, detail="Device type not found or could not be deleted"
+        )
     return None
+
 
 @router.get(
     "/attributes/parsers",
@@ -144,13 +160,16 @@ async def list_parsers(
     page_size: int = Query(100, ge=1, le=500),
 ):
     """List all available parsers."""
-    result = SMSService.get_all_parsers(group_id=group_id, page=page, page_size=page_size)
+    result = SMSService.get_all_parsers(
+        group_id=group_id, page=page, page_size=page_size
+    )
     return {
         "items": result["items"],
         "total": result["total"],
         "page": page,
-        "page_size": page_size
+        "page_size": page_size,
     }
+
 
 @router.get(
     "/parsers/{uuid}",
@@ -164,6 +183,7 @@ async def get_parser(uuid: str):
         raise ResourceNotFoundException(f"Parser {uuid} not found")
     return parser
 
+
 @router.put(
     "/parsers/{uuid}",
     summary="Update Parser",
@@ -175,6 +195,7 @@ async def update_parser(uuid: str, parser_update: ParserUpdate):
     if not updated:
         raise ResourceNotFoundException(f"Parser {uuid} not found")
     return updated
+
 
 @router.delete(
     "/parsers/{parser_id}",
@@ -199,6 +220,7 @@ async def delete_parser(parser_id: int):
         raise HTTPException(status_code=404, detail=reason)
     return None
 
+
 @router.post(
     "/parsers/csv",
     summary="Create CSV Parser",
@@ -215,14 +237,15 @@ async def create_csv_parser(parser_in: CSVParserCreate):
         timestamp_column=parser_in.timestamp_column,
         timestamp_format=parser_in.timestamp_format,
         header_line=parser_in.header_line,
-        extra_params=parser_in.extra_params
+        extra_params=parser_in.extra_params,
     )
     if not result:
-         raise HTTPException(
+        raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create CSV parser",
         )
     return result
+
 
 @router.get(
     "/attributes/ingest-types",

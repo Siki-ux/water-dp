@@ -18,12 +18,11 @@ import logging
 from typing import Annotated, Any, List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api import deps
 from app.core.database import get_db
-from app.services.minio_service import minio_service
 from app.schemas.qaqc import (
     QAQCConfigCreate,
     QAQCConfigResponse,
@@ -33,6 +32,7 @@ from app.schemas.qaqc import (
     QAQCTestUpdate,
     QAQCTriggerRequest,
 )
+from app.services.minio_service import minio_service
 from app.services.project_service import ProjectService
 from app.services.qaqc_service import QAQCService
 
@@ -58,7 +58,7 @@ def _resolve_schema(schema_name: str) -> dict:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"No TSM project found for schema '{schema_name}'. "
-                   "Ensure at least one sensor exists in this schema.",
+            "Ensure at least one sensor exists in this schema.",
         )
     return tsm_project
 
@@ -100,14 +100,18 @@ def _build_test_response(test: dict) -> dict:
 def _get_config_with_tests(qaqc_id: int) -> dict:
     cfg = _svc.get_config(qaqc_id)
     if cfg is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="QA/QC config not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="QA/QC config not found"
+        )
     tests = _svc.list_tests(qaqc_id)
     return _build_config_response(cfg, [_build_test_response(t) for t in tests])
 
 
 def _assert_config_belongs_to_project(cfg: dict | None, tsm_project_id: int) -> None:
     if cfg is None or cfg.get("project_id") != tsm_project_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="QA/QC config not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="QA/QC config not found"
+        )
 
 
 # ==================================================================
@@ -127,7 +131,12 @@ def _assert_config_belongs_to_project(cfg: dict | None, tsm_project_id: int) -> 
 
 _CUSTOM_SAQC_BUCKET = "custom-saqc-functions"
 
-_CONNECTIVITY_HINTS = ("NameResolutionError", "Max retries exceeded", "Connection refused", "timed out")
+_CONNECTIVITY_HINTS = (
+    "NameResolutionError",
+    "Max retries exceeded",
+    "Connection refused",
+    "timed out",
+)
 
 
 def _raise_storage_error(exc: Exception) -> None:
@@ -138,7 +147,10 @@ def _raise_storage_error(exc: Exception) -> None:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Object storage is unavailable. Check MINIO_URL configuration.",
         )
-    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Object storage error.")
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="Object storage error.",
+    )
 
 
 def _ensure_custom_saqc_bucket() -> None:
@@ -159,7 +171,9 @@ async def list_custom_saqc_functions(
                 "name": obj.object_name.removesuffix(".py"),
                 "filename": obj.object_name,
                 "size": obj.size,
-                "uploaded_at": obj.last_modified.isoformat() if obj.last_modified else None,
+                "uploaded_at": obj.last_modified.isoformat()
+                if obj.last_modified
+                else None,
             }
             for obj in objects
         ]
@@ -211,10 +225,16 @@ async def upload_custom_saqc_function(
         raise
     except Exception as exc:
         _raise_storage_error(exc)
-    return {"name": file.filename.removesuffix(".py"), "filename": file.filename, "size": len(content)}
+    return {
+        "name": file.filename.removesuffix(".py"),
+        "filename": file.filename,
+        "size": len(content),
+    }
 
 
-@sms_router.delete("/qaqc/functions/{name}", status_code=status.HTTP_204_NO_CONTENT, tags=["qaqc"])
+@sms_router.delete(
+    "/qaqc/functions/{name}", status_code=status.HTTP_204_NO_CONTENT, tags=["qaqc"]
+)
 async def delete_custom_saqc_function(
     name: str,
     user: dict = Depends(deps.get_current_user),
@@ -260,7 +280,9 @@ async def sms_list_qaqc_configs(
     result = []
     for cfg in configs:
         tests = _svc.list_tests(cfg["id"])
-        result.append(_build_config_response(cfg, [_build_test_response(t) for t in tests]))
+        result.append(
+            _build_config_response(cfg, [_build_test_response(t) for t in tests])
+        )
     return result
 
 
@@ -404,7 +426,9 @@ async def sms_update_test(
     tests = _svc.list_tests(qaqc_id)
     test = next((t for t in tests if t["id"] == test_id), None)
     if test is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Test not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Test not found"
+        )
     return _build_test_response(test)
 
 
@@ -444,9 +468,15 @@ async def sms_trigger_qaqc(
         end_date=trigger_in.end_date,
     )
     if not ok:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Failed to publish QC trigger.")
-    return {"status": "triggered", "schema_name": schema_name, "qaqc_name": trigger_in.qaqc_name}
-
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to publish QC trigger.",
+        )
+    return {
+        "status": "triggered",
+        "schema_name": schema_name,
+        "qaqc_name": trigger_in.qaqc_name,
+    }
 
 
 # ==================================================================
@@ -466,7 +496,9 @@ async def get_thing_qaqc(
     """Get the per-sensor QA/QC config assigned to a Thing (if any)."""
     cfg = _svc.get_thing_qaqc(thing_uuid)
     if cfg is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No per-sensor QA/QC config.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="No per-sensor QA/QC config."
+        )
     tests = _svc.list_tests(cfg["id"])
     return _build_config_response(cfg, [_build_test_response(t) for t in tests])
 
@@ -519,7 +551,10 @@ async def add_thing_qaqc_test(
     """Add a test to the per-sensor QA/QC config."""
     cfg = _svc.get_thing_qaqc(thing_uuid)
     if cfg is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No per-sensor config assigned.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No per-sensor config assigned.",
+        )
     streams_raw = [s.model_dump() for s in test_in.streams] if test_in.streams else None
     new_id = _svc.create_test(
         qaqc_id=cfg["id"],
@@ -559,7 +594,10 @@ async def trigger_thing_qaqc(
     """Trigger QA/QC for a specific sensor."""
     ok = _svc.trigger_thing_qaqc(thing_uuid)
     if not ok:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Failed to publish QC trigger.")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to publish QC trigger.",
+        )
     return {"status": "triggered", "thing_uuid": thing_uuid}
 
 
@@ -568,7 +606,9 @@ async def trigger_thing_qaqc(
 # ==================================================================
 
 
-@router.get("/{project_id}/qaqc", response_model=List[QAQCConfigResponse], tags=["qaqc"])
+@router.get(
+    "/{project_id}/qaqc", response_model=List[QAQCConfigResponse], tags=["qaqc"]
+)
 async def list_qaqc_configs(
     project_id: UUID,
     db: Session = Depends(get_db),
@@ -577,12 +617,19 @@ async def list_qaqc_configs(
     _, tsm = _get_project_and_tsm(project_id, db, user)
     configs = _svc.list_configs(tsm["id"])
     return [
-        _build_config_response(c, [_build_test_response(t) for t in _svc.list_tests(c["id"])])
+        _build_config_response(
+            c, [_build_test_response(t) for t in _svc.list_tests(c["id"])]
+        )
         for c in configs
     ]
 
 
-@router.post("/{project_id}/qaqc", response_model=QAQCConfigResponse, status_code=201, tags=["qaqc"])
+@router.post(
+    "/{project_id}/qaqc",
+    response_model=QAQCConfigResponse,
+    status_code=201,
+    tags=["qaqc"],
+)
 async def create_qaqc_config(
     project_id: UUID,
     config_in: QAQCConfigCreate,
@@ -590,14 +637,20 @@ async def create_qaqc_config(
     user: dict = Depends(deps.get_current_user),
 ) -> Any:
     _, tsm = _get_project_and_tsm(project_id, db, user)
-    new_id = _svc.create_config(tsm["id"], config_in.name, config_in.context_window, config_in.is_default)
+    new_id = _svc.create_config(
+        tsm["id"], config_in.name, config_in.context_window, config_in.is_default
+    )
     return _get_config_with_tests(new_id)
 
 
-@router.get("/{project_id}/qaqc/{qaqc_id}", response_model=QAQCConfigResponse, tags=["qaqc"])
+@router.get(
+    "/{project_id}/qaqc/{qaqc_id}", response_model=QAQCConfigResponse, tags=["qaqc"]
+)
 async def get_qaqc_config(
-    project_id: UUID, qaqc_id: int,
-    db: Session = Depends(get_db), user: dict = Depends(deps.get_current_user),
+    project_id: UUID,
+    qaqc_id: int,
+    db: Session = Depends(get_db),
+    user: dict = Depends(deps.get_current_user),
 ) -> Any:
     _, tsm = _get_project_and_tsm(project_id, db, user)
     cfg = _svc.get_config(qaqc_id)
@@ -605,22 +658,35 @@ async def get_qaqc_config(
     return _get_config_with_tests(qaqc_id)
 
 
-@router.put("/{project_id}/qaqc/{qaqc_id}", response_model=QAQCConfigResponse, tags=["qaqc"])
+@router.put(
+    "/{project_id}/qaqc/{qaqc_id}", response_model=QAQCConfigResponse, tags=["qaqc"]
+)
 async def update_qaqc_config(
-    project_id: UUID, qaqc_id: int, config_in: QAQCConfigUpdate,
-    db: Session = Depends(get_db), user: dict = Depends(deps.get_current_user),
+    project_id: UUID,
+    qaqc_id: int,
+    config_in: QAQCConfigUpdate,
+    db: Session = Depends(get_db),
+    user: dict = Depends(deps.get_current_user),
 ) -> Any:
     _, tsm = _get_project_and_tsm(project_id, db, user)
     cfg = _svc.get_config(qaqc_id)
     _assert_config_belongs_to_project(cfg, tsm["id"])
-    _svc.update_config(qaqc_id, tsm["id"], config_in.name, config_in.context_window, config_in.is_default)
+    _svc.update_config(
+        qaqc_id,
+        tsm["id"],
+        config_in.name,
+        config_in.context_window,
+        config_in.is_default,
+    )
     return _get_config_with_tests(qaqc_id)
 
 
 @router.delete("/{project_id}/qaqc/{qaqc_id}", status_code=204, tags=["qaqc"])
 async def delete_qaqc_config(
-    project_id: UUID, qaqc_id: int,
-    db: Session = Depends(get_db), user: dict = Depends(deps.get_current_user),
+    project_id: UUID,
+    qaqc_id: int,
+    db: Session = Depends(get_db),
+    user: dict = Depends(deps.get_current_user),
 ) -> None:
     _, tsm = _get_project_and_tsm(project_id, db, user)
     cfg = _svc.get_config(qaqc_id)
@@ -628,40 +694,75 @@ async def delete_qaqc_config(
     _svc.delete_config(qaqc_id)
 
 
-@router.post("/{project_id}/qaqc/{qaqc_id}/tests", response_model=QAQCTestResponse, status_code=201, tags=["qaqc"])
+@router.post(
+    "/{project_id}/qaqc/{qaqc_id}/tests",
+    response_model=QAQCTestResponse,
+    status_code=201,
+    tags=["qaqc"],
+)
 async def add_qaqc_test(
-    project_id: UUID, qaqc_id: int, test_in: QAQCTestCreate,
-    db: Session = Depends(get_db), user: dict = Depends(deps.get_current_user),
+    project_id: UUID,
+    qaqc_id: int,
+    test_in: QAQCTestCreate,
+    db: Session = Depends(get_db),
+    user: dict = Depends(deps.get_current_user),
 ) -> Any:
     _, tsm = _get_project_and_tsm(project_id, db, user)
     cfg = _svc.get_config(qaqc_id)
     _assert_config_belongs_to_project(cfg, tsm["id"])
     streams_raw = [s.model_dump() for s in test_in.streams] if test_in.streams else None
-    new_id = _svc.create_test(qaqc_id, test_in.function, test_in.name, test_in.position, test_in.args, streams_raw)
+    new_id = _svc.create_test(
+        qaqc_id,
+        test_in.function,
+        test_in.name,
+        test_in.position,
+        test_in.args,
+        streams_raw,
+    )
     test = next((t for t in _svc.list_tests(qaqc_id) if t["id"] == new_id), None)
     return _build_test_response(test)
 
 
-@router.put("/{project_id}/qaqc/{qaqc_id}/tests/{test_id}", response_model=QAQCTestResponse, tags=["qaqc"])
+@router.put(
+    "/{project_id}/qaqc/{qaqc_id}/tests/{test_id}",
+    response_model=QAQCTestResponse,
+    tags=["qaqc"],
+)
 async def update_qaqc_test(
-    project_id: UUID, qaqc_id: int, test_id: int, test_in: QAQCTestUpdate,
-    db: Session = Depends(get_db), user: dict = Depends(deps.get_current_user),
+    project_id: UUID,
+    qaqc_id: int,
+    test_id: int,
+    test_in: QAQCTestUpdate,
+    db: Session = Depends(get_db),
+    user: dict = Depends(deps.get_current_user),
 ) -> Any:
     _, tsm = _get_project_and_tsm(project_id, db, user)
     cfg = _svc.get_config(qaqc_id)
     _assert_config_belongs_to_project(cfg, tsm["id"])
     streams_raw = [s.model_dump() for s in test_in.streams] if test_in.streams else None
-    _svc.update_test(test_id, test_in.function, test_in.name, test_in.position, test_in.args, streams_raw)
+    _svc.update_test(
+        test_id,
+        test_in.function,
+        test_in.name,
+        test_in.position,
+        test_in.args,
+        streams_raw,
+    )
     test = next((t for t in _svc.list_tests(qaqc_id) if t["id"] == test_id), None)
     if test is None:
         raise HTTPException(status_code=404, detail="Test not found")
     return _build_test_response(test)
 
 
-@router.delete("/{project_id}/qaqc/{qaqc_id}/tests/{test_id}", status_code=204, tags=["qaqc"])
+@router.delete(
+    "/{project_id}/qaqc/{qaqc_id}/tests/{test_id}", status_code=204, tags=["qaqc"]
+)
 async def delete_qaqc_test(
-    project_id: UUID, qaqc_id: int, test_id: int,
-    db: Session = Depends(get_db), user: dict = Depends(deps.get_current_user),
+    project_id: UUID,
+    qaqc_id: int,
+    test_id: int,
+    db: Session = Depends(get_db),
+    user: dict = Depends(deps.get_current_user),
 ) -> None:
     _, tsm = _get_project_and_tsm(project_id, db, user)
     cfg = _svc.get_config(qaqc_id)
@@ -671,11 +772,18 @@ async def delete_qaqc_test(
 
 @router.post("/{project_id}/qaqc/trigger", tags=["qaqc"])
 async def trigger_qaqc(
-    project_id: UUID, trigger_in: QAQCTriggerRequest,
-    db: Session = Depends(get_db), user: dict = Depends(deps.get_current_user),
+    project_id: UUID,
+    trigger_in: QAQCTriggerRequest,
+    db: Session = Depends(get_db),
+    user: dict = Depends(deps.get_current_user),
 ) -> Any:
     _, tsm = _get_project_and_tsm(project_id, db, user)
-    ok = _svc.trigger_qaqc(str(tsm["uuid"]), trigger_in.qaqc_name, trigger_in.start_date, trigger_in.end_date)
+    ok = _svc.trigger_qaqc(
+        str(tsm["uuid"]),
+        trigger_in.qaqc_name,
+        trigger_in.start_date,
+        trigger_in.end_date,
+    )
     if not ok:
         raise HTTPException(status_code=502, detail="Failed to publish QC trigger.")
     return {"status": "triggered", "qaqc_name": trigger_in.qaqc_name}

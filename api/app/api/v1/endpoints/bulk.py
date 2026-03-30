@@ -1,3 +1,4 @@
+import logging
 import os
 import uuid
 from typing import Any, Optional
@@ -8,6 +9,8 @@ from pydantic import BaseModel
 
 from app.api.deps import get_current_active_superuser
 from app.tasks.import_tasks import import_geojson_task, import_timeseries_task
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -36,8 +39,8 @@ class TaskStatusResponse(BaseModel):
     dependencies=[Depends(get_current_active_superuser)],
 )
 async def import_geojson(file: UploadFile = File(...)):
-    # Create secure temp filename
-    filename = f"{uuid.uuid4()}_{file.filename}"
+    safe_name = os.path.basename(file.filename or "upload.json")
+    filename = f"{uuid.uuid4()}_{safe_name}"
     file_path = os.path.join(TEMP_IMPORT_DIR, filename)
 
     try:
@@ -62,9 +65,10 @@ async def import_geojson(file: UploadFile = File(...)):
             os.remove(file_path)
         raise
     except Exception as error:
+        logger.error(f"GeoJSON import failed: {error}", exc_info=True)
         if os.path.exists(file_path):
             os.remove(file_path)
-        raise HTTPException(status_code=500, detail=str(error))
+        raise HTTPException(status_code=500, detail="Import failed")
 
 
 @router.post(
@@ -73,7 +77,8 @@ async def import_geojson(file: UploadFile = File(...)):
     dependencies=[Depends(get_current_active_superuser)],
 )
 async def import_timeseries(file: UploadFile = File(...)):
-    filename = f"{uuid.uuid4()}_{file.filename}"
+    safe_name = os.path.basename(file.filename or "upload.csv")
+    filename = f"{uuid.uuid4()}_{safe_name}"
     file_path = os.path.join(TEMP_IMPORT_DIR, filename)
 
     try:
@@ -95,9 +100,10 @@ async def import_timeseries(file: UploadFile = File(...)):
             os.remove(file_path)
         raise
     except Exception as e:
+        logger.error(f"Timeseries import failed: {e}", exc_info=True)
         if os.path.exists(file_path):
             os.remove(file_path)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Import failed")
 
 
 @router.get(

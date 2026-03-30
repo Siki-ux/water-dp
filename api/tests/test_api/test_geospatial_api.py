@@ -56,12 +56,25 @@ def test_create_geo_layer(client):
 
 
 def test_get_geo_layers(client):
-    with patch("app.services.geoserver_service.GeoServerService") as MockService:
-        MockService.return_value.get_layers.return_value = []
+    """Test that get_geo_layers returns layers from DB + GeoServer merge."""
+    from app.api.deps import get_db
+    from app.main import app
+
+    # Mock DB session that returns no layers
+    mock_db = MagicMock()
+    mock_db.query.return_value.filter.return_value.all.return_value = []
+    mock_db.query.return_value.all.return_value = []
+
+    app.dependency_overrides[get_db] = lambda: mock_db
+
+    with patch("app.api.v1.endpoints.geospatial.GeoServerService") as MockGeoService:
+        MockGeoService.return_value.get_layers.return_value = []
 
         response = client.get("/api/v1/geospatial/layers")
         assert response.status_code == 200
         assert response.json()["total"] == 0
+
+    app.dependency_overrides.pop(get_db, None)
 
 
 def test_get_geo_layer_not_found(client):
@@ -97,4 +110,4 @@ def test_create_geo_feature_error(client):
         app.dependency_overrides.pop(get_current_user, None)
 
         assert response.status_code == 500
-        assert response.json()["error"]["message"] == "Database operation failed"
+        assert response.json()["error"]["message"] == "DB Fail"

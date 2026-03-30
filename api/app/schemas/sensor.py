@@ -11,9 +11,13 @@ class ExternalSFTPConfig(BaseModel):
     uri: str = Field(..., description="SFTP server URI (e.g. sftp://host:22)")
     path: str = Field(..., description="Remote directory path to sync from")
     username: str = Field(..., description="SFTP username")
-    password: Optional[str] = Field(None, description="SFTP password (plaintext, will be encrypted)")
+    password: Optional[str] = Field(
+        None, description="SFTP password (plaintext, will be encrypted)"
+    )
     public_key: str = Field("", description="SSH public key")
-    private_key: str = Field("", description="SSH private key (plaintext, will be encrypted)")
+    private_key: str = Field(
+        "", description="SSH private key (plaintext, will be encrypted)"
+    )
     sync_interval: int = Field(60, description="Sync interval in minutes")
     sync_enabled: bool = Field(True, description="Whether sync is active")
 
@@ -32,7 +36,9 @@ class ExternalSFTPConfig(BaseModel):
 
 
 class ExternalAPIConfig(BaseModel):
-    type: str = Field(..., description="API type name (e.g. 'dwd', 'uba', or custom type)")
+    type: str = Field(
+        ..., description="API type name (e.g. 'dwd', 'uba', or custom type)"
+    )
     enabled: bool = Field(True, description="Whether sync is active")
     sync_interval: int = Field(60, description="Sync interval in minutes")
     settings: Dict[str, Any] = Field(
@@ -87,7 +93,9 @@ class SensorCreate(BaseModel):
     mqtt_username: Optional[str] = Field(None, description="Custom MQTT Username")
     mqtt_password: Optional[str] = Field(None, description="Custom MQTT Password")
     mqtt_topic: Optional[str] = Field(None, description="Custom MQTT Topic")
-    ingest_type: str = Field("mqtt", description="Ingest type (mqtt, sftp, extapi, extsftp)")
+    ingest_type: str = Field(
+        "mqtt", description="Ingest type (mqtt, sftp, extapi, extsftp)"
+    )
     external_sftp: Optional[ExternalSFTPConfig] = Field(
         None, description="External SFTP source configuration"
     )
@@ -179,7 +187,7 @@ class SensorCreationResponse(BaseModel):
 class BulkSensorResult(BaseModel):
     row: int
     sensor_name: str
-    status: str            # "created" | "failed"
+    status: str  # "created" | "failed"
     uuid: Optional[str] = None
     error: Optional[str] = None
 
@@ -219,7 +227,9 @@ class MQTTPublishGeneric(BaseModel):
 
 class MQTTPublishSensor(BaseModel):
     data: Dict[str, Any] = Field(..., description="Payload data (object)")
-    topic_suffix: Optional[str] = Field("data", description="Topic suffix (e.g. 'data')")
+    topic_suffix: Optional[str] = Field(
+        "data", description="Topic suffix (e.g. 'data')"
+    )
 
     model_config = {
         "json_schema_extra": {

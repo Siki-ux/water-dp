@@ -19,7 +19,7 @@ from app.core.exceptions import (
 )
 from app.models.sensor_activity import SensorActivityConfig
 from app.models.user_context import Project
-from app.schemas.frost.datastream import Datastream, Observation, DatastreamUpdate
+from app.schemas.frost.datastream import Datastream, DatastreamUpdate, Observation
 from app.schemas.frost.thing import Thing
 from app.schemas.sensor import (
     BulkSensorResponse,
@@ -36,8 +36,8 @@ from app.services.async_thing_service import AsyncThingService
 from app.services.keycloak_service import KeycloakService
 from app.services.timeio.orchestrator import TimeIOOrchestrator
 
-
 # ---- Pydantic schemas for activity config endpoints ----
+
 
 class ActivityConfigResponse(PydanticBaseModel):
     thing_uuid: str
@@ -62,7 +62,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-
 orchestrator = TimeIOOrchestrator()
 
 
@@ -84,7 +83,7 @@ def _resolve_group_info(group_id: str) -> dict:
     display_name = raw_name
     for prefix in ("UFZ-TSM:", "ufz-tsm:"):
         if display_name.startswith(prefix):
-            display_name = display_name[len(prefix):]
+            display_name = display_name[len(prefix) :]
             break
 
     # Resolve or derive schema name
@@ -97,9 +96,7 @@ def _resolve_group_info(group_id: str) -> dict:
 
         # Store on group for future lookups
         try:
-            KeycloakService.set_group_attributes(
-                group_id, {"schema_name": schema_name}
-            )
+            KeycloakService.set_group_attributes(group_id, {"schema_name": schema_name})
         except Exception as e:
             logger.warning(f"Could not store schema on Keycloak group: {e}")
 
@@ -112,11 +109,25 @@ def _resolve_group_info(group_id: str) -> dict:
 
 
 BULK_CSV_COLUMNS = [
-    "sensor_name", "group_id", "description", "device_type",
-    "latitude", "longitude", "ingest_type", "parser_id",
-    "mqtt_username", "mqtt_password", "mqtt_topic",
-    "ext_sftp_uri", "ext_sftp_path", "ext_sftp_username", "ext_sftp_password", "ext_sftp_sync_interval",
-    "ext_api_type", "ext_api_sync_interval", "ext_api_settings",
+    "sensor_name",
+    "group_id",
+    "description",
+    "device_type",
+    "latitude",
+    "longitude",
+    "ingest_type",
+    "parser_id",
+    "mqtt_username",
+    "mqtt_password",
+    "mqtt_topic",
+    "ext_sftp_uri",
+    "ext_sftp_path",
+    "ext_sftp_username",
+    "ext_sftp_password",
+    "ext_sftp_sync_interval",
+    "ext_api_type",
+    "ext_api_sync_interval",
+    "ext_api_settings",
 ]
 
 BULK_CSV_EXAMPLE = {
@@ -210,15 +221,15 @@ async def _create_one_sensor(
 
     if sensor.project_uuid:
         project = (
-            database.query(Project)
-            .filter(Project.id == sensor.project_uuid)
-            .first()
+            database.query(Project).filter(Project.id == sensor.project_uuid).first()
         )
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
         if project.authorization_provider_group_id:
             try:
-                group_info = _resolve_group_info(project.authorization_provider_group_id)
+                group_info = _resolve_group_info(
+                    project.authorization_provider_group_id
+                )
                 group_name = group_info["name"]
             except Exception:
                 group_name = project.name
@@ -243,9 +254,7 @@ async def _create_one_sensor(
         mqtt_device_type=sensor.device_type,
         geometry=location,
         properties=(
-            [prop.dict() for prop in sensor.properties]
-            if sensor.properties
-            else None
+            [prop.dict() for prop in sensor.properties] if sensor.properties else None
         ),
         project_schema=schema_name,
         mqtt_username=sensor.mqtt_username,
@@ -273,6 +282,7 @@ async def _create_one_sensor(
     if project:
         try:
             from app.services.project_service import ProjectService
+
             ProjectService.add_sensor(
                 database,
                 project_id=project.id,
@@ -317,7 +327,9 @@ async def bulk_import_template(
     return StreamingResponse(
         io.BytesIO(content.encode("utf-8")),
         media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=\"sensor_bulk_template.csv\""},
+        headers={
+            "Content-Disposition": 'attachment; filename="sensor_bulk_template.csv"'
+        },
     )
 
 
@@ -345,37 +357,56 @@ async def bulk_create_sensors(
     for row_num, row in enumerate(reader, start=2):  # start=2: row 1 is header
         sensor_name = row.get("sensor_name", "").strip()
         if not sensor_name:
-            results.append(BulkSensorResult(
-                row=row_num, sensor_name="(blank)", status="failed",
-                error="sensor_name is required",
-            ))
+            results.append(
+                BulkSensorResult(
+                    row=row_num,
+                    sensor_name="(blank)",
+                    status="failed",
+                    error="sensor_name is required",
+                )
+            )
             continue
 
         if not row.get("group_id", "").strip():
-            results.append(BulkSensorResult(
-                row=row_num, sensor_name=sensor_name, status="failed",
-                error="group_id is required",
-            ))
+            results.append(
+                BulkSensorResult(
+                    row=row_num,
+                    sensor_name=sensor_name,
+                    status="failed",
+                    error="group_id is required",
+                )
+            )
             continue
 
         try:
             sensor = _row_to_sensor_create(row)
             created = await _create_one_sensor(sensor, database, user)
-            results.append(BulkSensorResult(
-                row=row_num, sensor_name=sensor_name, status="created",
-                uuid=created.get("uuid"),
-            ))
+            results.append(
+                BulkSensorResult(
+                    row=row_num,
+                    sensor_name=sensor_name,
+                    status="created",
+                    uuid=created.get("uuid"),
+                )
+            )
         except Exception as exc:
             detail = str(exc)
             if hasattr(exc, "detail"):
                 detail = exc.detail
-            results.append(BulkSensorResult(
-                row=row_num, sensor_name=sensor_name, status="failed", error=detail,
-            ))
+            results.append(
+                BulkSensorResult(
+                    row=row_num,
+                    sensor_name=sensor_name,
+                    status="failed",
+                    error=detail,
+                )
+            )
 
     created_count = sum(1 for r in results if r.status == "created")
     failed_count = sum(1 for r in results if r.status == "failed")
-    return BulkSensorResponse(created=created_count, failed=failed_count, results=results)
+    return BulkSensorResponse(
+        created=created_count, failed=failed_count, results=results
+    )
 
 
 @router.get(
@@ -498,12 +529,10 @@ async def create_sensor_datastream(
     # Build property dict
     unit_label = ""
     unit_symbol = ""
-    unit_definition = ""
     if payload.unit_of_measurement:
         uom = payload.unit_of_measurement
         unit_label = uom.label or ""
         unit_symbol = uom.symbol or ""
-        unit_definition = uom.definition or ""
 
     prop = {
         "name": name,
@@ -543,7 +572,7 @@ async def update_sensor_datastream_by_id(
         raise ResourceNotFoundException("Schema not found")
 
     thing_service = AsyncThingService(schema_name)
-    
+
     # Prepare payload -> convert snake_case to camelCase for FROST
     payload = {}
     if update.name:
@@ -562,8 +591,10 @@ async def update_sensor_datastream_by_id(
 
     success = await thing_service.update_datastream_by_id(datastream_id, payload)
     if not success:
-         raise HTTPException(status_code=404, detail="Datastream not found or update failed")
-    
+        raise HTTPException(
+            status_code=404, detail="Datastream not found or update failed"
+        )
+
     return True
 
 
@@ -586,7 +617,7 @@ async def update_sensor_datastream(
         raise ResourceNotFoundException("Schema not found")
 
     thing_service = AsyncThingService(schema_name)
-    
+
     # Prepare payload -> convert snake_case to camelCase for FROST
     payload = {}
     if update.name:
@@ -603,10 +634,14 @@ async def update_sensor_datastream(
     if not payload:
         return False
 
-    success = await thing_service.update_datastream(sensor_uuid, datastream_name, payload)
+    success = await thing_service.update_datastream(
+        sensor_uuid, datastream_name, payload
+    )
     if not success:
-         raise HTTPException(status_code=404, detail="Datastream not found or update failed")
-    
+        raise HTTPException(
+            status_code=404, detail="Datastream not found or update failed"
+        )
+
     return True
 
 
@@ -736,10 +771,13 @@ def get_activity_config(
     if not config:
         # Auto-create with defaults (lazy init for existing sensors)
         from app.services.monitoring_service import MonitoringService
+
         ms = MonitoringService(database)
         config = ms._get_or_create_activity_config(sensor_uuid)
         if not config:
-            raise HTTPException(status_code=404, detail="Sensor not found or project unknown")
+            raise HTTPException(
+                status_code=404, detail="Sensor not found or project unknown"
+            )
 
     return ActivityConfigResponse(
         thing_uuid=str(config.thing_uuid),
@@ -772,10 +810,13 @@ def update_activity_config(
     )
     if not config:
         from app.services.monitoring_service import MonitoringService
+
         ms = MonitoringService(database)
         config = ms._get_or_create_activity_config(sensor_uuid)
         if not config:
-            raise HTTPException(status_code=404, detail="Sensor not found or project unknown")
+            raise HTTPException(
+                status_code=404, detail="Sensor not found or project unknown"
+            )
 
     if update.track_activity is not None:
         config.track_activity = update.track_activity
@@ -814,8 +855,10 @@ async def store_qaqc_results(
         {"qaqc_labels": [{"datastream_id": int, "result_quality": {...}, "result_time": "ISO"}]}
     """
     import json
+
     import psycopg2
     from psycopg2 import sql as pgsql
+
     from app.core.config import settings
 
     labels = payload.get("qaqc_labels", [])
@@ -824,7 +867,9 @@ async def store_qaqc_results(
 
     schema_name = await AsyncThingService.get_schema_from_uuid(thing_uuid)
     if not schema_name:
-        raise HTTPException(status_code=404, detail=f"Schema not found for thing {thing_uuid}")
+        raise HTTPException(
+            status_code=404, detail=f"Schema not found for thing {thing_uuid}"
+        )
 
     try:
         conn = psycopg2.connect(
@@ -853,7 +898,9 @@ async def store_qaqc_results(
                     )
                     updated += cur.rowcount
         conn.close()
-        logger.info(f"[qaqc] Updated result_quality on {updated} observations for thing {thing_uuid}")
+        logger.info(
+            f"[qaqc] Updated result_quality on {updated} observations for thing {thing_uuid}"
+        )
     except Exception as exc:
         logger.error(f"[qaqc] Failed to store QC results for {thing_uuid}: {exc}")
         raise HTTPException(status_code=500, detail=str(exc))

@@ -383,7 +383,6 @@ export default function ProjectMap({ sensors: initialSensors, projectId, token, 
         }
 
         const handleStyleLoad = () => {
-            console.log("Style loaded, re-adding layers...");
             const style = map.current?.getStyle();
             if (style && style.layers) {
                 style.layers.forEach(layer => {

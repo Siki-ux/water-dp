@@ -1,6 +1,4 @@
-"""
-API Dependencies for Authentication and Authorization.
-"""
+"""API authentication and authorization dependencies."""
 
 import os
 from typing import Any, Callable, Dict
@@ -13,17 +11,13 @@ from app.core.database import get_db  # noqa
 from app.core.security import verify_token
 
 oauth2_scheme = OAuth2PasswordBearer(
-    # auto_error=False prevents FastAPI from automatically raising 401.
-    # We handle this manually in get_current_user to return a consistent error structure.
     tokenUrl=f"{os.getenv('ROOT_PATH', '')}{settings.api_prefix}/auth/token",
     auto_error=False,
 )
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> Dict[str, Any]:
-    """
-    Validate the Bearer token and return the user payload.
-    """
+    """Validate Bearer token and return user payload."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -40,10 +34,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> Dict[str, Any
 async def get_current_user_with_token(
     token: str = Depends(oauth2_scheme),
 ) -> Dict[str, Any]:
-    """
-    Validate the Bearer token and return the user payload WITH the token included.
-    Used by v2 endpoints that need to make API calls to other services.
-    """
+    """Validate Bearer token and include the raw token in the payload."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -54,16 +45,12 @@ async def get_current_user_with_token(
         raise credentials_exception
 
     payload = await verify_token(token)
-    # Include the token in the payload for downstream service calls
     payload["_token"] = token
     return payload
 
 
 def has_role(required_role: str) -> Callable:
-    """
-    Dependency factory to check if the user has a specific role.
-    Keycloak roles are typically in 'realm_access' -> 'roles'.
-    """
+    """Dependency factory that checks for a specific Keycloak realm role."""
 
     async def role_checker(user: Dict[str, Any] = Depends(get_current_user)):
         realm_access = user.get("realm_access", {})
@@ -82,12 +69,10 @@ def has_role(required_role: str) -> Callable:
 async def get_current_active_superuser(
     user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    """
-    Check if the user is a superuser (admin).
-    """
+    """Check if the user has an admin role."""
     realm_access = user.get("realm_access", {})
     roles = realm_access.get("roles", [])
-    if "admin" not in roles and "admin-siki" not in roles:
+    if not any(role in roles for role in settings.admin_roles_list):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="The user doesn't have enough privileges",

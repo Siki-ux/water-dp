@@ -19,8 +19,8 @@ from pydantic import BaseModel, model_validator
 class ProjectMemberCreate(BaseModel):
     """Add a user to a project with an explicit role."""
 
-    user_id: Optional[str] = None      # Keycloak sub (UUID string)
-    username: Optional[str] = None     # Resolved server-side if user_id not given
+    user_id: Optional[str] = None  # Keycloak sub (UUID string)
+    username: Optional[str] = None  # Resolved server-side if user_id not given
     role: Literal["editor", "viewer"]  # Cannot assign 'owner' via API
 
     @model_validator(mode="after")
@@ -62,10 +62,10 @@ class PermissionsResponse(BaseModel):
     project_id: UUID
 
     # Resolved role (highest-priority match from the 6-step resolution chain)
-    effective_role: str             # "owner" | "editor" | "viewer" | "none"
+    effective_role: str  # "owner" | "editor" | "viewer" | "none"
 
     # Raw tier info (for debugging / display)
-    group_role: Optional[str]       # Tier 1 role for this project's Keycloak group
+    group_role: Optional[str]  # Tier 1 role for this project's Keycloak group
     is_realm_admin: bool
 
     # Project-level capabilities
@@ -95,7 +95,7 @@ class GlobalPermissionsResponse(BaseModel):
     """
 
     is_realm_admin: bool
-    highest_group_role: Optional[str]   # highest role across all Keycloak groups
+    highest_group_role: Optional[str]  # highest role across all Keycloak groups
     can_access_sms: bool
     can_access_layers: bool
-    group_memberships: list[dict]        # [{group_path, role}]
+    group_memberships: list[dict]  # [{group_path, role}]

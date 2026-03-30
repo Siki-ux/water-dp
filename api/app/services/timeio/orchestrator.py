@@ -29,7 +29,7 @@ def _sanitize_schema_name(raw_name: str) -> str:
     # Strip common Keycloak group prefixes
     for prefix in ("UFZ-TSM:", "ufz-tsm:"):
         if name.startswith(prefix):
-            name = name[len(prefix):]
+            name = name[len(prefix) :]
             break
     # Also handle path-style groups
     if "/" in name:
@@ -195,8 +195,12 @@ class TimeIOOrchestrator:
                 "uri": external_sftp["uri"],
                 "path": external_sftp["path"],
                 "username": external_sftp["username"],
-                "password": encrypt_password(external_sftp["password"]) if external_sftp.get("password") else None,
-                "private_key": encrypt_password(external_sftp["private_key"]) if external_sftp.get("private_key") else "",
+                "password": encrypt_password(external_sftp["password"])
+                if external_sftp.get("password")
+                else None,
+                "private_key": encrypt_password(external_sftp["private_key"])
+                if external_sftp.get("private_key")
+                else "",
                 "public_key": external_sftp.get("public_key", ""),
                 "sync_interval": external_sftp.get("sync_interval", 60),
                 "sync_enabled": external_sftp.get("sync_enabled", True),
@@ -290,12 +294,18 @@ class TimeIOOrchestrator:
                     for retry in range(5):
                         linked = self.db.link_thing_to_parser(thing_uuid, parser_id)
                         if linked:
-                            logger.info(f"Linked parser {parser_id} to thing {thing_uuid}")
+                            logger.info(
+                                f"Linked parser {parser_id} to thing {thing_uuid}"
+                            )
                             break
-                        logger.info(f"Parser link attempt {retry + 1}/5 failed for {thing_uuid}, S3 store may not exist yet. Retrying...")
+                        logger.info(
+                            f"Parser link attempt {retry + 1}/5 failed for {thing_uuid}, S3 store may not exist yet. Retrying..."
+                        )
                         time.sleep(2)
                     if not linked:
-                        logger.warning(f"Could not link parser {parser_id} to thing {thing_uuid} after 5 attempts")
+                        logger.warning(
+                            f"Could not link parser {parser_id} to thing {thing_uuid} after 5 attempts"
+                        )
 
                 return {
                     "uuid": thing_uuid,
@@ -346,10 +356,10 @@ class TimeIOOrchestrator:
             flat_props = properties
             # Handle Pydantic models if passed
             if flat_props and not isinstance(flat_props[0], dict):
-                 flat_props = [p.dict() for p in flat_props]
+                flat_props = [p.dict() for p in flat_props]
         elif isinstance(properties, dict):
-             flat_props = [{"name": k, "unit": str(v)} for k, v in properties.items()]
-             thing_props = properties.copy()
+            flat_props = [{"name": k, "unit": str(v)} for k, v in properties.items()]
+            thing_props = properties.copy()
         elif properties is None:
             pass
         else:
@@ -381,7 +391,7 @@ class TimeIOOrchestrator:
                 update_props["latitude"] = geometry["latitude"]
                 if "longitude" in geometry:
                     update_props["longitude"] = geometry["longitude"]
-            
+
             # Store full geometry object
             update_props["location"] = geometry
 

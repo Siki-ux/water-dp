@@ -3,7 +3,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, status
-from jose import JWTError
+from jwt.exceptions import PyJWTError as JWTError
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 

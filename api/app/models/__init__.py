@@ -15,6 +15,7 @@ __all__ = [
     "BaseModel",
     "GeoLayer",
     "GeoFeature",
+    "LayerProjectAssignment",
     "Project",
     "Dashboard",
     "ProjectMember",

@@ -16,32 +16,45 @@ jobs:
       matrix:
         include:
           - service: api
-            image: water-dp-api
+            image: water_dp_api
             context: ./api
             dockerfile: Dockerfile
+            build-args: ""
           - service: worker
-            image: water-dp-worker
+            image: water_dp_worker
             context: ./api
             dockerfile: Dockerfile
+            build-args: ""
           - service: simulator
-            image: water-dp-simulator
+            image: water_dp_simulator
             context: ./api
             dockerfile: Dockerfile
+            build-args: ""
           - service: tm_migrations
-            image: water-dp-tm-migrations
+            image: water_dp_tm_migrations
             context: ./api
             dockerfile: docker/migrations.Dockerfile
+            build-args: ""
           - service: tm_seeder
-            image: water-dp-tm-seeder
+            image: water_dp_tm_seeder
             context: .
             dockerfile: api/docker/seeder.Dockerfile
+            build-args: ""
+          - service: frontend
+            image: water_dp_frontend
+            context: ./frontend
+            dockerfile: Dockerfile
+            build-args: |
+              NEXT_PUBLIC_API_URL=http://${{ secrets.PUBLIC_HOSTNAME_URL }}:8000
+              NEXT_PUBLIC_GEOSERVER_URL=http://${{ secrets.PUBLIC_HOSTNAME_URL }}:8080/geoserver
+              NEXT_PUBLIC_NEXTAUTH_URL=http://${{ secrets.PUBLIC_HOSTNAME_URL }}:3000/portal
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -52,12 +65,15 @@ jobs:
           echo "REPO=${GITHUB_REPOSITORY,,}" >>${GITHUB_ENV}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.context }}/${{ matrix.dockerfile }}
           push: true
-          tags: ghcr.io/${{ env.REPO }}/${{ matrix.image }}:latest
+          build-args: ${{ matrix.build-args }}
+          tags: |
+            ghcr.io/${{ env.REPO }}/${{ matrix.image }}:latest
+            ghcr.io/${{ env.REPO }}/${{ matrix.image }}:${{ github.event.release.tag_name || github.sha }}
 
   deploy:
     runs-on: ubuntu-latest
@@ -65,7 +81,7 @@ jobs:
     environment: DEV
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Downcase REPO
         run: |
@@ -75,7 +91,6 @@ jobs:
         run: |
           echo "DATABASE_USER=postgres" >> .env
           echo "DATABASE_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}" >> .env
-          # Use the same password for MinIO if not provided primarily
           echo "OBJECT_STORAGE_ROOT_USER=minioadmin" >> .env
           echo "OBJECT_STORAGE_ROOT_PASSWORD=${{ secrets.MINIO_PASSWORD }}" >> .env
 
@@ -89,9 +104,8 @@ jobs:
           echo "KEYCLOAK_EXTERNAL_URL=http://${{ secrets.PUBLIC_HOSTNAME_URL }}:8081" >> .env
           echo "GITHUB_REPOSITORY_LOWER=${{ env.REPO }}" >> .env
 
-
       - name: Copy files to VM
-        uses: appleboy/scp-action@master
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.AZURE_VM_HOST }}
           username: ${{ secrets.AZURE_VM_USERNAME }}
@@ -100,7 +114,7 @@ jobs:
           target: "~/water-dp"
 
       - name: Deploy on VM
-        uses: appleboy/ssh-action@master
+        uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.AZURE_VM_HOST }}
           username: ${{ secrets.AZURE_VM_USERNAME }}
@@ -112,18 +126,15 @@ jobs:
             # Login to GHCR to pull private images
             echo ${{ secrets.GHCR_PAT }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            # Reset environment (Stop containers and remove volumes)
-            # "|| true" ensures this doesn't fail if containers are already down/missing
-            docker-compose -f deploy/docker-compose.prod.yml down -v || true
+            # Stop running containers (preserve volumes)
+            docker compose -f deploy/docker-compose.prod.yml down || true
 
-            # FREE DISK SPACE (Critical for small VMs)
-            # Remove all unused images, containers, networks
+            # Clean up unused images and containers
             docker system prune -af
-            # Remove all unused volumes
             docker volume prune -f
 
-            # Pull latest images (Quietly to avoid log spam)
-            docker-compose -f deploy/docker-compose.prod.yml pull --quiet
+            # Pull latest images
+            docker compose -f deploy/docker-compose.prod.yml pull --quiet
 
             # Start services
-            docker-compose -f deploy/docker-compose.prod.yml up -d
+            docker compose -f deploy/docker-compose.prod.yml up -d

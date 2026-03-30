@@ -1,9 +1,8 @@
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
 
-import app.services.keycloak_service as keycloak_service
 from app.api import deps
 from app.main import app
 from app.schemas.user_context import (
@@ -70,16 +69,27 @@ def test_create_project(client, normal_user_token, mock_project_service):
     mock_project_service.create_project.assert_called_once()
 
 
-def test_list_projects(client, normal_user_token, mock_project_service):
-    mock_project_service.list_projects.return_value = [
-        ProjectResponse(
-            id=uuid4(),
-            name="P1",
-            owner_id=MOCK_USER_ID,
-            created_at="2024-01-01",
-            updated_at="2024-01-01",
-        )
-    ]
+@patch("app.services.rbac_service.PermissionResolver")
+def test_list_projects(mock_resolver, client, normal_user_token, mock_project_service):
+    project_id = uuid4()
+    mock_project = MagicMock()
+    mock_project.id = project_id
+    mock_project.name = "P1"
+    mock_project.description = None
+    mock_project.owner_id = MOCK_USER_ID
+    mock_project.authorization_provider_group_id = None
+    mock_project.authorization_provider_group_name = None
+    mock_project.schema_name = None
+    mock_project.properties = None
+    mock_project.created_at = "2024-01-01"
+    mock_project.updated_at = "2024-01-01"
+
+    mock_project_service.list_projects.return_value = [mock_project]
+
+    # Mock PermissionResolver.resolve to return permissions with effective_role
+    mock_perms = MagicMock()
+    mock_perms.effective_role = "owner"
+    mock_resolver.resolve.return_value = mock_perms
 
     response = client.get("/api/v1/projects/")
     assert response.status_code == 200
@@ -105,7 +115,7 @@ def test_get_project(client, normal_user_token, mock_project_service):
 
 @pytest.fixture
 def mock_keycloak_service():
-    with patch.object(keycloak_service, "KeycloakService") as mock:
+    with patch("app.services.keycloak_service.KeycloakService") as mock:
         yield mock
 
 

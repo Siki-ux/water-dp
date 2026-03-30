@@ -146,7 +146,9 @@ def assign_client_role_to_group(token, realm, group_id, client_name, role_name):
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
     # Get role representation
-    role_url = f"{KEYCLOAK_URL}/admin/realms/{realm}/clients/{client_uuid}/roles/{role_name}"
+    role_url = (
+        f"{KEYCLOAK_URL}/admin/realms/{realm}/clients/{client_uuid}/roles/{role_name}"
+    )
     role_resp = requests.get(role_url, headers=headers)
     if role_resp.status_code != 200:
         print(f"Role '{role_name}' not found on client '{client_name}'")
@@ -196,7 +198,9 @@ def create_subgroup(token, realm, parent_id, name):
             if c.get("name") == name:
                 return c["id"]
     else:
-        print(f"  Failed to create subgroup '{name}': {response.status_code} {response.text}")
+        print(
+            f"  Failed to create subgroup '{name}': {response.status_code} {response.text}"
+        )
     return None
 
 
@@ -416,7 +420,10 @@ if __name__ == "__main__":
     if client_uuid:
         print("Ensuring 'groups' protocol mapper on timeIO-client...")
         mapper_name = "group-membership-mapper"
-        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
 
         # Check if mapper already exists
         mappers_url = f"{KEYCLOAK_URL}/admin/realms/{KEYCLOAK_REALM}/clients/{client_uuid}/protocol-mappers/models"
@@ -438,7 +445,7 @@ if __name__ == "__main__":
             }
             resp = requests.post(mappers_url, headers=headers, json=mapper_payload)
             if resp.status_code == 201:
-                print(f"Created 'groups' protocol mapper on timeIO-client")
+                print("Created 'groups' protocol mapper on timeIO-client")
             else:
                 print(f"Failed to create groups mapper: {resp.status_code} {resp.text}")
         else:

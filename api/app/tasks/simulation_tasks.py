@@ -31,7 +31,7 @@ def run_simulation_step():
         # 1. Fetch active simulations from Local DB
         logger.info("Fetching active simulations from Local DB")
         active_sims = (
-            db_session.query(Simulation).filter(Simulation.is_enabled == True).all()
+            db_session.query(Simulation).filter(Simulation.is_enabled.is_(True)).all()
         )
 
         if not active_sims:

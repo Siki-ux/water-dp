@@ -2,6 +2,7 @@
 """
 Database migration runner for the Water Data Platform.
 """
+
 import logging
 import subprocess
 import sys

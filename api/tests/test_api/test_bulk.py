@@ -49,10 +49,12 @@ def test_import_geojson_success(override_deps, mock_superuser):
         # Integration test might be better to let it write.
         # Let's mock 'aiofiles' or the loop if used, but here it's just 'file.read' and 'open'.
 
-        with patch("builtins.open", MagicMock()), patch(
-            "os.path.exists", return_value=True
-        ), patch("os.path.exists", return_value=True), patch("os.remove"):
-
+        with (
+            patch("builtins.open", MagicMock()),
+            patch("os.path.exists", return_value=True),
+            patch("os.path.exists", return_value=True),
+            patch("os.remove"),
+        ):
             response = client.post("/api/v1/bulk/import/geojson", files=files)
 
             assert response.status_code == 200
@@ -66,10 +68,10 @@ def test_import_timeseries_success(override_deps, mock_superuser):
         mock_task.return_value.id = "task-ts-123"
         files = {"file": ("data.json", "[{}]", "application/json")}
 
-        with patch("builtins.open", MagicMock()), patch(
-            "os.path.exists", return_value=True
+        with (
+            patch("builtins.open", MagicMock()),
+            patch("os.path.exists", return_value=True),
         ):
-
             response = client.post("/api/v1/bulk/import/timeseries", files=files)
             assert response.status_code == 200
             assert response.json()["task_id"] == "task-ts-123"
@@ -91,10 +93,11 @@ def test_import_geojson_too_large(override_deps, mock_superuser):
         }
 
         # We need to ensure temp file cleanup is called
-        with patch("builtins.open", MagicMock()), patch(
-            "os.path.exists", return_value=True
-        ), patch("os.remove") as mock_remove:
-
+        with (
+            patch("builtins.open", MagicMock()),
+            patch("os.path.exists", return_value=True),
+            patch("os.remove") as mock_remove,
+        ):
             response = client.post("/api/v1/bulk/import/geojson", files=files)
             assert response.status_code == 400
             assert "exceeds" in response.json()["detail"]

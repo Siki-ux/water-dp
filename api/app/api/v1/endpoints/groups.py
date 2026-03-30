@@ -1,10 +1,9 @@
-from typing import Any, List, Optional
+from typing import Any, List
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 
 from app.api.deps import get_current_user
 from app.services.keycloak_service import KeycloakService
-from app.services.project_service import ProjectService
 from app.services.rbac_service import is_realm_admin, parse_group_roles
 
 router = APIRouter()
@@ -73,12 +72,14 @@ async def list_my_authorization_groups(user: dict = Depends(get_current_user)):
             name = g.get("name", "")
             if not name.startswith("UFZ-TSM:"):
                 continue
-            result.append({
-                "id": g.get("id"),
-                "name": name,
-                "path": g.get("path"),
-                "role": "admin",
-            })
+            result.append(
+                {
+                    "id": g.get("id"),
+                    "name": name,
+                    "path": g.get("path"),
+                    "role": "admin",
+                }
+            )
         return result
 
     user_id = user.get("sub")
@@ -97,12 +98,14 @@ async def list_my_authorization_groups(user: dict = Depends(get_current_user)):
         if not name.startswith("UFZ-TSM:"):
             continue
         role = group_roles.get(name) or group_roles.get(path) or "viewer"
-        result.append({
-            "id": g.get("id"),
-            "name": name,
-            "path": g.get("path"),
-            "role": role,
-        })
+        result.append(
+            {
+                "id": g.get("id"),
+                "name": name,
+                "path": g.get("path"),
+                "role": role,
+            }
+        )
 
     return result
 
@@ -127,7 +130,9 @@ async def create_group(
 
     existing = KeycloakService.get_group_by_name(group_name)
     if existing:
-        raise HTTPException(status_code=400, detail="Group with this name already exists")
+        raise HTTPException(
+            status_code=400, detail="Group with this name already exists"
+        )
 
     group_id = KeycloakService.create_group(group_name)
     if not group_id:
@@ -141,13 +146,21 @@ async def create_group(
 
     # Create subgroups and assign client roles
     timeio_client_uuid = KeycloakService.get_client_id("timeIO-client")
-    for subgroup_name, role_name in [("viewers", "viewer"), ("editors", "editor"), ("admins", "admin")]:
+    for subgroup_name, role_name in [
+        ("viewers", "viewer"),
+        ("editors", "editor"),
+        ("admins", "admin"),
+    ]:
         try:
             sub_id = KeycloakService.create_subgroup(group_id, subgroup_name)
             if sub_id and timeio_client_uuid:
-                role_rep = KeycloakService.get_client_role(timeio_client_uuid, role_name)
+                role_rep = KeycloakService.get_client_role(
+                    timeio_client_uuid, role_name
+                )
                 if role_rep:
-                    KeycloakService.assign_group_client_roles(sub_id, timeio_client_uuid, [role_rep])
+                    KeycloakService.assign_group_client_roles(
+                        sub_id, timeio_client_uuid, [role_rep]
+                    )
         except Exception as e:
             print(f"Warning: Could not create subgroup '{subgroup_name}': {e}")
 
@@ -192,9 +205,14 @@ async def get_group_members(group_id: str, user: dict = Depends(get_current_user
     all_members: dict = {}  # user_id → {user, role}
 
     subgroups = KeycloakService.get_subgroups(group_id)
-    subgroup_role_map = {sg["name"]: sg for sg in subgroups if sg.get("name") in ("viewers", "editors", "admins")}
+    subgroup_role_map = {
+        sg["name"]: sg
+        for sg in subgroups
+        if sg.get("name") in ("viewers", "editors", "admins")
+    }
 
     from app.services.rbac_service import SUBGROUP_TO_ROLE
+
     for subgroup_name, subgroup in subgroup_role_map.items():
         role = SUBGROUP_TO_ROLE.get(subgroup_name, "viewer")
         members = KeycloakService.get_group_members(subgroup["id"])
@@ -225,10 +243,14 @@ async def add_group_member(
     Requires group admin or realm admin permissions.
     """
     if not _can_manage_group(user, group_id):
-        raise HTTPException(status_code=403, detail="Group admin or realm admin required")
+        raise HTTPException(
+            status_code=403, detail="Group admin or realm admin required"
+        )
 
     if role not in ("viewer", "editor", "admin"):
-        raise HTTPException(status_code=422, detail="role must be 'viewer', 'editor', or 'admin'")
+        raise HTTPException(
+            status_code=422, detail="role must be 'viewer', 'editor', or 'admin'"
+        )
 
     target_user = KeycloakService.get_user_by_username(username)
     if not target_user:
@@ -237,7 +259,9 @@ async def add_group_member(
     subgroup_name = f"{role}s"  # viewer→viewers, editor→editors, admin→admins
     subgroup = KeycloakService.get_subgroup_by_name(group_id, subgroup_name)
     if subgroup:
-        KeycloakService.add_user_to_group(user_id=target_user["id"], group_id=subgroup["id"])
+        KeycloakService.add_user_to_group(
+            user_id=target_user["id"], group_id=subgroup["id"]
+        )
     else:
         # Fallback: add to parent group (legacy)
         KeycloakService.add_user_to_group(user_id=target_user["id"], group_id=group_id)
@@ -258,17 +282,23 @@ async def update_group_member_role(
     Requires group admin or realm admin permissions.
     """
     if not _can_manage_group(user, group_id):
-        raise HTTPException(status_code=403, detail="Group admin or realm admin required")
+        raise HTTPException(
+            status_code=403, detail="Group admin or realm admin required"
+        )
 
     if role not in ("viewer", "editor", "admin"):
-        raise HTTPException(status_code=422, detail="role must be 'viewer', 'editor', or 'admin'")
+        raise HTTPException(
+            status_code=422, detail="role must be 'viewer', 'editor', or 'admin'"
+        )
 
     # Remove from all subgroups first
     for subgroup_name in ("viewers", "editors", "admins"):
         sub = KeycloakService.get_subgroup_by_name(group_id, subgroup_name)
         if sub:
             try:
-                KeycloakService.remove_user_from_group(user_id=target_user_id, group_id=sub["id"])
+                KeycloakService.remove_user_from_group(
+                    user_id=target_user_id, group_id=sub["id"]
+                )
             except Exception:
                 pass
 
@@ -276,7 +306,9 @@ async def update_group_member_role(
     new_subgroup_name = f"{role}s"
     subgroup = KeycloakService.get_subgroup_by_name(group_id, new_subgroup_name)
     if subgroup:
-        KeycloakService.add_user_to_group(user_id=target_user_id, group_id=subgroup["id"])
+        KeycloakService.add_user_to_group(
+            user_id=target_user_id, group_id=subgroup["id"]
+        )
     else:
         KeycloakService.add_user_to_group(user_id=target_user_id, group_id=group_id)
 
@@ -292,14 +324,18 @@ async def remove_group_member(
     Requires group admin or realm admin permissions.
     """
     if not _can_manage_group(user, group_id):
-        raise HTTPException(status_code=403, detail="Group admin or realm admin required")
+        raise HTTPException(
+            status_code=403, detail="Group admin or realm admin required"
+        )
 
     # Remove from all subgroups
     for subgroup_name in ("viewers", "editors", "admins"):
         sub = KeycloakService.get_subgroup_by_name(group_id, subgroup_name)
         if sub:
             try:
-                KeycloakService.remove_user_from_group(user_id=user_id, group_id=sub["id"])
+                KeycloakService.remove_user_from_group(
+                    user_id=user_id, group_id=sub["id"]
+                )
             except Exception:
                 pass
 

@@ -1,7 +1,7 @@
 import base64
 import hashlib
-import secrets
 import logging
+import secrets
 
 from cryptography.fernet import Fernet
 
@@ -43,9 +43,7 @@ def hash_password_pbkdf2(password: str, iterations: int = 100000) -> str:
     salt_b64 = base64.b64encode(salt_bytes).decode("utf-8")
 
     # Hash the password using the BYTES as salt (CRITICAL: broker decodes the b64 salt)
-    dk = hashlib.pbkdf2_hmac(
-        "sha512", password.encode("utf-8"), salt_bytes, iterations
-    )
+    dk = hashlib.pbkdf2_hmac("sha512", password.encode("utf-8"), salt_bytes, iterations)
     # Encode hash in base64
     dk_b64 = base64.b64encode(dk).decode("utf-8")
 

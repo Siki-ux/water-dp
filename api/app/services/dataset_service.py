@@ -119,7 +119,9 @@ class DatasetService:
             Dataset details or None if not found
         """
         thing_service = ThingService(schema_name)
-        thing = thing_service.get_thing(dataset_uuid, expand=["Locations", "Datastreams"])
+        thing = thing_service.get_thing(
+            dataset_uuid, expand=["Locations", "Datastreams"]
+        )
 
         if not thing:
             return None

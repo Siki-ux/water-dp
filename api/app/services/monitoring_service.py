@@ -1,7 +1,7 @@
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional
+from typing import Optional
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -97,7 +97,9 @@ class MonitoringService:
             try:
                 self._check_config_inactivity(config, now)
             except Exception:
-                logger.exception("Error checking activity for thing %s", config.thing_uuid)
+                logger.exception(
+                    "Error checking activity for thing %s", config.thing_uuid
+                )
                 self.stats["errors"] += 1
 
         logger.info("Sensor activity check complete. Stats: %s", self.stats)
@@ -117,7 +119,9 @@ class MonitoringService:
         thing_name = self._get_thing_name(str(config.thing_uuid))
 
         if not thing_name:
-            logger.warning("No name found for thing %s, skipping alert", config.thing_uuid)
+            logger.warning(
+                "No name found for thing %s, skipping alert", config.thing_uuid
+            )
             return
 
         if is_inactive:
@@ -160,7 +164,10 @@ class MonitoringService:
         return definition
 
     def _ensure_alert_active(
-        self, alert_def: AlertDefinition, thing_name: str, last_activity: Optional[datetime]
+        self,
+        alert_def: AlertDefinition,
+        thing_name: str,
+        last_activity: Optional[datetime],
     ):
         existing = (
             self.db.query(Alert)
@@ -234,17 +241,25 @@ class MonitoringService:
         try:
             mappings = self.timeio_db.get_schema_mappings()
         except Exception:
-            logger.exception("_get_or_create_activity_config: failed to fetch schema mappings")
+            logger.exception(
+                "_get_or_create_activity_config: failed to fetch schema mappings"
+            )
             return None
 
-        schema = next((m["schema"] for m in mappings if m["thing_uuid"] == thing_uuid), None)
+        schema = next(
+            (m["schema"] for m in mappings if m["thing_uuid"] == thing_uuid), None
+        )
         if not schema:
-            logger.warning("_get_or_create_activity_config: no schema for %s", thing_uuid)
+            logger.warning(
+                "_get_or_create_activity_config: no schema for %s", thing_uuid
+            )
             return None
 
         project = self.db.query(Project).filter(Project.schema_name == schema).first()
         if not project:
-            logger.warning("_get_or_create_activity_config: no project for schema %s", schema)
+            logger.warning(
+                "_get_or_create_activity_config: no project for schema %s", schema
+            )
             return None
 
         track = self._default_track_activity(thing_uuid)
@@ -284,7 +299,9 @@ class MonitoringService:
         except Exception:
             return
         thing_uuid = str(config.thing_uuid)
-        schema = next((m["schema"] for m in mappings if m["thing_uuid"] == thing_uuid), None)
+        schema = next(
+            (m["schema"] for m in mappings if m["thing_uuid"] == thing_uuid), None
+        )
         if not schema:
             return
         try:
@@ -298,12 +315,13 @@ class MonitoringService:
             if not things:
                 return
             thing_data = things[0]
-            thing_id = thing_data.get("@iot.id")
             current_props = thing_data.get("properties", {}) or {}
             if current_props.get("status") == new_status:
                 return
             new_props = {**current_props, "status": new_status}
-            self.timeio_db.update_thing_properties(schema, thing_uuid, {"properties": new_props})
+            self.timeio_db.update_thing_properties(
+                schema, thing_uuid, {"properties": new_props}
+            )
             self.stats["status_updated"] = self.stats.get("status_updated", 0) + 1
         except Exception:
             logger.exception("_update_frost_status: failed for %s", thing_uuid)
@@ -318,7 +336,9 @@ class MonitoringService:
             mappings = self.timeio_db.get_schema_mappings()
         except Exception:
             return None
-        schema = next((m["schema"] for m in mappings if m["thing_uuid"] == thing_uuid), None)
+        schema = next(
+            (m["schema"] for m in mappings if m["thing_uuid"] == thing_uuid), None
+        )
         if not schema:
             return None
         try:
@@ -335,9 +355,9 @@ class MonitoringService:
             with conn:
                 with conn.cursor() as cur:
                     cur.execute(
-                        pgsql.SQL("SELECT name FROM {schema}.thing WHERE uuid = %s").format(
-                            schema=pgsql.Identifier(schema)
-                        ),
+                        pgsql.SQL(
+                            "SELECT name FROM {schema}.thing WHERE uuid = %s"
+                        ).format(schema=pgsql.Identifier(schema)),
                         (thing_uuid,),
                     )
                     row = cur.fetchone()

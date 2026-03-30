@@ -369,17 +369,23 @@ class GeoServerService:
                     )
                     if ft_response.status_code == 200:
                         ft_data = ft_response.json().get("featureType", {})
-                        
-                        raw_bounds = ft_data.get("latLonBoundingBox") or ft_data.get("nativeBoundingBox", {})
+
+                        raw_bounds = ft_data.get("latLonBoundingBox") or ft_data.get(
+                            "nativeBoundingBox", {}
+                        )
                         # Copy to avoid mutating original and remove non-float 'crs' param
-                        bounds = {k: float(v) for k, v in raw_bounds.items() if k != "crs"}
-                        
+                        bounds = {
+                            k: float(v) for k, v in raw_bounds.items() if k != "crs"
+                        }
+
                         srs = ft_data.get("srs", srs)
                         native_srs = ft_data.get("nativeCRS", native_srs)
                         title = ft_data.get("title", title)
                         abstract = ft_data.get("abstract", abstract)
             except Exception as e:
-                logger.warning(f"Failed to fetch featureType details for {layer_name}: {e}")
+                logger.warning(
+                    f"Failed to fetch featureType details for {layer_name}: {e}"
+                )
 
             return GeoServerLayerInfo(
                 name=layer_data["layer"]["name"],

@@ -97,7 +97,11 @@ def seed_data(db: Session) -> None:
             db.flush()
 
             # 2. Generate Grid Regions (GeoFeatures)
-            data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "geoserver", "data")
+            data_dir = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+                "geoserver",
+                "data",
+            )
             geojson_path = os.path.join(data_dir, "czech_regions.geojson")
 
             if os.path.exists(geojson_path):
@@ -165,7 +169,6 @@ def seed_data(db: Session) -> None:
                 # We need Shapely geometry for centroid calculation
                 # WKT is in f.geometry (as WKBElement or str depending on GeoAlchemy2 mapping)
                 # Converting WKB/WKT to shapely
-                from shapely import wkt
 
                 try:
                     # GeoAlchemy2.shape.to_shape(f.geometry) is standard
@@ -181,15 +184,27 @@ def seed_data(db: Session) -> None:
         # -------------------------------------------------------------------------
         # Seed Watershed Layers (e.g. Morava)
         # -------------------------------------------------------------------------
-        data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "geoserver", "data")
-        watershed_files = ["morava_river_watershed.geojson", "orava_river_watershed.geojson", "czech_regions_praha.geojson"]
-        
+        data_dir = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            "geoserver",
+            "data",
+        )
+        watershed_files = [
+            "morava_river_watershed.geojson",
+            "orava_river_watershed.geojson",
+            "czech_regions_praha.geojson",
+        ]
+
         for ws_file in watershed_files:
             ws_path = os.path.join(data_dir, ws_file)
             layer_name = os.path.splitext(ws_file)[0]
-            
+
             if os.path.exists(ws_path):
-                if not db.query(GeoLayer).filter(GeoLayer.layer_name == layer_name).first():
+                if (
+                    not db.query(GeoLayer)
+                    .filter(GeoLayer.layer_name == layer_name)
+                    .first()
+                ):
                     logger.info(f"Seeding {layer_name} layer...")
                     ws_layer = GeoLayer(
                         layer_name=layer_name,
@@ -203,7 +218,7 @@ def seed_data(db: Session) -> None:
                     )
                     db.add(ws_layer)
                     db.flush()
-                    
+
                     try:
                         with open(ws_path, "r", encoding="utf-8") as f:
                             data = json.load(f)
@@ -212,7 +227,9 @@ def seed_data(db: Session) -> None:
                             fs = [data]
                         for idx, fd in enumerate(fs):
                             props = fd.get("properties", {})
-                            fid = props.get("id") or fd.get("id") or f"{layer_name}_{idx}"
+                            fid = (
+                                props.get("id") or fd.get("id") or f"{layer_name}_{idx}"
+                            )
                             gs = shape(fd["geometry"])
                             wkt_geom = from_shape(gs, srid=4326)
                             feat = GeoFeature(
@@ -250,7 +267,11 @@ def seed_data(db: Session) -> None:
             db.add(cz_rep_layer)
             db.flush()
             # Try load geojson
-            data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "geoserver", "data")
+            data_dir = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+                "geoserver",
+                "data",
+            )
             cz_path = os.path.join(data_dir, "czech_republic.geojson")
 
             if os.path.exists(cz_path):
@@ -277,7 +298,6 @@ def seed_data(db: Session) -> None:
                 except Exception as e:
                     logger.error(f"Failed to load CZ Rep GeoJSON: {e}")
             db.commit()
-
 
         # Seed Czech Regions Praha Layer: SKIP (Managed by GeoServer Stack)
         # We rely on GeoServer WFS for this layer now.
@@ -505,7 +525,8 @@ def seed_data(db: Session) -> None:
         # Get some thing IDs from features
         logger.info("[SEEDING] Linking sensors to demo project...")
         features_with_ids = (
-            db.query(GeoFeature).filter(GeoFeature.layer_id == "czech_regions")
+            db.query(GeoFeature)
+            .filter(GeoFeature.layer_id == "czech_regions")
             # .limit(3) # Removed limit
             .all()
         )
@@ -952,7 +973,6 @@ def seed_simulator_entities():
         )
 
 
-
 def seed_qaqc_configs() -> None:
     """
     Seed default QA/QC configurations for all TSM projects that have no QA/QC config yet.
@@ -982,10 +1002,14 @@ def seed_qaqc_configs() -> None:
         # Skip if already has a default config
         existing = svc.list_configs(tsm_project_id)
         if any(c.get("is_default") for c in existing):
-            logger.info(f"[QA/QC seeding] Schema '{schema_name}' already has a default config — skipping.")
+            logger.info(
+                f"[QA/QC seeding] Schema '{schema_name}' already has a default config — skipping."
+            )
             continue
 
-        logger.info(f"[QA/QC seeding] Creating default water-level QA/QC config for schema '{schema_name}'…")
+        logger.info(
+            f"[QA/QC seeding] Creating default water-level QA/QC config for schema '{schema_name}'…"
+        )
 
         try:
             qaqc_id = svc.create_config(
@@ -1045,7 +1069,9 @@ def seed_qaqc_configs() -> None:
             logger.warning(f"[QA/QC seeding] Failed for schema '{schema_name}': {exc}")
 
     if seeded:
-        logger.info(f"[QA/QC seeding] Done — seeded default configs for {seeded} schema(s).")
+        logger.info(
+            f"[QA/QC seeding] Done — seeded default configs for {seeded} schema(s)."
+        )
     else:
         logger.info("[QA/QC seeding] All schemas already have default QA/QC configs.")
 
@@ -1096,6 +1122,7 @@ def flagSuddenJump(saqc, field, max_jump: float = 0.5, window: str = "1h", **kwa
 def seed_custom_saqc_functions() -> None:
     """Upload example custom SaQC function scripts to MinIO if not already present."""
     import io
+
     from app.services.minio_service import minio_service
 
     _BUCKET = "custom-saqc-functions"
@@ -1110,7 +1137,9 @@ def seed_custom_saqc_functions() -> None:
     for func_name, script in _CUSTOM_SAQC_EXAMPLE_FUNCTIONS.items():
         filename = f"{func_name}.py"
         if filename in existing:
-            logger.info(f"[QA/QC seeding] Custom function '{func_name}' already exists — skipping.")
+            logger.info(
+                f"[QA/QC seeding] Custom function '{func_name}' already exists — skipping."
+            )
             continue
         data = script.encode("utf-8")
         minio_service.upload_file(
@@ -1120,4 +1149,6 @@ def seed_custom_saqc_functions() -> None:
             length=len(data),
             content_type="text/x-python",
         )
-        logger.info(f"[QA/QC seeding] Uploaded custom SaQC function '{func_name}' to MinIO.")
+        logger.info(
+            f"[QA/QC seeding] Uploaded custom SaQC function '{func_name}' to MinIO."
+        )

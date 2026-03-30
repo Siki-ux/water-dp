@@ -56,8 +56,6 @@ export default function DashboardEditor({ dashboard }: DashboardEditorProps) {
         if (!type) return;
 
         const id = uuidv4();
-        console.log("New Widget ID:", id);
-
         const newWidget: Widget = {
             id,
             type,
@@ -73,8 +71,6 @@ export default function DashboardEditor({ dashboard }: DashboardEditorProps) {
         };
 
         const newWidgets = [...widgets, newWidget];
-        console.log("Widgets list:", newWidgets.map(w => w.id));
-
         setWidgets(newWidgets);
         setLayout([...layout, newItem]);
     };

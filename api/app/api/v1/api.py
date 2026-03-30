@@ -9,18 +9,18 @@ from app.api.v1.endpoints import (
     auth,
     bulk,
     computations,
+    custom_parsers,
     dashboards,
     datasets,
     external_sources,
     geospatial,
     groups,
+    mqtt,
     projects,
     qaqc,
     simulator,
-    things,
-    custom_parsers,
-    mqtt,
     sms,
+    things,
 )
 from app.api.v1.endpoints.qaqc import sms_router as qaqc_sms_router
 

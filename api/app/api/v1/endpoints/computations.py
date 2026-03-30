@@ -29,39 +29,90 @@ COMPUTATIONS_DIR = "app/computations"
 MAX_FILE_SIZE = 1 * 1024 * 1024  # 1MB
 
 
+ALLOWED_IMPORTS = frozenset(
+    {
+        "math",
+        "statistics",
+        "datetime",
+        "json",
+        "csv",
+        "io",
+        "re",
+        "collections",
+        "itertools",
+        "functools",
+        "decimal",
+        "fractions",
+        "typing",
+        "dataclasses",
+        "enum",
+        "copy",
+        "textwrap",
+        "string",
+        "numpy",
+        "pandas",
+        "scipy",
+    }
+)
+
+FORBIDDEN_BUILTINS = frozenset(
+    {
+        "eval",
+        "exec",
+        "compile",
+        "__import__",
+        "globals",
+        "locals",
+        "getattr",
+        "setattr",
+        "delattr",
+        "open",
+        "input",
+        "breakpoint",
+        "memoryview",
+        "type",
+        "vars",
+        "dir",
+    }
+)
+
+
 def validate_script_security(content: str):
-    """
-    Scan python code for dangerous imports and operations.
-    """
+    """Validate uploaded Python scripts using an import allowlist."""
     try:
         tree = ast.parse(content)
     except SyntaxError:
         raise HTTPException(status_code=400, detail="Invalid Python syntax")
 
     for node in ast.walk(tree):
-        # Check for dangerous imports
         if isinstance(node, ast.Import):
             for alias in node.names:
-                if alias.name in ["subprocess", "os", "platform"]:
+                top_module = alias.name.split(".")[0]
+                if top_module not in ALLOWED_IMPORTS:
                     raise HTTPException(
                         status_code=400,
-                        detail=f"Security violation: Import '{alias.name}' is forbidden",
+                        detail=f"Import '{alias.name}' is not allowed",
                     )
         elif isinstance(node, ast.ImportFrom):
-            if node.module in ["subprocess", "os", "platform"]:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Security violation: Import from '{node.module}' is forbidden",
-                )
-
-        # Check for dangerous calls (eval, exec)
-        elif isinstance(node, ast.Call):
-            if isinstance(node.func, ast.Name):
-                if node.func.id in ["eval", "exec"]:
+            if node.module:
+                top_module = node.module.split(".")[0]
+                if top_module not in ALLOWED_IMPORTS:
                     raise HTTPException(
                         status_code=400,
-                        detail=f"Security violation: Function '{node.func.id}' is forbidden",
+                        detail=f"Import from '{node.module}' is not allowed",
                     )
+        elif isinstance(node, ast.Call):
+            func_name = None
+            if isinstance(node.func, ast.Name):
+                func_name = node.func.id
+            elif isinstance(node.func, ast.Attribute):
+                func_name = node.func.attr
+
+            if func_name and func_name in FORBIDDEN_BUILTINS:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Function '{func_name}' is not allowed",
+                )
 
 
 @router.post("/upload", response_model=ComputationScriptRead)
@@ -73,10 +124,7 @@ async def upload_computation_script(
     database: Session = Depends(get_db),
     user: dict = Depends(deps.get_current_user),
 ):
-    """
-    Upload a new computation script and associate it with a project.
-    Requires 'editor' access to the project.
-    """
+    """Upload a computation script. Requires 'editor' access."""
     # Check Project Access (Editor required)
     ProjectService._check_access(database, project_id, user, required_role="editor")
 
@@ -131,10 +179,7 @@ async def run_computation(
     database: Session = Depends(get_db),
     user: dict = Depends(deps.get_current_user),
 ):
-    """
-    Run a computation script by ID.
-    Requires 'viewer' access to the associated project.
-    """
+    """Run a computation script. Requires 'viewer' access."""
     script = (
         database.query(ComputationScript)
         .filter(ComputationScript.id == script_id)
@@ -152,11 +197,6 @@ async def run_computation(
     script_path = os.path.join(COMPUTATIONS_DIR, script.filename)
     if not os.path.exists(script_path):
         raise HTTPException(status_code=404, detail="Script file missing on server")
-
-    # Pass the filename (module name logic will handle it in the task)
-    # Note: The task currently expects a module path like "app.computations.xyz".
-    # Our filenames are now "project-uuid_xyz.py".
-    # The module name would be "app.computations.project-uuid_xyz" (without .py)
 
     module_name = script.filename
     if module_name.endswith(".py"):
@@ -215,13 +255,6 @@ async def list_all_scripts(
     if project_id:
         ProjectService._check_access(database, project_id, user, required_role="viewer")
         query = query.filter(ComputationScript.project_id == project_id)
-    else:
-        # If no project_id, maybe list all accessible?
-        # For now, let's just return all if user is admin, or empty/error?
-        # User asked "only getting scripts that are available for this project".
-        # If called without project_id, we might return nothing or all public?
-        # Let's enforce project_id for now or return all if admin.
-        pass
 
     return query.all()
 
@@ -232,10 +265,7 @@ async def list_script_jobs(
     database: Session = Depends(get_db),
     user: dict = Depends(deps.get_current_user),
 ):
-    """
-    List execution history for a script.
-    Syncs PENDING jobs from Celery before returning.
-    """
+    """List execution history for a script."""
     script = (
         database.query(ComputationScript)
         .filter(ComputationScript.id == script_id)
@@ -256,7 +286,6 @@ async def list_script_jobs(
         .all()
     )
 
-    # Sync PENDING jobs
     import json
 
     from app.core.celery_app import celery_app
@@ -285,8 +314,6 @@ async def list_script_jobs(
 
     if dirty:
         database.commit()
-        # Refresh all jobs to get updated state (though objects should be updated in session)
-        # No need to re-query as SQLAlchemy updates the objects in identity map
 
     return jobs
 
@@ -297,22 +324,19 @@ async def get_computation_status(
     database: Session = Depends(get_db),
     user: dict = Depends(deps.get_current_user),
 ):
-    """
-    Get the status of a computation task.
-    Syncs Celery result to DB if finished.
-    """
+    """Get computation task status."""
     job = database.query(ComputationJob).filter(ComputationJob.id == task_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    # Authorization Check
+    from app.core.config import settings
+
     roles = user.get("realm_access", {}).get("roles", [])
-    is_superuser = "admin" in roles or "admin-siki" in roles
+    is_superuser = any(role in roles for role in settings.admin_roles_list)
 
     if not is_superuser and job.user_id != user.get("sub"):
         raise HTTPException(status_code=403, detail="Not authorized to view this job")
 
-    # If already finished in DB, return immediately
     if job.status in ["SUCCESS", "FAILURE", "REVOKED"]:
         return {
             "task_id": task_id,
@@ -334,8 +358,6 @@ async def get_computation_status(
         job.end_time = datetime.utcnow().isoformat()
 
         if task_result.successful():
-            # For now, we store the whole result as JSON in 'result'
-            # And also as 'logs' just for visibility in the simple UI
             task_result_data = task_result.result
             if isinstance(task_result_data, (dict, list)):
                 job.result = json.dumps(task_result_data)
@@ -344,8 +366,7 @@ async def get_computation_status(
                 job.result = str(task_result_data)
                 job.logs = str(task_result_data)
         else:
-            # Failure
-            job.error = str(task_result.result)  # Exception message
+            job.error = str(task_result.result)
             job.logs = (
                 f"Error: {task_result.result}\nTraceback: {task_result.traceback}"
             )
@@ -367,9 +388,7 @@ async def get_script_content(
     database: Session = Depends(get_db),
     user: dict = Depends(deps.get_current_user),
 ):
-    """
-    Get the raw content of a computation script.
-    """
+    """Get the content of a computation script."""
     script = (
         database.query(ComputationScript)
         .filter(ComputationScript.id == script_id)
@@ -399,10 +418,7 @@ async def update_script_content(
     database: Session = Depends(get_db),
     user: dict = Depends(deps.get_current_user),
 ):
-    """
-    Update the content of a computation script.
-    Requires 'editor' access.
-    """
+    """Update script content. Requires 'editor' access."""
     script = (
         database.query(ComputationScript)
         .filter(ComputationScript.id == script_id)

@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -18,7 +18,7 @@ from app.services.project_service import ProjectService
 USER_OWNER = {
     "sub": "owner-123",
     "realm_access": {"roles": ["user"]},
-    "groups": ["group-123"],
+    "groups": ["/UFZ-TSM:group-123/admins"],
 }
 USER_ADMIN = {
     "sub": "admin-999",
@@ -28,7 +28,7 @@ USER_ADMIN = {
 USER_MEMBER = {
     "sub": "member-456",
     "realm_access": {"roles": ["user"]},
-    "groups": ["group-123"],
+    "groups": ["/UFZ-TSM:group-123/editors"],
 }
 USER_OTHER = {
     "sub": "other-789",
@@ -57,106 +57,94 @@ def sample_dashboard(sample_project):
 
 
 class TestProjectService:
-    def test_create_project(self, mock_db):
+    @patch("app.services.project_service.KeycloakService")
+    @patch("app.services.project_service.TimeIODatabase")
+    def test_create_project(self, mock_timeio, mock_kc, mock_db):
         p_in = ProjectCreate(
             name="New Project",
             description="New Desc",
             authorization_provider_group_id="group-123",
         )
 
+        # Mock Keycloak
+        mock_kc.get_group.return_value = {
+            "id": "group-123",
+            "name": "UFZ-TSM:group-123",
+        }
+        mock_kc.get_group_schema_name.return_value = None
+        mock_kc.get_group_by_name.return_value = {
+            "id": "group-123",
+            "name": "UFZ-TSM:group-123",
+            "attributes": {},
+        }
+        mock_kc.set_group_attributes.return_value = None
+
+        # Mock TimeIO
+        mock_timeio.return_value.get_config_project_by_name.return_value = None
+
         result = ProjectService.create_project(mock_db, p_in, USER_OWNER)
 
         assert result.name == "New Project"
         assert result.owner_id == USER_OWNER["sub"]
-        mock_db.add.assert_called_once()
+        # add is called twice: once for project, once for ProjectMember (owner)
+        assert mock_db.add.call_count == 2
         mock_db.commit.assert_called_once()
 
-    def test_get_project_owner_success(self, mock_db, sample_project):
+    @patch("app.services.project_service.PermissionResolver")
+    def test_get_project_owner_success(self, mock_resolver, mock_db, sample_project):
         mock_db.query.return_value.filter.return_value.first.return_value = (
             sample_project
         )
+
+        mock_perms = MagicMock()
+        mock_perms.can_view = True
+        mock_perms.effective_role = "owner"
+        mock_resolver.resolve.return_value = mock_perms
 
         result = ProjectService.get_project(mock_db, sample_project.id, USER_OWNER)
         assert result.id == sample_project.id
 
-    def test_get_project_admin_success(self, mock_db, sample_project):
+    @patch("app.services.project_service.PermissionResolver")
+    def test_get_project_admin_success(self, mock_resolver, mock_db, sample_project):
         mock_db.query.return_value.filter.return_value.first.return_value = (
             sample_project
         )
+
+        mock_perms = MagicMock()
+        mock_perms.can_view = True
+        mock_perms.effective_role = "owner"
+        mock_resolver.resolve.return_value = mock_perms
 
         result = ProjectService.get_project(mock_db, sample_project.id, USER_ADMIN)
         assert result.id == sample_project.id
 
-    def test_get_project_member_success(self, mock_db, sample_project):
+    @patch("app.services.project_service.PermissionResolver")
+    def test_get_project_member_success(self, mock_resolver, mock_db, sample_project):
         mock_db.query.return_value.filter.return_value.first.return_value = (
             sample_project
         )
 
-        # Mock member query
-        member = ProjectMember(
-            project_id=sample_project.id, user_id=USER_MEMBER["sub"], role="viewer"
-        )
-        # The service calls .first() on the member query.
-        # Logic: project query first, then member query.
-        # We need to setup side_effect for query or checking call sequence.
-
-        # Simplified mock setup for chained query
-        # Because Service makes multiple queries, we need to be careful.
-        # 1. Project Query
-        # 2. Member Query
-
-        # Let's use side_effect for db.query to return different mocks
-        query_mock = MagicMock()
-        mock_db.query.return_value = query_mock
-
-        # We need to distinguish between Project query and ProjectMember query.
-        # This is tricky with simple mocks.
-        # Easier strategy: Mock .filter().first() to return based on logic or use specific checking.
-
-        # But here, let's just assume standard flow.
-        # We can inspect the arguments to filter if needed, but 'return_value' is often shared.
-
-        # Alternative: Just mock the specific lines.
-        # or use a more robust mock library or just patch the _check_access method if we trusted it?
-        # No, we want to test _check_access logic.
-
-        # Let's mock the project return
-        # The service does: project = db.query(Project).filter(...).first()
-        # Then: member = db.query(ProjectMember).filter(...).first()
-
-        # If we return sample_project for ANY first(), the second query will return sample_project (which is wrong type).
-        # We must make db.query(Project) return one mock, db.query(ProjectMember) another.
-
-        def query_side_effect(model):
-            m = MagicMock()
-            if model == Project:
-                m.filter.return_value.first.return_value = sample_project
-            elif model == ProjectMember:
-                m.filter.return_value.first.return_value = member
-            return m
-
-        mock_db.query.side_effect = query_side_effect
+        mock_perms = MagicMock()
+        mock_perms.can_view = True
+        mock_perms.effective_role = "viewer"
+        mock_resolver.resolve.return_value = mock_perms
 
         result = ProjectService.get_project(mock_db, sample_project.id, USER_MEMBER)
         assert result == sample_project
 
-    def test_get_project_access_denied(self, mock_db, sample_project):
-        def query_side_effect(model):
-            m = MagicMock()
-            if model == Project:
-                m.filter.return_value.first.return_value = sample_project
-            elif model == ProjectMember:
-                m.filter.return_value.first.return_value = None  # Not a member
-            return m
+    @patch("app.services.project_service.PermissionResolver")
+    def test_get_project_access_denied(self, mock_resolver, mock_db, sample_project):
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            sample_project
+        )
 
-        mock_db.query.side_effect = query_side_effect
+        mock_perms = MagicMock()
+        mock_perms.can_view = False
+        mock_resolver.resolve.return_value = mock_perms
 
         with pytest.raises(AuthorizationException) as exc:
             ProjectService.get_project(mock_db, sample_project.id, USER_OTHER)
         assert "Not authorized" in exc.value.message
-
-    # add_member and remove_member are disabled and raise ValidationException.
-    # Legacy tests removed.
 
 
 class TestDashboardService:
@@ -169,16 +157,7 @@ class TestDashboardService:
         result = DashboardService.get_dashboard(mock_db, sample_dashboard.id, None)
         assert result.id == sample_dashboard.id
 
-    # Removed broken auth-related tests (test_get_private_dashboard_no_auth, etc.)
-
     def test_create_dashboard_success(self, mock_db, sample_project):
-        # Must mock ProjectService._check_access or set up DB mocks to pass it.
-        # Since DashboardService calls ProjectService._check_access explicitly...
-        # We should rely on db mocks behaving correctly for that check.
-
-        # create_dashboard calls check_access(project_id, user, "editor")
-
-        # Mock DB to return project and member=editor for USER_MEMBER
         editor_member = ProjectMember(
             project_id=sample_project.id, user_id=USER_MEMBER["sub"], role="editor"
         )
@@ -206,40 +185,10 @@ class TestDashboardService:
         assert len(result.widgets) == 1
 
     def test_update_dashboard_success(self, mock_db, sample_dashboard):
-        # Mock check_access to return the dashboard (meaning user has access)
-        # DashboardService.update_dashboard calls check_access with 'editor'
-
-        # Mock DB queries
-        # 1. check_access -> get project -> get member
-        # 2. update -> commit -> refresh
-
-        # Simplify by mocking check_access logic if possible, or setup DB mocks
-        # Setup: project exists, member is editor
-
-        # Mock Project query for check_access (DashboardService.check_access -> ProjectService.check_access)
-        # Wait, DashboardService.update_dashboard calls ProjectService._check_access directly?
-        # No, it calls DashboardService.get_dashboard or similar usually?
-        # Let's check implementation.
-        # DashboardService.update_dashboard(db, dashboard_id, update_in, user)
-        # It gets dashboard, checks permissions.
-
-        # Let's assume standard flow:
-        # DashboardService.update_dashboard checks if user is editor of project.
-
-        # Mock finding the dashboard
         mock_db.query.return_value.filter.return_value.first.return_value = (
             sample_dashboard
         )
 
-        # Mock ProjectService._check_access call? No, integration test style or mock Service method.
-        # But we are testing Service, so we should mock DB.
-
-        # We need to mock:
-        # 1. db.query(Dashboard).filter().first() -> sample_dashboard
-        # 2. ProjectService._check_access(db, project_id, user, 'editor') -> Project
-
-        # Since _check_access is static, we can patch it or mock DB to satisfy it.
-        # Let's patch ProjectService._check_access for simplicity in this test file to avoid complex DB mocking for permission checks again.
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(ProjectService, "_check_access", MagicMock())
 
@@ -259,7 +208,6 @@ class TestDashboardService:
             sample_dashboard
         )
 
-        # Mock check_access
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(ProjectService, "_check_access", MagicMock())
 
@@ -288,13 +236,16 @@ class TestProjectServiceExtended:
             assert result.name == "Updated Name"
             mock_db.commit.assert_called()
 
-    def test_delete_project(self, mock_db, sample_project):
-        # delete_project checks if user is owner or admin directly, mostly.
-        # Logic: get project, check owner_id vs user sub.
-
+    @patch("app.services.project_service.PermissionResolver")
+    def test_delete_project(self, mock_resolver, mock_db, sample_project):
         mock_db.query.return_value.filter.return_value.first.return_value = (
             sample_project
         )
+
+        mock_perms = MagicMock()
+        mock_perms.can_delete = True
+        mock_perms.effective_role = "owner"
+        mock_resolver.resolve.return_value = mock_perms
 
         ProjectService.delete_project(mock_db, sample_project.id, USER_OWNER)
 
@@ -305,10 +256,10 @@ class TestProjectServiceExtended:
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(ProjectService, "_check_access", MagicMock())
 
+            sensor_uuid = str(uuid4())
             ProjectService.remove_sensor(
-                mock_db, sample_project.id, "sensor-1", USER_MEMBER
+                mock_db, sample_project.id, sensor_uuid, USER_MEMBER
             )
 
-            # Verify execute called for delete
             mock_db.execute.assert_called()
             mock_db.commit.assert_called()

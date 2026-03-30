@@ -51,7 +51,9 @@ async def test_verify_token_valid(mock_jwks):
                     "app.core.security.jwt.algorithms.RSAAlgorithm.from_jwk",
                     return_value="mock-key",
                 ):
-                    with patch("app.core.security.jwt.decode", return_value=mock_payload):
+                    with patch(
+                        "app.core.security.jwt.decode", return_value=mock_payload
+                    ):
                         payload = await verify_token("valid-token")
                         assert payload["sub"] == "user-123"
 

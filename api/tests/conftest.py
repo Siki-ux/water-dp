@@ -6,10 +6,10 @@ from dotenv import load_dotenv
 # Load test env vars before any app module is imported so Settings() succeeds.
 load_dotenv(Path(__file__).parent.parent / ".env.test", override=False)
 
-import pytest
-from sqlalchemy.orm import Session
+import pytest  # noqa: E402
+from sqlalchemy.orm import Session  # noqa: E402
 
-from app.core.config import Settings, settings
+from app.core.config import Settings, settings  # noqa: E402
 
 
 @pytest.fixture

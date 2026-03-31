@@ -224,7 +224,7 @@ class DatasetService:
 
         # Check if bucket exists
         if not minio_service.bucket_exists(bucket_name):
-            raise ValueError(
+            raise ResourceNotFoundException(
                 f"Bucket {bucket_name} does not exist. Dataset may not be fully provisioned."
             )
 
@@ -267,7 +267,7 @@ class DatasetService:
         bucket_name = f"b-{dataset_uuid}"
 
         if not minio_service.bucket_exists(bucket_name):
-            raise ValueError(
+            raise ResourceNotFoundException(
                 f"Bucket {bucket_name} does not exist. Dataset may not be fully provisioned."
             )
 

@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.api import deps
 from app.core.database import get_db
+from app.core.exceptions import ResourceNotFoundException
 from app.models.user_context import Project
 from app.schemas.dataset import (
     DatasetCreate,
@@ -181,7 +182,7 @@ async def get_upload_url(
             expires=expires,
         )
         return DatasetUploadUrlResponse(**result)
-    except ValueError as e:
+    except ResourceNotFoundException as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to get upload URL: {e}", exc_info=True)
@@ -252,7 +253,7 @@ async def upload_file(
                 content_type=content_type,
             )
             return DatasetUploadResponse(**result)
-        except ValueError as e:
+        except ResourceNotFoundException as e:
             raise HTTPException(status_code=404, detail=str(e))
         except Exception as e:
             logger.error(f"Failed to upload file: {e}", exc_info=True)

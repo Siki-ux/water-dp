@@ -33,14 +33,11 @@ class IngestionService:
         access_key = s3_config["user"]
         secret_key = s3_config["password"]
 
-        # 2. Initialize MinIO Client
-        # We use the internal MinIO Endpoint
-        # Note: settings.OBJECT_STORAGE_HOST might be "localhost:9000" or internal "object-storage:9000"
-        # Since we are in the API container, we should use the internal docker-compose name "object-storage" if configured,
-        # or use what is in settings.
-        # Let's check settings for MINIO/OBJECT_STORAGE config.
-        # Assuming settings has keys. If not, we might need to rely on env vars or internal defaults.
-        # Docker Compose says: object-storage ports 9000.
+        # 2. Initialize MinIO client using the configured endpoint and TLS setting.
+        # `settings.minio_url` and `settings.minio_secure` define how the API
+        # connects to object storage. Per-thing credentials from ConfigDB are
+        # used instead of the global MinioService singleton because each thing's
+        # bucket has its own access/secret key pair.
 
         try:
             client = Minio(

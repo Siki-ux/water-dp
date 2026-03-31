@@ -18,7 +18,7 @@ CUSTOM_PARSERS_BUCKET = "custom-parsers"
 async def upload_custom_parser(
     device_type_name: Annotated[str, Form()],
     file: Annotated[UploadFile, File()],
-    user: dict = Depends(deps.get_current_user),
+    user: dict = Depends(deps.get_current_active_superuser),
 ):
     """Upload a custom parser script for an MQTT device type."""
     safe_filename = os.path.basename(file.filename or "upload.py")

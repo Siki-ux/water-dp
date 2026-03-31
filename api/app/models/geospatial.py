@@ -63,7 +63,9 @@ class GeoFeature(Base, BaseModel):
 
     __tablename__ = "geo_features"
 
-    layer_id = Column(String(100), ForeignKey(GeoLayer.layer_name), nullable=False)
+    layer_id = Column(
+        String(100), ForeignKey("water_dp.geo_layers.layer_name"), nullable=False
+    )
 
     feature_id = Column(String(100), nullable=False, index=True)
     feature_type = Column(String(50), nullable=False)  # point, line, polygon, etc.

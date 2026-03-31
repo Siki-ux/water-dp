@@ -3,7 +3,7 @@
 import os
 from typing import Any, Callable, Dict
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 
 from app.core.config import settings
@@ -32,9 +32,15 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> Dict[str, Any
 
 
 async def get_current_user_with_token(
+    request: Request,
     token: str = Depends(oauth2_scheme),
 ) -> Dict[str, Any]:
-    """Validate Bearer token and include the raw token in the payload."""
+    """Validate Bearer token and store the raw token on request.state.
+
+    The token is stored on ``request.state.token`` instead of being embedded
+    in the user dict to prevent accidental leakage via logging, exception
+    serialization, or returning the user dict in a response.
+    """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -45,7 +51,7 @@ async def get_current_user_with_token(
         raise credentials_exception
 
     payload = await verify_token(token)
-    payload["_token"] = token
+    request.state.token = token
     return payload
 
 

@@ -32,8 +32,11 @@ class MinioService:
         try:
             return self.client.bucket_exists(bucket_name)
         except S3Error as e:
+            if getattr(e, "code", None) == "NoSuchBucket":
+                logger.info(f"Bucket does not exist: {bucket_name}")
+                return False
             logger.error(f"Error checking bucket existence: {e}")
-            return False
+            raise
 
     def get_presigned_upload_url(
         self,

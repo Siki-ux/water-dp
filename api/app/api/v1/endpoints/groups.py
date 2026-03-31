@@ -1,3 +1,4 @@
+import logging
 from typing import Any, List
 
 from fastapi import APIRouter, Body, Depends, HTTPException
@@ -5,6 +6,8 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 from app.api.deps import get_current_user
 from app.services.keycloak_service import KeycloakService
 from app.services.rbac_service import is_realm_admin, parse_group_roles
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -142,7 +145,7 @@ async def create_group(
     try:
         KeycloakService.set_group_attributes(group_id, {"schema_name": ""})
     except Exception as e:
-        print(f"Warning: Could not set group attributes: {e}")
+        logger.warning("Could not set group attributes: %s", e)
 
     # Create subgroups and assign client roles
     timeio_client_uuid = KeycloakService.get_client_id("timeIO-client")
@@ -162,7 +165,7 @@ async def create_group(
                         sub_id, timeio_client_uuid, [role_rep]
                     )
         except Exception as e:
-            print(f"Warning: Could not create subgroup '{subgroup_name}': {e}")
+            logger.warning("Could not create subgroup '%s': %s", subgroup_name, e)
 
     # Add creator to 'admins' subgroup
     user_id = user.get("sub")

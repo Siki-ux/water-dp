@@ -208,46 +208,57 @@ async def upload_file(
     """
     ProjectService._check_access(database, project_id, user, required_role="editor")
 
-    # Read file in chunks to enforce size limit without loading entire file at once
+    # Stream file to a SpooledTemporaryFile to avoid buffering entirely in memory.
+    # SpooledTemporaryFile keeps small files in memory and rolls to disk for large ones.
+    import tempfile
+
     max_size = 256 * 1024 * 1024  # 256MB
     chunk_size = 1024 * 1024  # 1MB
     total_size = 0
-    chunks: List[bytes] = []
-
-    while True:
-        chunk = await file.read(chunk_size)
-        if not chunk:
-            break
-        total_size += len(chunk)
-        if total_size > max_size:
-            raise HTTPException(
-                status_code=400, detail="File size exceeds maximum of 256MB"
-            )
-        chunks.append(chunk)
-
-    if total_size == 0:
-        raise HTTPException(status_code=400, detail="Empty file")
-
-    # Determine content type
-    content_type = file.content_type or "text/csv"
-    if file.filename and file.filename.endswith(".csv"):
-        content_type = "text/csv"
-
-    content = b"".join(chunks)
+    spool = tempfile.SpooledTemporaryFile(
+        max_size=5 * 1024 * 1024
+    )  # spool to disk after 5MB
 
     try:
-        result = DatasetService.upload_file(
-            dataset_uuid=dataset_id,
-            filename=file.filename or "upload.csv",
-            data=content,
-            content_type=content_type,
-        )
-        return DatasetUploadResponse(**result)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        logger.error(f"Failed to upload file: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        while True:
+            chunk = await file.read(chunk_size)
+            if not chunk:
+                break
+            total_size += len(chunk)
+            if total_size > max_size:
+                spool.close()
+                raise HTTPException(
+                    status_code=400, detail="File size exceeds maximum of 256MB"
+                )
+            spool.write(chunk)
+
+        if total_size == 0:
+            spool.close()
+            raise HTTPException(status_code=400, detail="Empty file")
+
+        spool.seek(0)
+
+        # Determine content type
+        content_type = file.content_type or "text/csv"
+        if file.filename and file.filename.endswith(".csv"):
+            content_type = "text/csv"
+
+        try:
+            result = DatasetService.upload_file(
+                dataset_uuid=dataset_id,
+                filename=file.filename or "upload.csv",
+                data=spool,
+                length=total_size,
+                content_type=content_type,
+            )
+            return DatasetUploadResponse(**result)
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+        except Exception as e:
+            logger.error(f"Failed to upload file: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        spool.close()
 
 
 @router.get("/{dataset_id}/files", response_model=DatasetFileList)

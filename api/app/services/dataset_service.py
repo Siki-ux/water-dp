@@ -245,7 +245,8 @@ class DatasetService:
     def upload_file(
         dataset_uuid: str,
         filename: str,
-        data: bytes,
+        data,
+        length: int,
         content_type: str = "text/csv",
     ) -> Dict[str, Any]:
         """
@@ -256,14 +257,13 @@ class DatasetService:
         Args:
             dataset_uuid: Dataset UUID
             filename: Name of the file
-            data: File contents as bytes
+            data: File-like object (BinaryIO) to stream to MinIO
+            length: Size of the data in bytes
             content_type: MIME type
 
         Returns:
             Upload result with etag and version_id
         """
-        import io
-
         bucket_name = f"b-{dataset_uuid}"
 
         if not minio_service.bucket_exists(bucket_name):
@@ -274,8 +274,8 @@ class DatasetService:
         result = minio_service.upload_file(
             bucket_name=bucket_name,
             object_name=filename,
-            data=io.BytesIO(data),
-            length=len(data),
+            data=data,
+            length=length,
             content_type=content_type,
         )
 

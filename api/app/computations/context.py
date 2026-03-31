@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -121,7 +121,7 @@ class ComputationContext:
             "message": message,
             "details": details or {},
             "severity": severity,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.utcnow().isoformat(),
         }
         self._alerts_triggered.append(alert_data)
         logger.info(f"Script {self.script_id} triggered alert: {message}")
@@ -160,7 +160,7 @@ class ComputationContext:
                     definition_id=definition.id,
                     message=message,
                     details=details,
-                    timestamp=datetime.now(timezone.utc),
+                    timestamp=datetime.utcnow(),
                     status="active",
                 )
                 self.db.add(new_alert)

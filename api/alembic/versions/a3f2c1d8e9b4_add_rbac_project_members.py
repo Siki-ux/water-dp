@@ -54,7 +54,7 @@ def upgrade() -> None:
     #    Uses ON CONFLICT DO NOTHING to be safe on re-runs
     op.execute(
         """
-        INSERT INTO project_members (id, project_id, user_id, role, created_at, updated_at)
+        INSERT INTO water_dp.project_members (id, project_id, user_id, role, created_at, updated_at)
         SELECT
             gen_random_uuid(),
             p.id,
@@ -76,7 +76,7 @@ def downgrade() -> None:
     # created after migration will also be removed.
     op.execute(
         """
-        DELETE FROM project_members
+        DELETE FROM water_dp.project_members
         WHERE role = 'owner'
           AND user_id IN (SELECT owner_id FROM water_dp.projects)
         """

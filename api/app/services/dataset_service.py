@@ -5,6 +5,7 @@ Datasets are Things with ingest_type=sftp, designed for CSV file uploads.
 """
 
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID
@@ -12,13 +13,25 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import ResourceNotFoundException
+from app.core.exceptions import ResourceNotFoundException, ValidationException
 from app.models.user_context import Project, project_sensors
 from app.services.minio_service import minio_service
 from app.services.thing_service import ThingService
 from app.services.timeio.orchestrator import TimeIOOrchestrator
 
 logger = logging.getLogger(__name__)
+
+
+def _sanitize_object_name(filename: str) -> str:
+    """Sanitize a user-supplied filename to a safe MinIO object key.
+
+    Strips path components, rejects empty/relative names, and ensures
+    the result is a plain basename with no directory traversal.
+    """
+    name = os.path.basename(filename).strip()
+    if not name or name in (".", ".."):
+        raise ValidationException("Invalid filename")
+    return name
 
 
 class DatasetService:
@@ -34,7 +47,6 @@ class DatasetService:
         description: Optional[str],
         parser_config: Dict[str, Any],
         filename_pattern: str,
-        user: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
         Create a new dataset.
@@ -46,7 +58,6 @@ class DatasetService:
             description: Optional description
             parser_config: CSV parser configuration
             filename_pattern: Glob pattern for file matching
-            user: Current user dict
 
         Returns:
             Created dataset info including UUID and bucket name
@@ -220,6 +231,7 @@ class DatasetService:
         Returns:
             Dict with upload_url, bucket_name, object_name, expires_in
         """
+        filename = _sanitize_object_name(filename)
         bucket_name = f"b-{dataset_uuid}"
 
         # Check if bucket exists
@@ -264,6 +276,7 @@ class DatasetService:
         Returns:
             Upload result with etag and version_id
         """
+        filename = _sanitize_object_name(filename)
         bucket_name = f"b-{dataset_uuid}"
 
         if not minio_service.bucket_exists(bucket_name):

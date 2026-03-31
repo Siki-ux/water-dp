@@ -306,7 +306,7 @@ class DatabaseService:
                     thing_service = ThingService(project.schema_name)
                     # Use the newly added filter support
                     project_things = thing_service.get_things(
-                        expand=["Locations", "Datastreams"],
+                        expand=["Locations"],
                         filter_expr=filter_param,
                     )
 

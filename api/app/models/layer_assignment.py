@@ -17,7 +17,9 @@ class LayerProjectAssignment(Base):
         String(100),
         nullable=False,
     )
-    project_id = Column(String(255), nullable=False)  # Project UUID / schema name
+    project_id = Column(
+        String(255), nullable=False
+    )  # Intentionally String: matched against both project UUID and schema_name (see geospatial.py get_project_layers)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
 
     __table_args__ = (

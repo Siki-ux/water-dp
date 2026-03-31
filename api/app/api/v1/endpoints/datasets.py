@@ -74,7 +74,6 @@ async def create_dataset(
             description=dataset_in.description,
             parser_config=parser_config,
             filename_pattern=dataset_in.filename_pattern,
-            user=user,
         )
 
         return DatasetResponse(

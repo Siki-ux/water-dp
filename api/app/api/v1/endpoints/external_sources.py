@@ -1,5 +1,7 @@
-import io
 import logging
+import os
+import re
+import tempfile
 from typing import Annotated, Any, Dict
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
@@ -15,6 +17,8 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 CUSTOM_SYNCERS_BUCKET = "custom-syncers"
+_MAX_SYNCER_SIZE = 1 * 1024 * 1024  # 1 MB
+_SAFE_NAME_RE = re.compile(r"^[a-zA-Z0-9_\-]+$")
 
 # ========== External API Type Management ==========
 
@@ -116,7 +120,12 @@ async def upload_custom_syncer(
     The script must define a class inheriting from ExtApiSyncer with
     fetch_api_data() and do_parse() methods.
     """
-    import os
+    # Sanitize api_type_name to prevent object-key manipulation
+    if not _SAFE_NAME_RE.match(api_type_name):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="api_type_name must contain only alphanumeric characters, hyphens, and underscores.",
+        )
 
     safe_filename = os.path.basename(file.filename or "upload.py")
     if not safe_filename.endswith(".py"):
@@ -130,25 +139,41 @@ async def upload_custom_syncer(
             logger.info(f"Bucket {CUSTOM_SYNCERS_BUCKET} not found, creating it.")
             minio_service.client.make_bucket(CUSTOM_SYNCERS_BUCKET)
 
-        content = await file.read()
+        # Stream upload to a spooled temp file to avoid holding everything in memory
+        spool = tempfile.SpooledTemporaryFile(max_size=_MAX_SYNCER_SIZE)
+        total = 0
+        while chunk := await file.read(64 * 1024):
+            total += len(chunk)
+            if total > _MAX_SYNCER_SIZE:
+                spool.close()
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail=f"File exceeds maximum size of {_MAX_SYNCER_SIZE} bytes.",
+                )
+            spool.write(chunk)
+
+        spool.seek(0)
+        content = spool.read()
+        spool.seek(0)
 
         if b"class" not in content or b"ExtApiSyncer" not in content:
+            spool.close()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Script must define a class inheriting from ExtApiSyncer.",
             )
 
         file_path = f"{api_type_name}/{safe_filename}"
-        file_obj = io.BytesIO(content)
         size = len(content)
 
         minio_service.upload_file(
             bucket_name=CUSTOM_SYNCERS_BUCKET,
             object_name=file_path,
-            data=file_obj,
+            data=spool,
             length=size,
             content_type="text/x-python",
         )
+        spool.close()
 
         # Register in config_db
         db = TimeIODatabase()

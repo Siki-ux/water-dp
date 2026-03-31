@@ -52,7 +52,7 @@ async def publish_generic(
 async def publish_sensor(
     sensor_uuid: str,
     payload: MQTTPublishSensor,
-    user: dict = Depends(deps.get_current_user),
+    user: dict = Depends(deps.get_current_active_superuser),
 ):
     """
     Publish an MQTT message for a specific sensor.

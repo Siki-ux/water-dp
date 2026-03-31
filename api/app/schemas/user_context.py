@@ -88,15 +88,17 @@ class ProjectResponse(ProjectBase):
         """
         # If it's already a dict (e.g. from ORM or model_dump)
         if isinstance(obj, dict):
-            if "authorization_provider_group_id" in obj and not obj.get(
+            # Work on a shallow copy to avoid mutating shared input dicts
+            data = {**obj}
+            if "authorization_provider_group_id" in data and not data.get(
                 "authorization_group_ids"
             ):
-                obj["authorization_group_ids"] = (
-                    [obj["authorization_provider_group_id"]]
-                    if obj["authorization_provider_group_id"]
+                data["authorization_group_ids"] = (
+                    [data["authorization_provider_group_id"]]
+                    if data["authorization_provider_group_id"]
                     else []
                 )
-            return super().model_validate(obj, **kwargs)
+            return super().model_validate(data, **kwargs)
 
         # If it's an ORM object
         data = {

@@ -219,14 +219,14 @@ class DatabaseService:
         Get all sensors (Things) that are spatially within the geometry of a layer's features.
         Fetches layer geometry from GeoServer (WFS) and uses FROST OGC Spatial Filters.
         """
-        logger.info(
+        logger.debug(
             f"ENTER: get_sensors_in_layer for {layer_name}, schema_name: {schema_name}"
         )
         from app.services.geoserver_service import GeoServerService
 
         # 1. Fetch features from GeoServer WFS
         try:
-            logger.info(f"Fetching features for layer {layer_name} from GeoServer...")
+            logger.debug(f"Fetching features for layer {layer_name} from GeoServer...")
             gs_service = GeoServerService()
             geojson_data = gs_service.get_wfs_features(layer_name)
             features = geojson_data.get("features", [])
@@ -271,9 +271,6 @@ class DatabaseService:
             combined = unary_union(polygons)
             minx, miny, maxx, maxy = combined.bounds
             logger.debug(f"Layer {layer_name} BBOX: {minx}, {miny}, {maxx}, {maxy}")
-            logger.info(
-                f"Layer {layer_name} BBOX: minx={minx}, miny={miny}, maxx={maxx}, maxy={maxy}"
-            )
 
             # 4. Fetch Things from FROST across all projects (or specific tenant)
             from app.models.user_context import Project
@@ -297,7 +294,7 @@ class DatabaseService:
                 f"st_intersects(Locations/location, geography'{wkt_polygon}')"
             )
 
-            logger.info(
+            logger.debug(
                 f"Searching for sensors in {len(projects)} projects using spatial filter: {filter_param}"
             )
 

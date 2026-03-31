@@ -5,6 +5,7 @@ Handles file uploads to MinIO buckets for dataset file ingestion.
 """
 
 import logging
+import threading
 from datetime import timedelta
 from typing import BinaryIO, List, Optional
 
@@ -207,13 +208,16 @@ class MinioService:
 # Lazy-initialized singleton — avoids import-time init when env vars
 # may not yet be set (migrations, CLI scripts, tests).
 _minio_service: MinioService | None = None
+_minio_lock = threading.Lock()
 
 
 def get_minio_service() -> MinioService:
-    """Return the lazily-created MinioService singleton."""
+    """Return the lazily-created MinioService singleton (thread-safe)."""
     global _minio_service
     if _minio_service is None:
-        _minio_service = MinioService()
+        with _minio_lock:
+            if _minio_service is None:
+                _minio_service = MinioService()
     return _minio_service
 
 

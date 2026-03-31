@@ -5,7 +5,6 @@ Datasets are Things with ingest_type=sftp, designed for CSV file uploads.
 """
 
 import logging
-import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID
@@ -28,7 +27,9 @@ def _sanitize_object_name(filename: str) -> str:
     Strips path components, rejects empty/relative names, and ensures
     the result is a plain basename with no directory traversal.
     """
-    name = os.path.basename(filename).strip()
+    # Split on both / and \ so Windows paths are handled on any OS
+    name = filename.replace("\\", "/")
+    name = name.rsplit("/", 1)[-1].strip()
     if not name or name in (".", ".."):
         raise ValidationException("Invalid filename")
     return name

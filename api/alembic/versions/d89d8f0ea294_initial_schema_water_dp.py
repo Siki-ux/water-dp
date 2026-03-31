@@ -177,6 +177,7 @@ def upgrade() -> None:
             ["project_id"], ["water_dp.projects.id"], ondelete="CASCADE"
         ),
         sa.PrimaryKeyConstraint("project_id", "thing_uuid"),
+        schema="water_dp",
     )
     op.create_table(
         "alert_definitions",
@@ -1101,7 +1102,7 @@ def downgrade() -> None:
         schema="water_dp",
     )
     op.drop_table("alert_definitions", schema="water_dp")
-    op.drop_table("project_sensors")
+    op.drop_table("project_sensors", schema="water_dp")
     op.drop_index(op.f("ix_project_members_id"), table_name="project_members")
     op.drop_table("project_members")
     op.drop_index(op.f("ix_geo_features_id"), table_name="geo_features")

@@ -198,7 +198,9 @@ async def get_parser(uuid: str):
 )
 async def update_parser(uuid: str, parser_update: ParserUpdate):
     """Update parser details."""
-    updated = SMSService.update_parser(uuid, parser_update.dict(exclude_unset=True))
+    updated = SMSService.update_parser(
+        uuid, parser_update.model_dump(exclude_unset=True)
+    )
     if not updated:
         raise ResourceNotFoundException(f"Parser {uuid} not found")
     return updated

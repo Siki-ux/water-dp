@@ -35,9 +35,25 @@ async def lifespan(app: FastAPI):
     app.state.startup_complete = False
 
     try:
-        # Ensure tables exist (create_all is idempotent - won't recreate existing tables)
-        init_db()
-        logger.info("Database initialized successfully")
+        # Optionally ensure tables exist.
+        # To avoid masking missing Alembic migrations in production, database
+        # schema initialization at startup is:
+        #   - controlled by the STARTUP_DB_INIT env var when set
+        #   - enabled by default only when settings.debug is True
+        startup_db_init_env = os.getenv("STARTUP_DB_INIT")
+        if startup_db_init_env is None:
+            should_init_db = settings.debug
+        else:
+            should_init_db = startup_db_init_env.lower() in ("1", "true", "yes", "on")
+
+        if should_init_db:
+            init_db()
+            logger.info("Database initialized successfully")
+        else:
+            logger.info(
+                "Skipping database schema initialization at startup; "
+                "schema changes should be managed via migrations."
+            )
 
         logger.info("Application starting...")
 

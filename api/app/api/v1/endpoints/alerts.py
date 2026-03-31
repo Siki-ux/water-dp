@@ -62,7 +62,7 @@ class AlertRead(BaseModel):
 
 
 @router.get("/definitions/{project_id}", response_model=List[AlertDefinitionRead])
-async def get_alert_definitions(
+def get_alert_definitions(
     project_id: UUID4,
     database: Session = Depends(get_db),
     user: dict = Depends(deps.get_current_user),
@@ -81,7 +81,7 @@ async def get_alert_definitions(
 
 
 @router.post("/definitions", response_model=AlertDefinitionRead)
-async def create_alert_definition(
+def create_alert_definition(
     definition: AlertDefinitionCreate,
     database: Session = Depends(get_db),
     user: dict = Depends(deps.get_current_user),
@@ -123,7 +123,7 @@ class AlertDefinitionUpdate(BaseModel):
 
 
 @router.put("/definitions/{definition_id}", response_model=AlertDefinitionRead)
-async def update_alert_definition(
+def update_alert_definition(
     definition_id: UUID4,
     update_data: AlertDefinitionUpdate,
     database: Session = Depends(get_db),
@@ -165,7 +165,7 @@ async def update_alert_definition(
 
 
 @router.delete("/definitions/{definition_id}")
-async def delete_alert_definition(
+def delete_alert_definition(
     definition_id: UUID4,
     database: Session = Depends(get_db),
     user: dict = Depends(deps.get_current_user),
@@ -191,7 +191,7 @@ async def delete_alert_definition(
 
 
 @router.get("/history/{project_id}", response_model=List[AlertRead])
-async def get_alert_history(
+def get_alert_history(
     project_id: UUID4,
     status: Optional[str] = None,
     database: Session = Depends(get_db),
@@ -218,7 +218,7 @@ async def get_alert_history(
 
 
 @router.post("/history/{alert_id}/acknowledge")
-async def acknowledge_alert(
+def acknowledge_alert(
     alert_id: UUID4,
     database: Session = Depends(get_db),
     user: dict = Depends(deps.get_current_user),
@@ -249,7 +249,7 @@ async def acknowledge_alert(
 
 
 @router.post("/test-trigger", response_model=AlertRead)
-async def trigger_test_alert(
+def trigger_test_alert(
     definition_id: UUID4 = Body(..., embed=True),
     message: str = Body(..., embed=True),
     database: Session = Depends(get_db),

@@ -38,7 +38,7 @@ async def get_optional_current_user(request: Request) -> dict | None:
 
 
 @router.get("/{dashboard_id}", response_model=DashboardResponse)
-async def get_dashboard(
+def get_dashboard(
     dashboard_id: UUID,
     database: Session = Depends(get_db),
     user: dict | None = Depends(get_optional_current_user),
@@ -52,7 +52,7 @@ async def get_dashboard(
 
 
 @router.put("/{dashboard_id}", response_model=DashboardResponse)
-async def update_dashboard(
+def update_dashboard(
     dashboard_id: UUID,
     dashboard_in: DashboardUpdate,
     database: Session = Depends(get_db),
@@ -63,7 +63,7 @@ async def update_dashboard(
 
 
 @router.delete("/{dashboard_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_dashboard(
+def delete_dashboard(
     dashboard_id: UUID,
     database: Session = Depends(get_db),
     user: dict = Depends(deps.get_current_user),

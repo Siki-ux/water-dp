@@ -300,6 +300,7 @@ class DatabaseService:
 
             sensors = []
             seen_uuids = set()
+            _MAX_SENSORS_PER_PROJECT = 500
 
             for project in projects:
                 try:
@@ -308,6 +309,8 @@ class DatabaseService:
                     project_things = thing_service.get_things(
                         expand=["Locations"],
                         filter_expr=filter_param,
+                        top=100,
+                        max_total=_MAX_SENSORS_PER_PROJECT,
                     )
 
                     for thing_model in project_things:

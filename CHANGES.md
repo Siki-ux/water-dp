@@ -121,7 +121,7 @@ The following endpoint prefixes were added. Previously existing endpoints (`/thi
 | `/external-sources/` | Manage external API data source configurations |
 | `/mqtt/` | Inspect and update MQTT thing configurations |
 | `/custom-parsers/` | Upload and manage custom parser scripts |
-| `/datasets/` | Export time series data (CSV, JSON) |
+| `/datasets/` | Manage dataset files (ingestion via upload, presigned URLs, list/download files) |
 
 ---
 

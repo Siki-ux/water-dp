@@ -8,7 +8,7 @@ import logging
 from typing import Any, List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api import deps
@@ -228,7 +228,8 @@ async def upload_file(
             if total_size > max_size:
                 spool.close()
                 raise HTTPException(
-                    status_code=400, detail="File size exceeds maximum of 256MB"
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail="File size exceeds maximum of 256MB",
                 )
             spool.write(chunk)
 

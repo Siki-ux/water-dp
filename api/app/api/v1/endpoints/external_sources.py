@@ -1,3 +1,4 @@
+import ast
 import logging
 import os
 import re
@@ -156,7 +157,26 @@ async def upload_custom_syncer(
         content = spool.read()
         spool.seek(0)
 
-        if b"class" not in content or b"ExtApiSyncer" not in content:
+        # Parse with ast to verify a class inheriting from ExtApiSyncer exists
+        try:
+            tree = ast.parse(content, filename=safe_filename)
+        except SyntaxError as exc:
+            spool.close()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Uploaded script has a syntax error: {exc.msg} (line {exc.lineno}).",
+            )
+
+        has_syncer_class = any(
+            isinstance(node, ast.ClassDef)
+            and any(
+                (isinstance(b, ast.Name) and b.id == "ExtApiSyncer")
+                or (isinstance(b, ast.Attribute) and b.attr == "ExtApiSyncer")
+                for b in node.bases
+            )
+            for node in ast.walk(tree)
+        )
+        if not has_syncer_class:
             spool.close()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

@@ -1,7 +1,6 @@
 import asyncio
 import io
 import logging
-import os
 
 from fastapi import UploadFile
 from minio import Minio
@@ -60,9 +59,13 @@ class IngestionService:
             # 4. Upload — stream directly without reading into memory
             # Wrap synchronous MinIO put_object in a thread to avoid blocking the event loop
             # Sanitize filename to prevent path traversal in object keys
-            object_name = (
-                os.path.basename(file.filename) if file.filename else "upload.csv"
-            )
+            if file.filename:
+                normalized_name = file.filename.replace("\\", "/")
+                object_name = normalized_name.rsplit("/", 1)[-1]
+                if object_name in ("", ".", ".."):
+                    raise AppException(message="Invalid filename")
+            else:
+                object_name = "upload.csv"
 
             await asyncio.to_thread(
                 client.put_object,

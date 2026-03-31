@@ -141,7 +141,7 @@ async def upload_custom_syncer(
             minio_service.client.make_bucket(CUSTOM_SYNCERS_BUCKET)
 
         # Stream upload to a spooled temp file to avoid holding everything in memory
-        spool = tempfile.SpooledTemporaryFile(max_size=_MAX_SYNCER_SIZE)
+        spool = tempfile.SpooledTemporaryFile(max_size=64 * 1024)
         total = 0
         while chunk := await file.read(64 * 1024):
             total += len(chunk)

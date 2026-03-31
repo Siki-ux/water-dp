@@ -2,6 +2,7 @@
 Security module for JWT verification against Keycloak.
 """
 
+import asyncio
 import json
 import logging
 import time
@@ -18,26 +19,36 @@ logger = logging.getLogger(__name__)
 # JWKS cache with TTL
 _jwks_cache: Optional[Tuple[Dict[str, Any], float]] = None
 JWKS_CACHE_TTL = 3600  # 1 hour
+_jwks_lock = asyncio.Lock()
 
 
 async def get_jwks() -> Dict[str, Any]:
     """Fetch JWKS from Keycloak with a 1-hour cache TTL."""
     global _jwks_cache
 
+    # Fast path: return cached keys if still valid without acquiring the lock.
     if _jwks_cache:
         cached_keys, cached_at = _jwks_cache
         if time.time() - cached_at < JWKS_CACHE_TTL:
             return cached_keys
 
+    # Slow path: coordinate refresh so only one coroutine fetches JWKS.
     try:
-        url = f"{settings.keycloak_url}/realms/{settings.keycloak_realm}/protocol/openid-connect/certs"
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url, timeout=10.0)
-            response.raise_for_status()
-            keys = response.json()
-            _jwks_cache = (keys, time.time())
-            logger.info("Fetched JWKS from Keycloak")
-            return keys
+        async with _jwks_lock:
+            # Double-check inside the lock in case another coroutine refreshed already.
+            if _jwks_cache:
+                cached_keys, cached_at = _jwks_cache
+                if time.time() - cached_at < JWKS_CACHE_TTL:
+                    return cached_keys
+
+            url = f"{settings.keycloak_url}/realms/{settings.keycloak_realm}/protocol/openid-connect/certs"
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, timeout=10.0)
+                response.raise_for_status()
+                keys = response.json()
+                _jwks_cache = (keys, time.time())
+                logger.info("Fetched JWKS from Keycloak")
+                return keys
     except Exception as error:
         logger.error(f"Failed to fetch JWKS: {error}")
         raise HTTPException(

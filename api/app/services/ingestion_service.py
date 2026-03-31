@@ -1,3 +1,4 @@
+import asyncio
 import io
 import logging
 
@@ -59,9 +60,11 @@ class IngestionService:
                 raise AppException(message="Uploaded file is too large (max 256MB)")
 
             # 4. Upload — stream directly without reading into memory
+            # Wrap synchronous MinIO put_object in a thread to avoid blocking the event loop
             object_name = file.filename
 
-            client.put_object(
+            await asyncio.to_thread(
+                client.put_object,
                 bucket_name=bucket,
                 object_name=object_name,
                 data=upload_stream,

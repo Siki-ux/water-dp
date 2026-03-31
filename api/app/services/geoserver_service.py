@@ -366,10 +366,10 @@ class GeoServerService:
             try:
                 resource_href = layer_data["layer"]["resource"].get("href", "")
                 if resource_href and resource_href.startswith(settings.geoserver_url):
-                    ft_response = requests.get(
-                        resource_href,
-                        auth=self.auth,
-                        timeout=settings.geoserver_timeout,
+                    # Convert absolute GeoServer URL to a relative path for _make_request
+                    resource_path = resource_href[len(self.base_url) + len("/rest") :]
+                    ft_response = self._make_request(
+                        "GET", resource_path, check_status=False
                     )
                     if ft_response.status_code == 200:
                         ft_data = ft_response.json().get("featureType", {})

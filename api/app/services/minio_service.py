@@ -201,5 +201,24 @@ class MinioService:
             raise
 
 
-# Singleton instance
-minio_service = MinioService()
+# Lazy-initialized singleton — avoids import-time init when env vars
+# may not yet be set (migrations, CLI scripts, tests).
+_minio_service: MinioService | None = None
+
+
+def get_minio_service() -> MinioService:
+    """Return the lazily-created MinioService singleton."""
+    global _minio_service
+    if _minio_service is None:
+        _minio_service = MinioService()
+    return _minio_service
+
+
+class _MinioServiceProxy:
+    """Transparent proxy that defers MinioService creation to first use."""
+
+    def __getattr__(self, name: str):
+        return getattr(get_minio_service(), name)
+
+
+minio_service: MinioService = _MinioServiceProxy()  # type: ignore[assignment]

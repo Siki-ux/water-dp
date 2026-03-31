@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException
@@ -243,7 +243,7 @@ async def acknowledge_alert(
 
     alert.status = "acknowledged"
     alert.acknowledged_by = user.get("sub")
-    alert.acknowledged_at = datetime.now(timezone.utc)
+    alert.acknowledged_at = datetime.utcnow()
     database.commit()
     return {"status": "acknowledged"}
 

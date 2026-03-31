@@ -208,23 +208,32 @@ async def upload_file(
     """
     ProjectService._check_access(database, project_id, user, required_role="editor")
 
-    # Read file content
-    content = await file.read()
+    # Read file in chunks to enforce size limit without loading entire file at once
+    max_size = 256 * 1024 * 1024  # 256MB
+    chunk_size = 1024 * 1024  # 1MB
+    total_size = 0
+    chunks: List[bytes] = []
 
-    if not content:
+    while True:
+        chunk = await file.read(chunk_size)
+        if not chunk:
+            break
+        total_size += len(chunk)
+        if total_size > max_size:
+            raise HTTPException(
+                status_code=400, detail="File size exceeds maximum of 256MB"
+            )
+        chunks.append(chunk)
+
+    if total_size == 0:
         raise HTTPException(status_code=400, detail="Empty file")
-
-    # Check file size (max 256MB to match TSM limit)
-    max_size = 256 * 1024 * 1024
-    if len(content) > max_size:
-        raise HTTPException(
-            status_code=400, detail="File size exceeds maximum of 256MB"
-        )
 
     # Determine content type
     content_type = file.content_type or "text/csv"
     if file.filename and file.filename.endswith(".csv"):
         content_type = "text/csv"
+
+    content = b"".join(chunks)
 
     try:
         result = DatasetService.upload_file(

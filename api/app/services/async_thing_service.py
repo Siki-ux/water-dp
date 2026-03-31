@@ -129,7 +129,7 @@ class AsyncThingService:
     async def get_things_paginated(
         self,
         expand: List[str] = None,
-        filter: str = None,
+        filter_expr: str = None,
         skip: int = 0,
         top: int = 20,
     ) -> Dict[str, Any]:
@@ -141,7 +141,7 @@ class AsyncThingService:
             expand = ["Locations", "Datastreams"]
 
         data = await self.frost_client.get_things_paginated(
-            expand=",".join(expand), filter=filter, skip=skip, top=top
+            expand=",".join(expand), filter=filter_expr, skip=skip, top=top
         )
 
         things = [Thing.from_frost(t) for t in data.get("value", [])]
@@ -153,14 +153,14 @@ class AsyncThingService:
     async def get_all_things(
         schema_name: str,
         expand: List[str] = None,
-        filter: str = None,
+        filter_expr: str = None,
         top: int = None,
     ) -> List[Thing]:
         """
         Static method to fetch all things for a given schema.
         """
         service = AsyncThingService(schema_name)
-        return await service.get_things(expand=expand, filter_expr=filter, top=top)
+        return await service.get_things(expand=expand, filter_expr=filter_expr, top=top)
 
     # ─────────────────────────────────────────────────────────────────────
     # Datastream Operations

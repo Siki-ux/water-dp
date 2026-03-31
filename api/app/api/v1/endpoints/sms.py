@@ -68,7 +68,11 @@ async def get_sensor_details(uuid: str):
     summary="Update Sensor Details",
     description="Update sensor details (Name, Description, MQTT) in ConfigDB.",
 )
-async def update_sensor(uuid: str, update_data: Dict[str, Any]):
+async def update_sensor(
+    uuid: str,
+    update_data: Dict[str, Any],
+    user: dict = Depends(deps.get_current_user),
+):
     """
     Update sensor details.
     """
@@ -87,7 +91,7 @@ async def update_sensor(uuid: str, update_data: Dict[str, Any]):
 async def delete_sensor(
     uuid: str,
     delete_from_source: bool = Query(False),
-    # user: dict = Depends(deps.get_current_user)
+    user: dict = Depends(deps.get_current_user),
 ):
     """
     Delete a sensor.
@@ -137,7 +141,10 @@ async def get_device_type_details(id: str):
 
 
 @router.delete("/attributes/device-types/{id}", status_code=204)
-async def delete_device_type(id: str):
+async def delete_device_type(
+    id: str,
+    user: dict = Depends(deps.get_current_user),
+):
     """
     Delete a device type.
     """
@@ -203,7 +210,10 @@ async def update_parser(uuid: str, parser_update: ParserUpdate):
     summary="Delete Parser",
     description="Delete a parser. Fails if parser is assigned to sensors.",
 )
-async def delete_parser(parser_id: int):
+async def delete_parser(
+    parser_id: int,
+    user: dict = Depends(deps.get_current_user),
+):
     """Delete a parser by its integer ID. Checks for sensor linkage first."""
     result = SMSService.delete_parser(parser_id)
     if not result.get("success"):
@@ -227,7 +237,10 @@ async def delete_parser(parser_id: int):
     description="Create a new CSV parser configuration.",
     status_code=status.HTTP_201_CREATED,
 )
-async def create_csv_parser(parser_in: CSVParserCreate):
+async def create_csv_parser(
+    parser_in: CSVParserCreate,
+    user: dict = Depends(deps.get_current_user),
+):
     """
     Create a new CSV parser.
     """

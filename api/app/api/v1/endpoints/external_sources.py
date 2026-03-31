@@ -63,7 +63,9 @@ def get_ext_api_type(id_or_name: str, user: dict = Depends(deps.get_current_user
 
 
 @router.post("/api-types", status_code=status.HTTP_201_CREATED)
-def create_ext_api_type(name: str, user: dict = Depends(deps.get_current_user)):
+def create_ext_api_type(
+    name: str, user: dict = Depends(deps.get_current_active_superuser)
+):
     """Register a new external API type (name only)."""
     try:
         db = TimeIODatabase()
@@ -86,7 +88,9 @@ def create_ext_api_type(name: str, user: dict = Depends(deps.get_current_user)):
 
 
 @router.delete("/api-types/{id_or_name}")
-def delete_ext_api_type(id_or_name: str, user: dict = Depends(deps.get_current_user)):
+def delete_ext_api_type(
+    id_or_name: str, user: dict = Depends(deps.get_current_active_superuser)
+):
     """Delete an external API type (only if not in use by any sensor)."""
     db = TimeIODatabase()
     result = db.delete_ext_api_type(id_or_name)

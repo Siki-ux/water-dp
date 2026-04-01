@@ -230,7 +230,7 @@ class DatabaseService:
             gs_service = GeoServerService()
             geojson_data = gs_service.get_wfs_features(layer_name)
             features = geojson_data.get("features", [])
-            logger.info(f"Fetched {len(features)} features for layer {layer_name}.")
+            logger.debug(f"Fetched {len(features)} features for layer {layer_name}.")
         except Exception as e:
             logger.error(f"Failed to fetch layer {layer_name} from GeoServer: {e}")
             return []
@@ -282,7 +282,7 @@ class DatabaseService:
                 query = query.filter(Project.schema_name == schema_name)
 
             projects = query.all()
-            logger.info(f"Found {len(projects)} projects for sensor discovery.")
+            logger.debug(f"Found {len(projects)} projects for sensor discovery.")
             if not projects:
                 return []
 
@@ -331,11 +331,7 @@ class DatabaseService:
                                 }
                             )
 
-                            match = False
-                            for poly in polygons:
-                                if poly.intersects(thing_point):
-                                    match = True
-                                    break
+                            match = combined.intersects(thing_point)
 
                             if match:
                                 # Standardized dict from model

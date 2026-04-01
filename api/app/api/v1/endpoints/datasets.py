@@ -87,11 +87,15 @@ async def create_dataset(
             status="active",
         )
     except TimeoutError as e:
-        raise HTTPException(status_code=408, detail=str(e))
+        logger.error(f"Dataset creation timed out: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=408,
+            detail="Dataset creation timed out",
+        )
     except Exception as e:
         logger.error(f"Failed to create dataset: {e}", exc_info=True)
         raise HTTPException(
-            status_code=500, detail=f"Failed to create dataset: {str(e)}"
+            status_code=500, detail="Failed to create dataset"
         )
 
 
@@ -182,10 +186,10 @@ async def get_upload_url(
         )
         return DatasetUploadUrlResponse(**result)
     except ResourceNotFoundException as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail="Resource not found")
     except Exception as e:
         logger.error(f"Failed to get upload URL: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to get upload URL")
 
 
 @router.post("/{dataset_id}/upload", response_model=DatasetUploadResponse)
@@ -254,10 +258,10 @@ async def upload_file(
             )
             return DatasetUploadResponse(**result)
         except ResourceNotFoundException as e:
-            raise HTTPException(status_code=404, detail=str(e))
+            raise HTTPException(status_code=404, detail="Dataset not found")
         except Exception as e:
             logger.error(f"Failed to upload file: {e}", exc_info=True)
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Failed to upload file")
     finally:
         spool.close()
 
@@ -281,7 +285,7 @@ async def list_files(
         return DatasetFileList(**result)
     except Exception as e:
         logger.error(f"Failed to list files: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to list files")
 
 
 @router.delete("/{dataset_id}")

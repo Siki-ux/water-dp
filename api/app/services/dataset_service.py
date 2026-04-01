@@ -21,18 +21,7 @@ from app.services.timeio.orchestrator import TimeIOOrchestrator
 logger = logging.getLogger(__name__)
 
 
-def _sanitize_object_name(filename: str) -> str:
-    """Sanitize a user-supplied filename to a safe MinIO object key.
-
-    Strips path components, rejects empty/relative names, and ensures
-    the result is a plain basename with no directory traversal.
-    """
-    # Split on both / and \ so Windows paths are handled on any OS
-    name = filename.replace("\\", "/")
-    name = name.rsplit("/", 1)[-1].strip()
-    if not name or name in (".", ".."):
-        raise ValidationException("Invalid filename")
-    return name
+from app.utils.storage import sanitize_object_name as _sanitize_object_name
 
 
 class DatasetService:

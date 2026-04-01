@@ -365,12 +365,18 @@ class GeoServerService:
             # Follow the resource href to get full featureType data
             try:
                 resource_href = layer_data["layer"]["resource"].get("href", "")
-                if resource_href and resource_href.startswith(settings.geoserver_url):
-                    # Convert absolute GeoServer URL to a relative path for _make_request
-                    resource_path = resource_href[len(self.base_url) + len("/rest") :]
-                    ft_response = self._make_request(
-                        "GET", resource_path, check_status=False
-                    )
+                if resource_href:
+                    base_url = settings.geoserver_url.rstrip("/")
+                    if resource_href.startswith(base_url):
+                        relative_path = resource_href[len(base_url):]
+                        if relative_path.startswith("/rest"):
+                            relative_path = relative_path[len("/rest"):]
+                        if not relative_path.startswith("/"):
+                            relative_path = "/" + relative_path
+                        resource_path = relative_path
+                        ft_response = self._make_request(
+                            "GET", resource_path, check_status=False
+                        )
                     if ft_response.status_code == 200:
                         ft_data = ft_response.json().get("featureType", {})
 

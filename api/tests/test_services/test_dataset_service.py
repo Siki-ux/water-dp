@@ -3,7 +3,7 @@
 import pytest
 
 from app.core.exceptions import ValidationException
-from app.services.dataset_service import _sanitize_object_name
+from app.utils.storage import sanitize_object_name as _sanitize_object_name
 
 
 class TestSanitizeObjectName:

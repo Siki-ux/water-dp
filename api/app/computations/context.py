@@ -85,7 +85,7 @@ class ComputationContext:
             all_obs = []
             for ds in datastreams:
                 ds_id = ds.get("@iot.id")
-                obs = self._frost_client.get_observations(ds_id, limit=limit)
+                obs = self._frost_client.get_observations(ds_id, limit=1)
                 all_obs.extend(obs)
 
             # Sort by time desc

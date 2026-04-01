@@ -1,8 +1,15 @@
 import { auth } from "@/lib/auth"
 import { NextResponse } from "next/server"
 
+const basePath = "/portal"
+
 export default auth((req) => {
-    const { pathname } = req.nextUrl
+    const rawPathname = req.nextUrl.pathname
+    // Strip basePath so route checks work regardless of whether Next.js
+    // includes it in req.nextUrl.pathname (behavior varies by deployment).
+    const pathname = rawPathname.startsWith(basePath)
+        ? rawPathname.slice(basePath.length) || "/"
+        : rawPathname
 
     // Allow public routes
     const publicPaths = ["/", "/auth/signin", "/auth/signup"]
@@ -12,10 +19,13 @@ export default auth((req) => {
 
     // Redirect unauthenticated users to sign in
     if (!req.auth) {
-        const signInUrl = req.nextUrl.clone()
-        signInUrl.pathname = "/auth/signin"
-        signInUrl.search = ""
-        signInUrl.searchParams.set("callbackUrl", pathname)
+        // Build redirect URL from forwarded headers (proxy sets X-Forwarded-* and Host).
+        // req.nextUrl uses the internal container origin (0.0.0.0:3000) which is wrong
+        // when behind a reverse proxy.
+        const proto = req.headers.get("x-forwarded-proto") || "http"
+        const host = req.headers.get("host") || "localhost"
+        // callbackUrl keeps the full rawPathname so Auth.js redirects to the correct external path
+        const signInUrl = `${proto}://${host}${basePath}/auth/signin?callbackUrl=${encodeURIComponent(rawPathname)}`
         return NextResponse.redirect(signInUrl)
     }
 

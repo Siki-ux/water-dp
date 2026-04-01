@@ -183,8 +183,8 @@ async def get_upload_url(
             expires=expires,
         )
         return DatasetUploadUrlResponse(**result)
-    except ResourceNotFoundException:
-        raise HTTPException(status_code=404, detail="Resource not found")
+    except ResourceNotFoundException as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
     except Exception as e:
         logger.error(f"Failed to get upload URL: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to get upload URL")
@@ -255,8 +255,8 @@ async def upload_file(
                 content_type=content_type,
             )
             return DatasetUploadResponse(**result)
-        except ResourceNotFoundException:
-            raise HTTPException(status_code=404, detail="Dataset not found")
+        except ResourceNotFoundException as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
         except Exception as e:
             logger.error(f"Failed to upload file: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail="Failed to upload file")

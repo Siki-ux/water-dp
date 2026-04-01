@@ -71,7 +71,7 @@ class AsyncThingService:
     # ─────────────────────────────────────────────────────────────────────
 
     async def get_thing(
-        self, sensor_uuid: str, expand: List[str] = None
+        self, sensor_uuid: str, expand: Optional[List[str]] = None
     ) -> Optional[Thing]:
         """
         Fetch a sensor with full details.
@@ -97,10 +97,10 @@ class AsyncThingService:
 
     async def get_things(
         self,
-        expand: List[str] = None,
-        filter_expr: str = None,
-        top: int = None,
-        max_total: int = None,
+        expand: Optional[List[str]] = None,
+        filter_expr: Optional[str] = None,
+        top: Optional[int] = None,
+        max_total: Optional[int] = None,
     ) -> List[Thing]:
         """
         Fetch all sensors for this schema with optional filtering.
@@ -128,8 +128,8 @@ class AsyncThingService:
 
     async def get_things_paginated(
         self,
-        expand: List[str] = None,
-        filter_expr: str = None,
+        expand: Optional[List[str]] = None,
+        filter_expr: Optional[str] = None,
         skip: int = 0,
         top: int = 20,
     ) -> Dict[str, Any]:
@@ -152,9 +152,9 @@ class AsyncThingService:
     @staticmethod
     async def get_all_things(
         schema_name: str,
-        expand: List[str] = None,
-        filter_expr: str = None,
-        top: int = None,
+        expand: Optional[List[str]] = None,
+        filter_expr: Optional[str] = None,
+        top: Optional[int] = None,
     ) -> List[Thing]:
         """
         Static method to fetch all things for a given schema.
@@ -250,8 +250,8 @@ class AsyncThingService:
     async def get_observations(
         self,
         datastream_id: Any,
-        start_time: str = None,
-        end_time: str = None,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
         limit: int = 1000,
         order_by: str = "phenomenonTime desc",
         select: str = "phenomenonTime,result,resultTime",
@@ -275,8 +275,8 @@ class AsyncThingService:
         self,
         sensor_uuid: str,
         datastream_name: str,
-        start_time: str = None,
-        end_time: str = None,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
         limit: int = 1000,
         order_by: str = "phenomenonTime desc",
         select: str = "phenomenonTime,result,resultTime",

@@ -3,6 +3,9 @@ FROM python:3.11-slim AS builder
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
+# Corporate TLS inspection bypass (set via docker build --build-arg SKIP_SSL_VERIFY=true)
+ARG SKIP_SSL_VERIFY=false
+
 WORKDIR /build
 
 # Install build dependencies
@@ -13,12 +16,26 @@ RUN apt-get update \
     libgdal-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Poetry and dependencies
-RUN pip install --no-cache-dir poetry==1.8.2 \
-    && poetry config virtualenvs.create false
+# Install Poetry
+RUN if [ "$SKIP_SSL_VERIFY" = "true" ]; then \
+      pip install --no-cache-dir --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org poetry==1.8.2; \
+    else \
+      pip install --no-cache-dir poetry==1.8.2; \
+    fi
 
-COPY pyproject.toml poetry.lock* ./
-RUN poetry install --no-interaction --no-ansi --no-root --only main
+COPY pyproject.toml poetry.lock ./
+# Export requirements from lock file (local, no network) then install with pip.
+# poetry export runs offline against poetry.lock, so no SSL needed.
+RUN poetry export -f requirements.txt --only main --without-hashes -o requirements.txt \
+    && if [ "$SKIP_SSL_VERIFY" = "true" ]; then \
+         pip install --no-cache-dir \
+           --trusted-host pypi.org \
+           --trusted-host pypi.python.org \
+           --trusted-host files.pythonhosted.org \
+           -r requirements.txt; \
+       else \
+         pip install --no-cache-dir -r requirements.txt; \
+       fi
 
 
 # --- Runtime stage ---

@@ -226,11 +226,11 @@ class DatabaseService:
 
         # 1. Fetch features from GeoServer WFS
         try:
-            logger.debug(f"Fetching features for layer {layer_name} from GeoServer...")
+            logger.debug("Fetching features for layer %s from GeoServer...", layer_name)
             gs_service = GeoServerService()
             geojson_data = gs_service.get_wfs_features(layer_name)
             features = geojson_data.get("features", [])
-            logger.debug(f"Fetched {len(features)} features for layer {layer_name}.")
+            logger.debug("Fetched %d features for layer %s.", len(features), layer_name)
         except Exception as e:
             logger.error(f"Failed to fetch layer {layer_name} from GeoServer: {e}")
             return []
@@ -270,7 +270,7 @@ class DatabaseService:
 
             combined = unary_union(polygons)
             minx, miny, maxx, maxy = combined.bounds
-            logger.debug(f"Layer {layer_name} BBOX: {minx}, {miny}, {maxx}, {maxy}")
+            logger.debug("Layer %s BBOX: %s, %s, %s, %s", layer_name, minx, miny, maxx, maxy)
 
             # 4. Fetch Things from FROST across all projects (or specific tenant)
             from app.models.user_context import Project
@@ -282,7 +282,7 @@ class DatabaseService:
                 query = query.filter(Project.schema_name == schema_name)
 
             projects = query.all()
-            logger.debug(f"Found {len(projects)} projects for sensor discovery.")
+            logger.debug("Found %d projects for sensor discovery.", len(projects))
             if not projects:
                 return []
 
@@ -295,7 +295,9 @@ class DatabaseService:
             )
 
             logger.debug(
-                f"Searching for sensors in {len(projects)} projects using spatial filter: {filter_param}"
+                "Searching for sensors in %d projects using spatial filter: %s",
+                len(projects),
+                filter_param,
             )
 
             sensors = []

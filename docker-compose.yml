@@ -37,6 +37,8 @@ services:
     build:
       context: ./api
       dockerfile: Dockerfile
+      args:
+        SKIP_SSL_VERIFY: ${SKIP_SSL_VERIFY:-false}
     container_name: water-dp-api
     restart: unless-stopped
     env_file: .env
@@ -162,11 +164,12 @@ services:
       dockerfile: Dockerfile
       target: runner
       args:
+        SKIP_SSL_VERIFY: ${SKIP_SSL_VERIFY:-false}
         # Use relative URLs so the frontend works over any protocol (HTTP locally, HTTPS via tunnel).
         # NEXT_PUBLIC_* vars are baked into the JS bundle at build time — absolute http:// URLs
         # break when the page is served over HTTPS (mixed content blocking).
-        - NEXT_PUBLIC_API_URL=/water-api/api/v1
-        - NEXT_PUBLIC_GEOSERVER_URL=/geoserver
+        NEXT_PUBLIC_API_URL: /water-api/api/v1
+        NEXT_PUBLIC_GEOSERVER_URL: /geoserver
         # NEXT_PUBLIC_NEXTAUTH_URL intentionally omitted: next-auth/react falls back to
         # window.location.origin, which is correct for both local and tunnel access.
     container_name: water-dp-frontend
@@ -178,9 +181,11 @@ services:
       - INTERNAL_API_URL=http://water-dp-api:8000/api/v1
       - AUTH_SECRET=${AUTH_SECRET:-6e2e9c8b3a4f5d6e7f8g9h0i1j2k3l4m5n6o7p8q9r}
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-6e2e9c8b3a4f5d6e7f8g9h0i1j2k3l4m5n6o7p8q9r}
-      # AUTH_URL / NEXTAUTH_URL intentionally omitted: AUTH_TRUST_HOST=true lets next-auth
-      # derive the URL from the Host header, so redirects work for any hostname (localhost,
-      # tunnel, production domain) without a rebuild.
+      # AUTH_URL must include the Next.js basePath (/portal) so Auth.js generates
+      # correct signIn/signOut redirect URLs (e.g. /portal/auth/signin).
+      # Without this, HOSTNAME=0.0.0.0 in the Dockerfile causes http://0.0.0.0:3000 URLs.
+      - AUTH_URL=${PROXY_URL:-http://localhost:8080}/portal
+      - NEXTAUTH_URL=${PROXY_URL:-http://localhost:8080}/portal
       - AUTH_TRUST_HOST=true
     networks:
       - water_shared_net
@@ -191,6 +196,8 @@ services:
     build:
       context: ./api
       dockerfile: Dockerfile
+      args:
+        SKIP_SSL_VERIFY: ${SKIP_SSL_VERIFY:-false}
     container_name: water-dp-worker
     # restart: unless-stopped
     command: celery -A app.core.celery_app.celery_app worker -B --loglevel=info -Q imports,computations,celery
@@ -238,6 +245,8 @@ services:
     build:
       context: ./api
       dockerfile: Dockerfile
+      args:
+        SKIP_SSL_VERIFY: ${SKIP_SSL_VERIFY:-false}
     container_name: water-dp-seed
     command: python scripts/seed_data.py
     # restart: on-failure

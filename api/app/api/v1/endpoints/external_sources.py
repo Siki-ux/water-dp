@@ -43,26 +43,37 @@ def list_ext_api_types(
 
 
 @router.get("/api-types/{id_or_name}", response_model=Dict[str, Any])
-def get_ext_api_type(id_or_name: str, user: dict = Depends(deps.get_current_user)):
-    """Get details for an external API type, including syncer code if available."""
+def get_ext_api_type(
+    id_or_name: str,
+    include_code: bool = False,
+    user: dict = Depends(deps.get_current_user),
+):
+    """Get details for an external API type, including syncer code if requested (superuser only)."""
     db = TimeIODatabase()
     api_type = db.get_ext_api_type(id_or_name)
     if not api_type:
         raise HTTPException(status_code=404, detail="API type not found")
 
-    # Load syncer code if available
-    properties = api_type.get("properties") or {}
-    script_bucket = properties.get("script_bucket")
-    script_path = properties.get("script_path")
+    # Load syncer code only if explicitly requested and user is superuser
+    if include_code:
+        if not user or not user.get("is_superuser"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough privileges to access syncer code",
+            )
 
-    if script_bucket and script_path:
-        try:
-            content = minio_service.get_file_content(script_bucket, script_path)
-            if content:
-                api_type["code"] = content.decode("utf-8")
-        except Exception as e:
-            logger.error(f"Failed to fetch syncer code for {id_or_name}: {e}")
-            api_type["code_error"] = str(e)
+        properties = api_type.get("properties") or {}
+        script_bucket = properties.get("script_bucket")
+        script_path = properties.get("script_path")
+
+        if script_bucket and script_path:
+            try:
+                content = minio_service.get_file_content(script_bucket, script_path)
+                if content:
+                    api_type["code"] = content.decode("utf-8")
+            except Exception as e:
+                logger.error(f"Failed to fetch syncer code for {id_or_name}: {e}")
+                api_type["code_error"] = str(e)
 
     return api_type
 

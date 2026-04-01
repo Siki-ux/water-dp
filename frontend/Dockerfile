@@ -1,9 +1,17 @@
 FROM node:20-alpine AS base
 
+# Corporate TLS inspection bypass (set via docker build --build-arg SKIP_SSL_VERIFY=true)
+ARG SKIP_SSL_VERIFY=false
+
 # Install dependencies only when needed
 FROM base AS deps
+ARG SKIP_SSL_VERIFY=false
 # Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
-RUN apk add --no-cache libc6-compat
+RUN if [ "$SKIP_SSL_VERIFY" = "true" ]; then \
+      apk add --no-check-certificate --no-cache libc6-compat; \
+    else \
+      apk add --no-cache libc6-compat; \
+    fi
 WORKDIR /app
 
 ENV NPM_CONFIG_UPDATE_NOTIFIER=false
@@ -13,9 +21,12 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 # Install dependencies based on the preferred package manager
 COPY package.json package-lock.json* ./
-RUN \
-    if [ -f package-lock.json ]; then npm ci --legacy-peer-deps --ignore-scripts; \
-    else echo "Lockfile not found." && npm install --legacy-peer-deps --ignore-scripts; \
+RUN if [ "$SKIP_SSL_VERIFY" = "true" ]; then \
+      export NODE_TLS_REJECT_UNAUTHORIZED=0; \
+      npm config set strict-ssl false; \
+    fi && \
+    if [ -f package-lock.json ]; then npm ci --legacy-peer-deps; \
+    else echo "Lockfile not found." && npm install --legacy-peer-deps; \
     fi
 
 
@@ -68,11 +79,9 @@ USER nextjs
 
 EXPOSE 3000
 
-ENV PORT 3000
-ENV HOSTNAME 0.0.0.0
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
 
-# server.js is created by next build from the standalone output
-# https://nextjs.org/docs/pages/api-reference/next-config-js/output
 CMD ["node", "server.js"]
 
 # Done

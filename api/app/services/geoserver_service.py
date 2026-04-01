@@ -368,9 +368,9 @@ class GeoServerService:
                 if resource_href:
                     base_url = settings.geoserver_url.rstrip("/")
                     if resource_href.startswith(base_url):
-                        relative_path = resource_href[len(base_url):]
+                        relative_path = resource_href[len(base_url) :]
                         if relative_path.startswith("/rest"):
-                            relative_path = relative_path[len("/rest"):]
+                            relative_path = relative_path[len("/rest") :]
                         if not relative_path.startswith("/"):
                             relative_path = "/" + relative_path
                         resource_path = relative_path

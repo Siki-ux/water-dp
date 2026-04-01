@@ -51,11 +51,16 @@ class MinioService:
         Args:
             bucket_name: The bucket to upload to
             object_name: The object key/filename
-            expires: URL expiration time in seconds (default 1 hour)
+            expires: URL expiration time in seconds (default 1 hour, max 7 days)
 
         Returns:
             Presigned URL for PUT request
         """
+        _MAX_PRESIGN_SECONDS = 7 * 24 * 3600  # 7 days (S3/MinIO limit)
+        if expires < 1 or expires > _MAX_PRESIGN_SECONDS:
+            raise ValueError(
+                f"expires must be between 1 and {_MAX_PRESIGN_SECONDS} seconds"
+            )
         try:
             url = self.client.presigned_put_object(
                 bucket_name=bucket_name,

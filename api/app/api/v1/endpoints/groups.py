@@ -33,7 +33,7 @@ def _can_manage_group(user: dict, group_id: str) -> bool:
             group_name = group.get("name", "")
             group_path = group.get("path", "").lstrip("/")
             for key, role in group_roles.items():
-                if key == group_name or key == group_path or group_name.endswith(key):
+                if key == group_name or key == group_path:
                     return role == "admin"
     except Exception:
         pass

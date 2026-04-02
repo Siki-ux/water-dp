@@ -101,7 +101,7 @@ export function BulkImportDialog({ open, onClose }: Props) {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-            <div className="w-full max-w-xl bg-[#0f1a2e] border border-white/10 rounded-2xl shadow-2xl p-6 space-y-5 mx-4">
+            <div className="w-full max-w-xl bg-card border border-white/10 rounded-2xl shadow-2xl p-6 space-y-5 mx-4">
                 {/* Header */}
                 <div className="flex items-center justify-between">
                     <h2 className="text-lg font-semibold text-white">{t("sms.sensors.bulkImportTitle")}</h2>

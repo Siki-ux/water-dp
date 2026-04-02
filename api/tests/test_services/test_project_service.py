@@ -237,9 +237,7 @@ def test_get_linked_sensors_frost_filter_uses_both_identifier_and_uuid(
         mock_thing_svc.return_value.get_things.return_value = [mock_thing]
 
         with patch("app.services.project_service.TimeIODatabase"):
-            ProjectService.get_linked_sensors(
-                mock_db_session, project_id, mock_user
-            )
+            ProjectService.get_linked_sensors(mock_db_session, project_id, mock_user)
 
             # Verify ThingService.get_things was called with the dual filter
             call_args = mock_thing_svc.return_value.get_things.call_args
@@ -281,9 +279,7 @@ def test_get_linked_sensors_multiple_uuids_filter(
         mock_thing_svc.return_value.get_things.return_value = []
 
         with patch("app.services.project_service.TimeIODatabase"):
-            ProjectService.get_linked_sensors(
-                mock_db_session, project_id, mock_user
-            )
+            ProjectService.get_linked_sensors(mock_db_session, project_id, mock_user)
 
             call_args = mock_thing_svc.return_value.get_things.call_args
             filter_arg = call_args[1].get("filter_expr") or call_args[0][1]
@@ -318,9 +314,7 @@ def test_get_linked_sensors_no_schema(mock_resolver, mock_db_session, mock_user)
         uuid.UUID(thing_uuid)
     ]
 
-    result = ProjectService.get_linked_sensors(
-        mock_db_session, project_id, mock_user
-    )
+    result = ProjectService.get_linked_sensors(mock_db_session, project_id, mock_user)
     assert len(result) == 1
     assert result[0]["thing_uuid"] == thing_uuid
     assert result[0]["status"] == "schema_not_assigned"

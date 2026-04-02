@@ -11,7 +11,6 @@ import pytest
 from app.api import deps
 from app.main import app
 
-
 MOCK_USER = {
     "sub": "test-user-id",
     "realm_access": {"roles": ["admin"]},
@@ -96,9 +95,7 @@ def test_update_sensor_success(mock_sms_service, client):
         return_value={"uuid": "abc-123", "name": "Updated"}
     )
 
-    response = client.put(
-        "/api/v1/sms/sensors/abc-123", json={"name": "Updated"}
-    )
+    response = client.put("/api/v1/sms/sensors/abc-123", json={"name": "Updated"})
 
     assert response.status_code == 200
     assert response.json()["name"] == "Updated"
@@ -109,9 +106,7 @@ def test_update_sensor_not_found(mock_sms_service, client):
     """PUT /sms/sensors/{uuid} returns 404 when not found."""
     mock_sms_service.update_sensor = AsyncMock(return_value=None)
 
-    response = client.put(
-        "/api/v1/sms/sensors/nonexistent", json={"name": "X"}
-    )
+    response = client.put("/api/v1/sms/sensors/nonexistent", json={"name": "X"})
 
     assert response.status_code == 404
 
@@ -144,9 +139,7 @@ def test_delete_sensor_with_source_deletion(mock_sms_service, client):
     """DELETE /sms/sensors/{uuid}?delete_from_source=true passes flag."""
     mock_sms_service.delete_sensor = AsyncMock(return_value=True)
 
-    response = client.delete(
-        "/api/v1/sms/sensors/abc-123?delete_from_source=true"
-    )
+    response = client.delete("/api/v1/sms/sensors/abc-123?delete_from_source=true")
 
     assert response.status_code == 204
     mock_sms_service.delete_sensor.assert_awaited_once_with(
@@ -259,9 +252,7 @@ def test_update_parser(mock_sms_service, client):
     """PUT /sms/parsers/{uuid} updates parser."""
     mock_sms_service.update_parser.return_value = {"id": 1, "name": "Updated"}
 
-    response = client.put(
-        "/api/v1/sms/parsers/some-uuid", json={"name": "Updated"}
-    )
+    response = client.put("/api/v1/sms/parsers/some-uuid", json={"name": "Updated"})
 
     assert response.status_code == 200
 
@@ -271,9 +262,7 @@ def test_update_parser_not_found(mock_sms_service, client):
     """PUT /sms/parsers/{uuid} returns 404."""
     mock_sms_service.update_parser.return_value = None
 
-    response = client.put(
-        "/api/v1/sms/parsers/missing-uuid", json={"name": "X"}
-    )
+    response = client.put("/api/v1/sms/parsers/missing-uuid", json={"name": "X"})
 
     assert response.status_code == 404
 

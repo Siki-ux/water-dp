@@ -72,6 +72,7 @@ async def list_projects(
 
     # Batch-count linked sensors per project (avoids N+1)
     from sqlalchemy import func, select
+
     from app.models.user_context import project_sensors
 
     project_ids = [p.id for p in projects]
@@ -85,8 +86,7 @@ async def list_projects(
             .group_by(project_sensors.c.project_id)
         )
         sensor_counts = {
-            row.project_id: row.cnt
-            for row in database.execute(count_stmt).all()
+            row.project_id: row.cnt for row in database.execute(count_stmt).all()
         }
     else:
         sensor_counts = {}

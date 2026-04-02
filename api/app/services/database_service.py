@@ -270,7 +270,9 @@ class DatabaseService:
 
             combined = unary_union(polygons)
             minx, miny, maxx, maxy = combined.bounds
-            logger.debug("Layer %s BBOX: %s, %s, %s, %s", layer_name, minx, miny, maxx, maxy)
+            logger.debug(
+                "Layer %s BBOX: %s, %s, %s, %s", layer_name, minx, miny, maxx, maxy
+            )
 
             # 4. Fetch Things from FROST across all projects (or specific tenant)
             from app.models.user_context import Project

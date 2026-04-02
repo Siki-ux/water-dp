@@ -18,10 +18,10 @@ Environment variables:
     API_PREFIX          - API path prefix (default: /api/v1)
 """
 
-import os
 import logging
+import os
 
-from locust import HttpUser, between, task, events
+from locust import HttpUser, between, events, task
 
 logger = logging.getLogger(__name__)
 
@@ -177,6 +177,7 @@ class WaterDPUser(HttpUser):
 
 
 # ── Event Hooks ──────────────────────────────────────────────────────
+
 
 @events.quitting.add_listener
 def on_quitting(environment, **kwargs):

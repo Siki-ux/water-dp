@@ -4,12 +4,10 @@ N+1 Query Regression Tests
 Verifies that batch-loading patterns are used instead of per-item queries.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from uuid import uuid4
 
-import pytest
-
-from app.services.rbac_service import PermissionResolver, EffectivePermissions
+from app.services.rbac_service import PermissionResolver
 
 
 class TestPermissionResolverBatch:
@@ -66,9 +64,7 @@ class TestPermissionResolverBatch:
         PermissionResolver.resolve_batch(user, projects, db)
 
         # Should have exactly one db.query() call
-        assert db.query.call_count == 1, (
-            f"Expected 1 query, got {db.query.call_count}"
-        )
+        assert db.query.call_count == 1, f"Expected 1 query, got {db.query.call_count}"
 
     def test_batch_uses_prefetched_member(self):
         """Pre-fetched ProjectMember row should be used to resolve the role."""

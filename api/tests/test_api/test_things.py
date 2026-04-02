@@ -94,10 +94,14 @@ def test_ingest_csv(mock_upload):
 def test_list_sensors(mock_async_cls):
     """GET /things/{schema}/all returns sensor list."""
     thing1 = Thing(
-        sensor_uuid="uuid-1", name="S1", location=Location(type="Point"),
+        sensor_uuid="uuid-1",
+        name="S1",
+        location=Location(type="Point"),
     )
     thing2 = Thing(
-        sensor_uuid="uuid-2", name="S2", location=Location(type="Point"),
+        sensor_uuid="uuid-2",
+        name="S2",
+        location=Location(type="Point"),
     )
     mock_async_cls.get_all_things = AsyncMock(return_value=[thing1, thing2])
 
@@ -168,7 +172,9 @@ def test_get_datastreams(mock_async_cls):
     mock_async_cls.get_schema_from_uuid = AsyncMock(return_value="test_schema")
     mock_instance = MagicMock()
     ds = Datastream(
-        datastream_id="1", thing_id="10", sensor_uuid="abc",
+        datastream_id="1",
+        thing_id="10",
+        sensor_uuid="abc",
         name="Temperature",
         unit_of_measurement=UnitOfMeasurement(
             definition="http://unit", symbol="C", label="Celsius"

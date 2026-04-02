@@ -528,12 +528,12 @@ def register_custom_device_type(headers):
             data=data,
         )
         if res.status_code in [200, 201]:
-            logger.info("Registered 'water_level_generic' device type with parser script.")
+            logger.info(
+                "Registered 'water_level_generic' device type with parser script."
+            )
             return True
         else:
-            logger.warning(
-                f"Failed to upload parser: {res.status_code} - {res.text}"
-            )
+            logger.warning(f"Failed to upload parser: {res.status_code} - {res.text}")
             return False
     except Exception as e:
         logger.error(f"Error registering device type: {e}")

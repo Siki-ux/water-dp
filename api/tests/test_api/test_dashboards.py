@@ -131,7 +131,7 @@ def test_delete_dashboard(mock_service):
 
 
 @patch("app.api.v1.endpoints.dashboards.DashboardService")
-def test_get_dashboard(mock_service):
+def test_get_dashboard_with_auth(mock_service):
     app.dependency_overrides[get_current_user] = lambda: {
         "sub": "u1",
         "realm_access": {"roles": []},

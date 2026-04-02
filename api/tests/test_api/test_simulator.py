@@ -110,7 +110,13 @@ def test_create_simulated_thing_project_mismatch(mock_sim_svc, override_deps):
                 },
                 "simulation": {
                     "datastreams": [
-                        {"name": "T", "unit": "C", "min_value": 0, "max_value": 1, "pattern": "sine"}
+                        {
+                            "name": "T",
+                            "unit": "C",
+                            "min_value": 0,
+                            "max_value": 1,
+                            "pattern": "sine",
+                        }
                     ]
                 },
             },
@@ -138,7 +144,13 @@ def test_create_simulated_thing_failure(mock_sim_svc, override_deps):
                 },
                 "simulation": {
                     "datastreams": [
-                        {"name": "T", "unit": "C", "min_value": 0, "max_value": 1, "pattern": "sine"}
+                        {
+                            "name": "T",
+                            "unit": "C",
+                            "min_value": 0,
+                            "max_value": 1,
+                            "pattern": "sine",
+                        }
                     ]
                 },
             },
@@ -173,9 +185,7 @@ def test_delete_simulated_thing(mock_sim_svc, override_deps):
         mock_ps._check_access.return_value = override_deps["project"]
         mock_ps.remove_sensor.return_value = None
 
-        response = client.delete(
-            f"/api/v1/projects/{pid}/simulator/things/thing-123"
-        )
+        response = client.delete(f"/api/v1/projects/{pid}/simulator/things/thing-123")
 
     assert response.status_code == 200
     assert "deleted" in response.json()["message"].lower()
@@ -190,8 +200,6 @@ def test_delete_simulated_thing_failure(mock_sim_svc, override_deps):
     with patch("app.api.v1.endpoints.simulator.ProjectService") as mock_ps:
         mock_ps._check_access.return_value = override_deps["project"]
 
-        response = client.delete(
-            f"/api/v1/projects/{pid}/simulator/things/thing-123"
-        )
+        response = client.delete(f"/api/v1/projects/{pid}/simulator/things/thing-123")
 
     assert response.status_code == 500

@@ -120,15 +120,20 @@ class SMSService:
                     if thing.sensor_uuid:
                         frost_data_by_uuid[thing.sensor_uuid] = {
                             "properties": thing.properties,
-                            "latitude": thing.location.latitude if thing.location else None,
-                            "longitude": thing.location.longitude if thing.location else None,
+                            "latitude": thing.location.latitude
+                            if thing.location
+                            else None,
+                            "longitude": thing.location.longitude
+                            if thing.location
+                            else None,
                         }
             except Exception as e:
-                logger.warning(f"Failed to batch-fetch FROST data for schema {schema}: {e}")
+                logger.warning(
+                    f"Failed to batch-fetch FROST data for schema {schema}: {e}"
+                )
 
         tasks = [
-            fetch_schema_batch(schema, items)
-            for schema, items in schema_groups.items()
+            fetch_schema_batch(schema, items) for schema, items in schema_groups.items()
         ]
         if tasks:
             await asyncio.gather(*tasks)

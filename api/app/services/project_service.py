@@ -453,9 +453,11 @@ class ProjectService:
                 )
             )
 
-            query = db.query(Project).options(
-                selectinload(Project.members)
-            ).filter(or_(*criteria))
+            query = (
+                db.query(Project)
+                .options(selectinload(Project.members))
+                .filter(or_(*criteria))
+            )
 
             # Optional group filter
             if group_id:

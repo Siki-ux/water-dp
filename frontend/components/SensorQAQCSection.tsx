@@ -18,13 +18,12 @@ import { useTranslation } from "@/lib/i18n";
 
 interface Props {
     sensorUuid: string;
-    token: string;
 }
 
-function TestRow({ test, sensorUuid, token }: { test: QAQCTest; sensorUuid: string; token: string }) {
+function TestRow({ test, sensorUuid }: { test: QAQCTest; sensorUuid: string }) {
     const qc = useQueryClient();
     const del = useMutation({
-        mutationFn: () => deleteThingQAQCTest(sensorUuid, test.id, token),
+        mutationFn: () => deleteThingQAQCTest(sensorUuid, test.id),
         onSuccess: () => qc.invalidateQueries({ queryKey: ["thing-qaqc", sensorUuid] }),
     });
 
@@ -58,7 +57,7 @@ function TestRow({ test, sensorUuid, token }: { test: QAQCTest; sensorUuid: stri
     );
 }
 
-function AddTestForm({ sensorUuid, token, onDone }: { sensorUuid: string; token: string; onDone: () => void }) {
+function AddTestForm({ sensorUuid, onDone }: { sensorUuid: string; onDone: () => void }) {
     const { t } = useTranslation();
     const qc = useQueryClient();
     const [selectedFunc, setSelectedFunc] = useState(SAQC_FUNCTIONS[0].name);
@@ -94,7 +93,7 @@ function AddTestForm({ sensorUuid, token, onDone }: { sensorUuid: string; token:
                 position: position ? Number(position) : null,
                 args,
                 streams: null,
-            }, token);
+            });
         },
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ["thing-qaqc", sensorUuid] });
@@ -237,7 +236,7 @@ function AddTestForm({ sensorUuid, token, onDone }: { sensorUuid: string; token:
     );
 }
 
-function ConfigView({ config, sensorUuid, token }: { config: QAQCConfig; sensorUuid: string; token: string }) {
+function ConfigView({ config, sensorUuid }: { config: QAQCConfig; sensorUuid: string }) {
     const { t } = useTranslation();
     const qc = useQueryClient();
     const [showTests, setShowTests] = useState(true);
@@ -245,12 +244,12 @@ function ConfigView({ config, sensorUuid, token }: { config: QAQCConfig; sensorU
     const [triggerSuccess, setTriggerSuccess] = useState(false);
 
     const unassign = useMutation({
-        mutationFn: () => deleteThingQAQC(sensorUuid, token),
+        mutationFn: () => deleteThingQAQC(sensorUuid),
         onSuccess: () => qc.invalidateQueries({ queryKey: ["thing-qaqc", sensorUuid] }),
     });
 
     const trigger = useMutation({
-        mutationFn: () => triggerThingQAQC(sensorUuid, token),
+        mutationFn: () => triggerThingQAQC(sensorUuid),
         onSuccess: () => {
             setTriggerSuccess(true);
             setTimeout(() => setTriggerSuccess(false), 3000);
@@ -303,10 +302,10 @@ function ConfigView({ config, sensorUuid, token }: { config: QAQCConfig; sensorU
                 {showTests && (
                     <div className="space-y-1.5 ml-1">
                         {config.tests.map(t => (
-                            <TestRow key={t.id} test={t} sensorUuid={sensorUuid} token={token} />
+                            <TestRow key={t.id} test={t} sensorUuid={sensorUuid} />
                         ))}
                         {addingTest ? (
-                            <AddTestForm sensorUuid={sensorUuid} token={token} onDone={() => setAddingTest(false)} />
+                            <AddTestForm sensorUuid={sensorUuid} onDone={() => setAddingTest(false)} />
                         ) : (
                             <button
                                 onClick={() => setAddingTest(true)}
@@ -322,14 +321,14 @@ function ConfigView({ config, sensorUuid, token }: { config: QAQCConfig; sensorU
     );
 }
 
-function CreateForm({ sensorUuid, token }: { sensorUuid: string; token: string }) {
+function CreateForm({ sensorUuid }: { sensorUuid: string }) {
     const { t } = useTranslation();
     const qc = useQueryClient();
     const [name, setName] = useState("");
     const [window, setWindow] = useState("5d");
 
     const create = useMutation({
-        mutationFn: () => createThingQAQC(sensorUuid, { name, context_window: window }, token),
+        mutationFn: () => createThingQAQC(sensorUuid, { name, context_window: window }),
         onSuccess: () => qc.invalidateQueries({ queryKey: ["thing-qaqc", sensorUuid] }),
     });
 
@@ -369,11 +368,11 @@ function CreateForm({ sensorUuid, token }: { sensorUuid: string; token: string }
     );
 }
 
-export default function SensorQAQCSection({ sensorUuid, token }: Props) {
+export default function SensorQAQCSection({ sensorUuid }: Props) {
     const { t } = useTranslation();
     const { data, isLoading, isError } = useQuery<QAQCConfig | null>({
         queryKey: ["thing-qaqc", sensorUuid],
-        queryFn: () => getThingQAQC(sensorUuid, token),
+        queryFn: () => getThingQAQC(sensorUuid),
     });
 
     return (
@@ -397,11 +396,11 @@ export default function SensorQAQCSection({ sensorUuid, token }: Props) {
             )}
 
             {!isLoading && !isError && data === null && (
-                <CreateForm sensorUuid={sensorUuid} token={token} />
+                <CreateForm sensorUuid={sensorUuid} />
             )}
 
             {!isLoading && !isError && data && (
-                <ConfigView config={data} sensorUuid={sensorUuid} token={token} />
+                <ConfigView config={data} sensorUuid={sensorUuid} />
             )}
         </div>
     );

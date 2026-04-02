@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import {
     Play,
@@ -15,6 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 import SimulationDetailsModal from "@/components/simulator/SimulationDetailsModal";
 import { useTranslation } from "@/lib/i18n";
+import api from "@/lib/api";
 
 interface Simulation {
     thing_id: number;
@@ -28,7 +28,6 @@ interface Simulation {
 
 export default function SimulatorPage() {
     const { id: projectId } = useParams();
-    const { data: session } = useSession();
     const router = useRouter();
     const { t } = useTranslation();
 
@@ -50,25 +49,17 @@ export default function SimulatorPage() {
     ]);
 
     useEffect(() => {
-        if (session?.accessToken && projectId) {
+        if (projectId) {
             fetchSimulations();
         }
-    }, [session, projectId]);
+    }, [projectId]);
 
 
 
     async function fetchSimulations() {
         try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
-            const res = await fetch(`${apiUrl}/projects/${projectId}/simulator/simulations`, {
-                headers: {
-                    "Authorization": `Bearer ${session?.accessToken}`
-                }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setSimulations(data);
-            }
+            const res = await api.get(`/projects/${projectId}/simulator/simulations`);
+            setSimulations(res.data);
         } catch (e) {
             console.error(e);
         } finally {
@@ -95,30 +86,23 @@ export default function SimulatorPage() {
             }));
 
             // 1. Create Thing with Config (Single Step)
-            const thingRes = await fetch(`${apiUrl}/projects/${projectId}/simulator/things`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${session?.accessToken}`
+            const thingRes = await api.post(`/projects/${projectId}/simulator/things`, {
+                thing: {
+                    project_uuid: projectId,
+                    sensor_name: newName,
+                    description: "Created via Simulator UI",
+                    device_type: "simulator",
+                    latitude: latVal ? parseFloat(latVal) : undefined,
+                    longitude: lonVal ? parseFloat(lonVal) : undefined,
+                    properties: []
                 },
-                body: JSON.stringify({
-                    thing: {
-                        project_uuid: projectId,
-                        sensor_name: newName,
-                        description: "Created via Simulator UI",
-                        device_type: "simulator",
-                        latitude: latVal ? parseFloat(latVal) : undefined,
-                        longitude: lonVal ? parseFloat(lonVal) : undefined,
-                        properties: []
-                    },
-                    simulation: {
-                        enabled: true,
-                        datastreams: datastreamsPayload
-                    }
-                })
+                simulation: {
+                    enabled: true,
+                    datastreams: datastreamsPayload
+                }
             });
 
-            if (!thingRes.ok) throw new Error("Failed to create thing");
+            if (!thingRes.data) throw new Error("Failed to create thing");
 
             setNewName("");
             setNewDatastreams([{ name: "datastream_1", type: "sine", min: "0", max: "100" }]);
@@ -147,24 +131,10 @@ export default function SimulatorPage() {
     }
 
     async function toggleSimulation(sim: Simulation) {
-        // Stop propagation is handled in the button render, 
-        // but here we just do logic.
         try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
             const action = sim.is_running ? "stop" : "start";
-
-            // Use UUID for action URL
-            await fetch(`${apiUrl}/projects/${projectId}/simulator/simulations/${sim.thing_uuid}/${action}`, {
-                method: "POST",
-                headers: {
-                    "Authorization": `Bearer ${session?.accessToken}`
-                }
-            });
+            await api.post(`/projects/${projectId}/simulator/simulations/${sim.thing_uuid}/${action}`);
             fetchSimulations();
-
-            // If this sim is currently open in modal, update it locally?
-            // Actually fetchSimulations will update list. Modal can sync from list or we close it.
-            // Better to re-fetch.
         } catch (e) {
             console.error(e);
         }
@@ -172,42 +142,20 @@ export default function SimulatorPage() {
 
     async function handleUpdateSimulation(sim: Simulation, newConfig: any) {
         try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
-
-            const res = await fetch(`${apiUrl}/projects/${projectId}/simulator/simulations`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${session?.accessToken}`
-                },
-                body: JSON.stringify({
-                    thing_id: sim.thing_uuid, // Using UUID as expected by backend
-                    config: newConfig
-                })
+            await api.post(`/projects/${projectId}/simulator/simulations`, {
+                thing_id: sim.thing_uuid,
+                config: newConfig
             });
-
-            if (!res.ok) throw new Error("Failed to update simulation");
-
             fetchSimulations();
         } catch (e) {
             console.error(e);
-            throw e; // Modal needs to know
+            throw e;
         }
     }
 
     async function handleDeleteSimulation(sim: Simulation) {
         try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
-
-            const res = await fetch(`${apiUrl}/projects/${projectId}/simulator/things/${sim.thing_uuid}`, {
-                method: "DELETE",
-                headers: {
-                    "Authorization": `Bearer ${session?.accessToken}`
-                }
-            });
-
-            if (!res.ok) throw new Error("Failed to delete simulation");
-
+            await api.delete(`/projects/${projectId}/simulator/things/${sim.thing_uuid}`);
             fetchSimulations();
         } catch (e) {
             console.error(e);

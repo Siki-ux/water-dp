@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
+import { queryKeys } from "./queries/keys";
 import {
     parseJwt,
     parseGroupRoles,
@@ -93,7 +94,7 @@ export function useGlobalPermissions(): GlobalPermissions {
 
 export function useProjectPermissions(projectId: string | undefined) {
     return useQuery<ProjectPermissions>({
-        queryKey: ["project-permissions", projectId],
+        queryKey: queryKeys.projects.permissions(projectId!),
         queryFn: () =>
             api
                 .get(`/projects/${projectId}/permissions`)

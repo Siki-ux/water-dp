@@ -19,7 +19,7 @@ from app.core.config import settings
 from app.core.constants import API_DESCRIPTION
 from app.core.database import init_db
 from app.core.logging_config import setup_logging
-from app.core.middleware import ErrorHandlingMiddleware, LoggingMiddleware
+from app.core.middleware import ErrorHandlingMiddleware, LoggingMiddleware, SecurityHeadersMiddleware
 from app.core.rate_limit import limiter
 
 setup_logging()
@@ -141,6 +141,7 @@ app.add_middleware(
 )
 
 app.add_middleware(ErrorHandlingMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(LoggingMiddleware)
 
 

@@ -5,30 +5,19 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import TimeSeriesChart from "./TimeSeriesChart";
 import { X, Trash2, Edit, ArrowUpRight, Loader2, Activity } from "lucide-react";
-import { getApiUrl } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n";
+import api from "@/lib/api";
 
 // Helper to fetch data
-async function getDataPoints(sensorUuid: string, token: string, datastream: string) {
-    const apiUrl = getApiUrl();
-    // New Endpoint: /things/{uuid}/datastream/{ds_name}/observations
-    // Use limit=100 for "Recent Data" chart
-    const url = `${apiUrl}/things/${sensorUuid}/datastream/${encodeURIComponent(datastream)}/observations?limit=100`;
-
+async function getDataPoints(sensorUuid: string, datastream: string) {
     try {
-        const res = await fetch(url, {
-            headers: { Authorization: `Bearer ${token}` }
+        const res = await api.get(`/things/${sensorUuid}/datastream/${encodeURIComponent(datastream)}/observations`, {
+            params: { limit: 100 }
         });
-        if (!res.ok) return [];
-        const observations = await res.json();
-
-        // Map Observations -> Chart Data
-        // API: [{ "phenomenon_time", "result", ... }, ...]
-        // Chart: [{ timestamp, value }]
-        return observations.map((obs: any) => ({
+        return res.data.map((obs: any) => ({
             timestamp: obs.phenomenon_time || obs.phenomenonTime,
             value: obs.result,
-            unit: '', // Unit is handled at series level
+            unit: '',
             datastream: datastream
         })).reverse();
     } catch (e) {
@@ -46,7 +35,6 @@ interface SensorDetailModalProps {
     sensor: any;
     isOpen: boolean;
     onClose: () => void;
-    token: string;
     onDelete: (sensorId: string, deleteFromSource: boolean) => void;
 }
 
@@ -54,7 +42,6 @@ export default function SensorDetailModal({
     sensor,
     isOpen,
     onClose,
-    token,
     onDelete,
 }: SensorDetailModalProps) {
     useEscapeKey(onClose, isOpen);
@@ -77,19 +64,15 @@ export default function SensorDetailModal({
             const sensorUuid = sensor.uuid || sensor.id;
 
             // 1. Fetch Rich Details
-            fetch(`${getApiUrl()}/things/${sensorUuid}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            })
-                .then(res => res.ok ? res.json() : null)
-                .then(data => {
+            api.get(`/things/${sensorUuid}`)
+                .then(res => {
+                    const data = res.data;
                     if (data) {
                         setFullSensor(data);
 
-                        // 2. Determine Datastreams
                         const datastreams = data.datastreams || [];
                         const dsNames = datastreams.map((ds: any) => ds.name);
 
-                        // Select default datastream logic
                         let effectiveDs = selectedDatastream;
                         if (dsNames.length > 0) {
                             if (!selectedDatastream || !dsNames.includes(selectedDatastream)) {
@@ -98,9 +81,8 @@ export default function SensorDetailModal({
                             }
                         }
 
-                        // 3. Fetch Data for Selected Datastream
                         if (effectiveDs) {
-                            getDataPoints(sensorUuid, token, effectiveDs).then(points => {
+                            getDataPoints(sensorUuid, effectiveDs).then(points => {
                                 setSeriesData({ [effectiveDs]: points });
                                 setLoading(false);
                             });
@@ -119,7 +101,7 @@ export default function SensorDetailModal({
         return () => {
             document.body.style.overflow = "unset";
         };
-    }, [isOpen, sensor, token, selectedDatastream]);
+    }, [isOpen, sensor, selectedDatastream]);
 
     const handleDatastreamChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         setSelectedDatastream(e.target.value);

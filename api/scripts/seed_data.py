@@ -75,6 +75,48 @@ LOCATIONS_MORAVA = [
 # External Source test sensors
 # --------------------------------------------------------------------------
 
+# Custom MQTT parser script (uploaded as custom device type during seeding)
+CUSTOM_WATER_LEVEL_PARSER_CODE = '''\
+"""
+Custom Water Level Parser
+Parses JSON payloads from a simple water-level sensor.
+
+Expected payload format:
+    {
+        "timestamp": "2026-01-15T10:30:00Z",
+        "water_level_m": 3.42,
+        "temperature_c": 12.5,
+        "battery_v": 3.8
+    }
+"""
+from datetime import datetime
+from timeio.parser.mqtt_parser import MqttParser, Observation
+
+
+class WaterLevelParser(MqttParser):
+    def do_parse(self, rawdata, origin="", **kwargs):
+        timestamp = rawdata.get("timestamp", datetime.utcnow().isoformat())
+        observations = []
+        position = 0
+        for key, value in rawdata.items():
+            if key == "timestamp":
+                continue
+            try:
+                observations.append(
+                    Observation(
+                        timestamp=timestamp,
+                        value=float(value),
+                        position=position,
+                        origin=origin,
+                        header=key,
+                    )
+                )
+                position += 1
+            except (ValueError, TypeError):
+                continue
+        return observations
+'''
+
 # Open-Meteo syncer script (uploaded as custom API type)
 OPEN_METEO_SYNCER_CODE = '''\
 """
@@ -453,6 +495,51 @@ def create_simulated_sensor(headers, project_id, location_info, index):
     logger.error(f"Failed to create sensor {name} after {max_retries} attempts.")
 
 
+def register_custom_device_type(headers):
+    """Upload the custom water-level parser as a custom device type."""
+    logger.info("Registering 'water_level_generic' device type with parser script...")
+
+    # Check if it already exists
+    try:
+        res = requests.get(
+            f"{API_URL}/sms/attributes/device-types",
+            headers=headers,
+        )
+        if res.status_code == 200:
+            items = res.json().get("items", [])
+            for dt in items:
+                if dt.get("name") == "water_level_generic":
+                    logger.info("Device type 'water_level_generic' already exists.")
+                    return True
+    except Exception:
+        pass
+
+    # Upload the parser script
+    try:
+        blob = CUSTOM_WATER_LEVEL_PARSER_CODE.encode("utf-8")
+        files = {"file": ("water_level_generic.py", blob, "text/x-python")}
+        data = {"device_type_name": "water_level_generic"}
+        upload_headers = {"Authorization": headers["Authorization"]}
+
+        res = requests.post(
+            f"{API_URL}/custom-parsers/upload",
+            headers=upload_headers,
+            files=files,
+            data=data,
+        )
+        if res.status_code in [200, 201]:
+            logger.info("Registered 'water_level_generic' device type with parser script.")
+            return True
+        else:
+            logger.warning(
+                f"Failed to upload parser: {res.status_code} - {res.text}"
+            )
+            return False
+    except Exception as e:
+        logger.error(f"Error registering device type: {e}")
+        return False
+
+
 def register_open_meteo_api_type(headers):
     """Upload the Open-Meteo syncer script as a custom API type."""
     logger.info("Registering 'open_meteo' API type with syncer script...")
@@ -625,7 +712,8 @@ def seed_external_sources(headers, admin_headers=None):
     if cfg.get("members"):
         seed_project_members(headers, project_id, cfg["members"])
 
-    # Step 1: Register custom API types (requires realm admin)
+    # Step 1: Register custom types (requires realm admin)
+    register_custom_device_type(admin_headers if admin_headers else headers)
     register_open_meteo_api_type(admin_headers if admin_headers else headers)
 
     # Step 2: Create CSV parser for SFTP sensor

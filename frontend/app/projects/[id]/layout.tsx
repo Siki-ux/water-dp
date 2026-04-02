@@ -1,37 +1,18 @@
+"use client";
+
 import { ProjectSidebar } from "@/components/ProjectSidebar";
-import { getApiUrl } from "@/lib/utils";
-import { auth } from "@/lib/auth";
+import { useProject } from "@/hooks/queries/useProjects";
+import { useParams } from "next/navigation";
 
-async function getProjectName(id: string) {
-    const session = await auth();
-    if (!session?.accessToken) return "Unknown Project";
-
-    const apiUrl = getApiUrl();
-
-    try {
-        const res = await fetch(`${apiUrl}/projects/${id}`, {
-            headers: { Authorization: `Bearer ${session.accessToken}` },
-            cache: 'no-store' // Keep it fresh
-        });
-        if (!res.ok) return "Unknown Project";
-        const data = await res.json();
-        return data.name;
-    } catch {
-        return "Unknown Project";
-    }
-}
-
-export default async function ProjectContextLayout({
+export default function ProjectContextLayout({
     children,
-    params,
 }: {
     children: React.ReactNode;
-    params: Promise<{ id: string }>;
 }) {
-    // In Next.js 15, params are async. Need to await.
-
-    const { id } = await params;
-    const projectName = await getProjectName(id);
+    const params = useParams();
+    const id = params.id as string;
+    const { data: project } = useProject(id);
+    const projectName = project?.name ?? "Loading…";
 
     return (
         <div className="flex min-h-[calc(100vh-64px)]">

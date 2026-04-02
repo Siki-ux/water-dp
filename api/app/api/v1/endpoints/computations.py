@@ -172,6 +172,40 @@ async def upload_computation_script(
     return db_script
 
 
+@router.delete("/{script_id}", status_code=204)
+async def delete_computation_script(
+    script_id: UUID4,
+    project_id: Optional[UUID4] = None,
+    database: Session = Depends(get_db),
+    user: dict = Depends(deps.get_current_user),
+):
+    """Delete a computation script and its file."""
+    script = (
+        database.query(ComputationScript)
+        .filter(ComputationScript.id == script_id)
+        .first()
+    )
+    if not script:
+        raise HTTPException(status_code=404, detail="Script not found")
+
+    ProjectService._check_access(
+        database, script.project_id, user, required_role="editor"
+    )
+
+    # Delete jobs associated with the script
+    database.query(ComputationJob).filter(
+        ComputationJob.script_id == script_id
+    ).delete()
+
+    # Delete the file from disk
+    script_path = os.path.join(COMPUTATIONS_DIR, script.filename)
+    if os.path.exists(script_path):
+        os.remove(script_path)
+
+    database.delete(script)
+    database.commit()
+
+
 @router.post("/run/{script_id}", response_model=TaskSubmissionResponse)
 async def run_computation(
     script_id: UUID4,

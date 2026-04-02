@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useSession } from "next-auth/react";
 import { Layers, Plus, Loader2, Trash2 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
+import { useLayers, useDeleteLayer } from "@/hooks/queries/useLayers";
 
 interface LayerInfo {
     layer_name: string;
@@ -14,50 +13,14 @@ interface LayerInfo {
 }
 
 export default function LayersPage() {
-    const { data: session } = useSession();
     const { t } = useTranslation();
-    const [layers, setLayers] = useState<LayerInfo[]>([]);
-    const [loading, setLoading] = useState(true);
+    const { data: raw, isLoading: loading } = useLayers();
+    const deleteLayerMut = useDeleteLayer();
+    const layers: LayerInfo[] = raw?.layers ?? [];
 
-    useEffect(() => {
-        if (!session?.accessToken) return;
-        fetchLayers();
-    }, [session]);
-
-    const fetchLayers = async () => {
-        setLoading(true);
-        try {
-            const res = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"}/geospatial/layers?limit=100`,
-                { headers: { Authorization: `Bearer ${session?.accessToken}` } }
-            );
-            if (res.ok) {
-                const data = await res.json();
-                setLayers(data.layers || []);
-            }
-        } catch (e) {
-            console.error("Failed to fetch layers", e);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const deleteLayer = async (layerName: string) => {
+    const handleDelete = (layerName: string) => {
         if (!confirm(t('layers.deleteConfirm'))) return;
-        try {
-            const res = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"}/geospatial/layers/${layerName}`,
-                {
-                    method: "DELETE",
-                    headers: { Authorization: `Bearer ${session?.accessToken}` },
-                }
-            );
-            if (res.ok || res.status === 204) {
-                setLayers((prev) => prev.filter((l) => l.layer_name !== layerName));
-            }
-        } catch (e) {
-            console.error("Failed to delete layer", e);
-        }
+        deleteLayerMut.mutate(layerName);
     };
 
     return (
@@ -125,7 +88,7 @@ export default function LayersPage() {
                                     <td className="px-6 py-4 text-sm text-white/50">{layer.workspace || "—"}</td>
                                     <td className="px-6 py-4 text-right">
                                         <button
-                                            onClick={() => deleteLayer(layer.layer_name)}
+                                            onClick={() => handleDelete(layer.layer_name)}
                                             className="p-2 text-white/30 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
                                             title={t('layers.deleteTitle')}
                                         >

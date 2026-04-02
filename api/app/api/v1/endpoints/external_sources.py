@@ -54,9 +54,13 @@ def get_ext_api_type(
     if not api_type:
         raise HTTPException(status_code=404, detail="API type not found")
 
-    # Load syncer code only if explicitly requested and user is superuser
+    # Load syncer code only if explicitly requested and user has admin role
     if include_code:
-        if not user or not user.get("is_superuser"):
+        from app.core.config import settings
+
+        realm_access = (user or {}).get("realm_access", {})
+        roles = realm_access.get("roles", [])
+        if not any(role in roles for role in settings.admin_roles_list):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not enough privileges to access syncer code",
@@ -74,6 +78,40 @@ def get_ext_api_type(
             except Exception as e:
                 logger.error(f"Failed to fetch syncer code for {id_or_name}: {e}")
                 api_type["code_error"] = str(e)
+
+        # Fallback: extract built-in syncer class from hardcoded file
+        if "code" not in api_type:
+            try:
+                import os
+                import re as _re
+
+                HARDCODED_SYNCERS_FILE = "/app/hardcoded_syncers/ext_api.py"
+                if os.path.exists(HARDCODED_SYNCERS_FILE):
+                    name = api_type.get("name", "")
+                    # Map API type name to class name suffix
+                    # e.g. "bosch" -> "BoschApiSyncer", "dwd" -> "DwdApiSyncer"
+                    class_suffix = "ApiSyncer"
+                    # Build candidate class names
+                    candidates = [
+                        name.capitalize() + class_suffix,
+                        name.title().replace("_", "") + class_suffix,
+                        name.upper() + class_suffix,
+                    ]
+
+                    with open(HARDCODED_SYNCERS_FILE, "r") as f:
+                        source = f.read()
+
+                    for class_name in candidates:
+                        pattern = _re.compile(
+                            rf"^(class {_re.escape(class_name)}\(.*?\):.*?)(?=\nclass |\Z)",
+                            _re.MULTILINE | _re.DOTALL,
+                        )
+                        match = pattern.search(source)
+                        if match:
+                            api_type["code"] = match.group(1).rstrip()
+                            break
+            except Exception as e:
+                logger.error(f"Failed to read hardcoded syncer for {id_or_name}: {e}")
 
     return api_type
 

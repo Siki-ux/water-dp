@@ -37,9 +37,7 @@ import {
     getSaQCFunction,
 } from "@/lib/saqc-functions";
 
-interface QAQCClientProps {
-    token: string;
-}
+interface QAQCClientProps {}
 
 // ---------------------------------------------------------------------------
 // QAQCTriggerDialog
@@ -48,12 +46,10 @@ interface QAQCClientProps {
 function QAQCTriggerDialog({
     config,
     projectId,
-    token,
     onClose,
 }: {
     config: QAQCConfig;
     projectId: string;
-    token: string;
     onClose: () => void;
 }) {
     const [startDate, setStartDate] = useState("");
@@ -70,7 +66,6 @@ function QAQCTriggerDialog({
                     start_date: new Date(startDate).toISOString(),
                     end_date: new Date(endDate).toISOString(),
                 },
-                token
             ),
         onSuccess: () => setSuccess(true),
         onError: (e: Error) => setError(e.message),
@@ -152,14 +147,12 @@ function QAQCTestRow({
     test,
     projectId,
     qaqcId,
-    token,
     index,
     total,
 }: {
     test: QAQCTest;
     projectId: string;
     qaqcId: number;
-    token: string;
     index: number;
     total: number;
 }) {
@@ -202,7 +195,7 @@ function QAQCTestRow({
                 function: funcName,
                 name: testName || null,
                 args,
-            }, token);
+            });
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["qaqc", projectId] });
@@ -211,13 +204,13 @@ function QAQCTestRow({
     });
 
     const deleteMutation = useMutation({
-        mutationFn: () => deleteQAQCTest(projectId, qaqcId, test.id, token),
+        mutationFn: () => deleteQAQCTest(projectId, qaqcId, test.id),
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ["qaqc", projectId] }),
     });
 
     const moveMutation = useMutation({
         mutationFn: (newPos: number) =>
-            updateQAQCTest(projectId, qaqcId, test.id, { position: newPos }, token),
+            updateQAQCTest(projectId, qaqcId, test.id, { position: newPos }),
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ["qaqc", projectId] }),
     });
 
@@ -379,12 +372,10 @@ function QAQCTestRow({
 function AddTestForm({
     projectId,
     qaqcId,
-    token,
     onClose,
 }: {
     projectId: string;
     qaqcId: number;
-    token: string;
     onClose: () => void;
 }) {
     const queryClient = useQueryClient();
@@ -422,7 +413,7 @@ function AddTestForm({
                 args,
                 position: null,
                 streams: null,
-            }, token);
+            });
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["qaqc", projectId] });
@@ -540,11 +531,9 @@ function AddTestForm({
 function QAQCConfigCard({
     config,
     projectId,
-    token,
 }: {
     config: QAQCConfig;
     projectId: string;
-    token: string;
 }) {
     const queryClient = useQueryClient();
     const [expanded, setExpanded] = useState(false);
@@ -556,18 +545,18 @@ function QAQCConfigCard({
 
     const setDefaultMutation = useMutation({
         mutationFn: () =>
-            updateQAQCConfig(projectId, config.id, { is_default: !config.is_default }, token),
+            updateQAQCConfig(projectId, config.id, { is_default: !config.is_default }),
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ["qaqc", projectId] }),
     });
 
     const deleteMutation = useMutation({
-        mutationFn: () => deleteQAQCConfig(projectId, config.id, token),
+        mutationFn: () => deleteQAQCConfig(projectId, config.id),
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ["qaqc", projectId] }),
     });
 
     const saveNameMutation = useMutation({
         mutationFn: () =>
-            updateQAQCConfig(projectId, config.id, { name: newName, context_window: newWindow }, token),
+            updateQAQCConfig(projectId, config.id, { name: newName, context_window: newWindow }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["qaqc", projectId] });
             setEditingName(false);
@@ -685,7 +674,6 @@ function QAQCConfigCard({
                             test={test}
                             projectId={projectId}
                             qaqcId={config.id}
-                            token={token}
                             index={i}
                             total={config.tests.length}
                         />
@@ -694,7 +682,6 @@ function QAQCConfigCard({
                         <AddTestForm
                             projectId={projectId}
                             qaqcId={config.id}
-                            token={token}
                             onClose={() => setAddingTest(false)}
                         />
                     ) : (
@@ -713,7 +700,6 @@ function QAQCConfigCard({
                 <QAQCTriggerDialog
                     config={config}
                     projectId={projectId}
-                    token={token}
                     onClose={() => setTriggerOpen(false)}
                 />
             )}
@@ -727,11 +713,9 @@ function QAQCConfigCard({
 
 function CreateConfigForm({
     projectId,
-    token,
     onClose,
 }: {
     projectId: string;
-    token: string;
     onClose: () => void;
 }) {
     const queryClient = useQueryClient();
@@ -742,7 +726,7 @@ function CreateConfigForm({
 
     const mutation = useMutation({
         mutationFn: () =>
-            createQAQCConfig(projectId, { name, context_window: window, is_default: isDefault }, token),
+            createQAQCConfig(projectId, { name, context_window: window, is_default: isDefault }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["qaqc", projectId] });
             onClose();
@@ -812,14 +796,14 @@ function CreateConfigForm({
 // Main Client Component
 // ---------------------------------------------------------------------------
 
-export default function QAQCClient({ token }: QAQCClientProps) {
+export default function QAQCClient({}: QAQCClientProps) {
     const params = useParams();
     const projectId = params.id as string;
     const [creating, setCreating] = useState(false);
 
     const { data: configs, isLoading, error } = useQuery({
         queryKey: ["qaqc", projectId],
-        queryFn: () => listQAQCConfigs(projectId, token),
+        queryFn: () => listQAQCConfigs(projectId),
     });
 
     return (
@@ -862,7 +846,6 @@ export default function QAQCClient({ token }: QAQCClientProps) {
             {creating && (
                 <CreateConfigForm
                     projectId={projectId}
-                    token={token}
                     onClose={() => setCreating(false)}
                 />
             )}
@@ -900,7 +883,6 @@ export default function QAQCClient({ token }: QAQCClientProps) {
                             key={cfg.id}
                             config={cfg}
                             projectId={projectId}
-                            token={token}
                         />
                     ))}
                 </div>

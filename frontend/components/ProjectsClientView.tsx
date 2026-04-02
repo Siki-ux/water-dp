@@ -3,29 +3,24 @@
 import { useTranslation } from "@/lib/i18n";
 import { ProjectCard } from "./ProjectCard";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useGlobalPermissions } from "@/hooks/usePermissions";
-import { useQuery } from "@tanstack/react-query";
-import api from "@/lib/api";
+import { useProjects } from "@/hooks/queries/useProjects";
+import { useMyAuthGroups } from "@/hooks/queries/useGroups";
 
 export function ProjectsClientView({
-    projectsWithCounts,
     selectedGroupId,
 }: {
-    projectsWithCounts: any[];
     selectedGroupId?: string;
 }) {
     const { t } = useTranslation();
     const router = useRouter();
     const { groupMemberships: jwtMemberships } = useGlobalPermissions();
 
-    // Fetch authorization groups from API as a fallback (more reliable before Keycloak re-seed)
-    const { data: apiGroups = [] } = useQuery<{ id: string; name: string; path: string; role: string }[]>({
-        queryKey: ["my-authorization-groups"],
-        queryFn: () => api.get("/groups/my-authorization-groups").then((r) => r.data),
-        staleTime: 5 * 60 * 1000,
-    });
+    const { data: projects = [], isLoading } = useProjects(selectedGroupId);
+
+    const { data: apiGroups = [] } = useMyAuthGroups();
 
     // Prefer API groups (always current); fall back to JWT-parsed memberships
     const authGroups = apiGroups.length > 0
@@ -94,20 +89,25 @@ export function ProjectsClientView({
                 </div>
             )}
 
-            {projectsWithCounts.length === 0 ? (
+            {isLoading ? (
+                <div className="flex items-center justify-center py-20 text-white/40">
+                    <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                    Loading projects…
+                </div>
+            ) : projects.length === 0 ? (
                 <div className="text-center py-20 bg-white/5 rounded-xl border border-white/10">
                     <p className="text-white/60">{t('projects.noProjectsFound')}</p>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {projectsWithCounts.map((project: any) => (
+                    {projects.map((project: any) => (
                         <ProjectCard
                             key={project.id}
                             id={project.id}
                             name={project.name}
                             description={project.description || t('projects.noDescription')}
                             role={project.user_role || project.role || t('projects.member')}
-                            sensorCount={project.sensorCount}
+                            sensorCount={project.sensorCount ?? project.sensor_count}
                         />
                     ))}
                 </div>

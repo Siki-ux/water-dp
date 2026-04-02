@@ -2,6 +2,7 @@
 Application configuration using Pydantic Settings.
 """
 
+import logging
 from typing import List, Optional
 
 from pydantic import Field
@@ -31,6 +32,8 @@ class Settings(BaseSettings):
     postgres_db: Optional[str] = Field(default=None, alias="POSTGRES_DB")
     database_pool_size: int = Field(default=10, alias="DATABASE_POOL_SIZE")
     database_max_overflow: int = Field(default=20, alias="DATABASE_MAX_OVERFLOW")
+    database_pool_recycle: int = Field(default=3600, alias="DATABASE_POOL_RECYCLE")
+    database_connect_timeout: int = Field(default=30, alias="DATABASE_CONNECT_TIMEOUT")
 
     # Redis
     redis_url: str = Field(default="redis://localhost:6379", alias="REDIS_URL")
@@ -174,3 +177,27 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# Emit startup warnings for production-unsafe configuration
+_logger = logging.getLogger(__name__)
+if not settings.debug:
+    if settings.cors_origins == "*":
+        _logger.warning(
+            "SECURITY: CORS_ORIGINS is set to '*' while DEBUG=False. "
+            "Set explicit origins for production deployments."
+        )
+    if settings.allowed_hosts == "*":
+        _logger.warning(
+            "SECURITY: ALLOWED_HOSTS is set to '*' while DEBUG=False. "
+            "Set explicit hosts for production deployments."
+        )
+    if settings.geoserver_password == "geoserver":
+        _logger.warning(
+            "SECURITY: GeoServer is using the default password. "
+            "Set GEOSERVER_PASSWORD to a strong value in production."
+        )
+    if not settings.minio_secure:
+        _logger.warning(
+            "SECURITY: MINIO_SECURE is False — MinIO connections are unencrypted. "
+            "Set MINIO_SECURE=true in production."
+        )

@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import UUID4, BaseModel
 from sqlalchemy.orm import Session
 
@@ -196,7 +196,7 @@ def get_alert_history(
     status: Optional[str] = None,
     database: Session = Depends(get_db),
     user: dict = Depends(deps.get_current_user),
-    limit: int = 100,
+    limit: int = Query(100, ge=1, le=1000),
 ):
     """
     Get history of triggered alerts for a project.

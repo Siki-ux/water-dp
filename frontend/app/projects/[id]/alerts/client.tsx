@@ -7,6 +7,7 @@ import { useParams } from 'next/navigation';
 import { Loader2, Plus, Bell, AlertTriangle, CheckCircle, Trash2, Zap, ArrowUpRight } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
 import { useProjectPermissions } from '@/hooks/usePermissions';
+import api from '@/lib/api';
 
 interface AlertDefinition {
     id: string;
@@ -32,10 +33,9 @@ interface TriggeredAlert {
 }
 
 interface AlertsClientProps {
-    token: string;
 }
 
-export default function AlertsClient({ token }: AlertsClientProps) {
+export default function AlertsClient({}: AlertsClientProps) {
     const params = useParams();
     const projectId = params.id as string;
     const queryClient = useQueryClient();
@@ -103,16 +103,15 @@ export default function AlertsClient({ token }: AlertsClientProps) {
 
             <div className="flex-1 min-h-0 bg-muted/50 backdrop-blur-sm border border-border rounded-2xl overflow-hidden shadow-2xl">
                 {activeTab === 'rules' ? (
-                    <RulesList projectId={projectId} token={token} queryClient={queryClient} canEdit={canEditAlerts} />
+                    <RulesList projectId={projectId} queryClient={queryClient} canEdit={canEditAlerts} />
                 ) : (
-                    <HistoryList projectId={projectId} token={token} />
+                    <HistoryList projectId={projectId} />
                 )}
             </div>
 
             {isCreateOpen && (
                 <RuleModal
                     projectId={projectId}
-                    token={token}
                     onClose={() => setIsCreateOpen(false)}
                     onSuccess={() => {
                         queryClient.invalidateQueries({ queryKey: ['alertDefinitions', projectId] });
@@ -128,33 +127,22 @@ export default function AlertsClient({ token }: AlertsClientProps) {
 
 // --- Sub-components ---
 
-function RulesList({ projectId, token, queryClient, canEdit }: { projectId: string, token: string, queryClient: any, canEdit: boolean }) {
+function RulesList({ projectId, queryClient, canEdit }: { projectId: string, queryClient: any, canEdit: boolean }) {
     const { t } = useTranslation();
     const [editingRule, setEditingRule] = useState<AlertDefinition | null>(null);
 
     const { data: rules = [], isLoading } = useQuery({
         queryKey: ['alertDefinitions', projectId],
         queryFn: async () => {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/alerts/definitions/${projectId}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (!res.ok) throw new Error('Failed to fetch rules');
-            return await res.json() as AlertDefinition[];
+            const res = await api.get(`/alerts/definitions/${projectId}`);
+            return res.data as AlertDefinition[];
         }
     });
 
     const testTriggerMutation = useMutation({
         mutationFn: async (defId: string) => {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/alerts/test-trigger`, {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ definition_id: defId, message: "Manual test alert trigger" })
-            });
-            if (!res.ok) throw new Error('Failed to trigger test');
-            return await res.json();
+            const res = await api.post('/alerts/test-trigger', { definition_id: defId, message: "Manual test alert trigger" });
+            return res.data;
         },
         onSuccess: () => {
             alert("Test alert triggered! Check History.");
@@ -163,16 +151,8 @@ function RulesList({ projectId, token, queryClient, canEdit }: { projectId: stri
 
     const toggleMutation = useMutation({
         mutationFn: async (rule: AlertDefinition) => {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/alerts/definitions/${rule.id}`, {
-                method: 'PUT',
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ is_active: !rule.is_active })
-            });
-            if (!res.ok) throw new Error('Failed to update rule');
-            return await res.json();
+            const res = await api.put(`/alerts/definitions/${rule.id}`, { is_active: !rule.is_active });
+            return res.data;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['alertDefinitions', projectId] });
@@ -293,7 +273,6 @@ function RulesList({ projectId, token, queryClient, canEdit }: { projectId: stri
             {editingRule && (
                 <RuleModal
                     projectId={projectId}
-                    token={token}
                     initialData={editingRule}
                     onClose={() => setEditingRule(null)}
                     onSuccess={() => {
@@ -306,29 +285,22 @@ function RulesList({ projectId, token, queryClient, canEdit }: { projectId: stri
     );
 }
 
-function HistoryList({ projectId, token }: { projectId: string, token: string }) {
+function HistoryList({ projectId }: { projectId: string }) {
     const { t } = useTranslation();
     const queryClient = useQueryClient();
     const { data: alerts = [], isLoading } = useQuery({
         queryKey: ['alertsHistory', projectId],
         queryFn: async () => {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/alerts/history/${projectId}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (!res.ok) throw new Error('Failed to fetch alerts');
-            return await res.json() as TriggeredAlert[];
+            const res = await api.get(`/alerts/history/${projectId}`);
+            return res.data as TriggeredAlert[];
         },
         refetchInterval: 5000
     });
 
     const acknowledgeMutation = useMutation({
         mutationFn: async (alertId: string) => {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/alerts/history/${alertId}/acknowledge`, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (!res.ok) throw new Error('Failed to acknowledge alert');
-            return await res.json();
+            const res = await api.post(`/alerts/history/${alertId}/acknowledge`);
+            return res.data;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['alertsHistory', projectId] });
@@ -409,13 +381,12 @@ function HistoryList({ projectId, token }: { projectId: string, token: string })
 
 interface RuleModalProps {
     projectId: string;
-    token: string;
     onClose: () => void;
     onSuccess: () => void;
     initialData?: AlertDefinition;
 }
 
-function RuleModal({ projectId, token, onClose, onSuccess, initialData }: RuleModalProps) {
+function RuleModal({ projectId, onClose, onSuccess, initialData }: RuleModalProps) {
     const { t } = useTranslation();
     const isEdit = !!initialData;
 
@@ -453,11 +424,8 @@ function RuleModal({ projectId, token, onClose, onSuccess, initialData }: RuleMo
     const { data: sensors = [] } = useQuery({
         queryKey: ['sensors', projectId],
         queryFn: async () => {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/projects/${projectId}/sensors`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (!res.ok) return [];
-            return await res.json();
+            const res = await api.get(`/projects/${projectId}/sensors`);
+            return res.data;
         }
     });
 
@@ -493,25 +461,13 @@ function RuleModal({ projectId, token, onClose, onSuccess, initialData }: RuleMo
             }
 
             const url = isEdit
-                ? `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/alerts/definitions/${initialData?.id}`
-                : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/alerts/definitions`;
+                ? `/alerts/definitions/${initialData?.id}`
+                : `/alerts/definitions`;
 
-            const method = isEdit ? 'PUT' : 'POST';
-
-            const res = await fetch(url, {
-                method,
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(body)
-            });
-
-            if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.detail || 'Failed to save rule');
-            }
-            return await res.json();
+            const res = isEdit
+                ? await api.put(url, body)
+                : await api.post(url, body);
+            return res.data;
         },
         onSuccess,
     });

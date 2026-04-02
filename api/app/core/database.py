@@ -19,8 +19,10 @@ engine = create_engine(
     poolclass=QueuePool,
     pool_size=settings.database_pool_size,
     max_overflow=settings.database_max_overflow,
+    pool_recycle=settings.database_pool_recycle,
     pool_pre_ping=True,
-    echo=settings.debug,
+    echo=(settings.sqlalchemy_log_level == "DEBUG"),
+    connect_args={"connect_timeout": settings.database_connect_timeout},
 )
 
 
@@ -58,6 +60,7 @@ def init_db() -> None:
 
     max_retries = 30
     retry_interval = 2
+    max_retry_interval = 30
 
     for attempt in range(max_retries):
         try:
@@ -109,6 +112,7 @@ def init_db() -> None:
                     f"Database connection refused (Attempt {attempt + 1}/{max_retries}). Retrying in {retry_interval}s..."
                 )
                 time.sleep(retry_interval)
+                retry_interval = min(retry_interval * 2, max_retry_interval)
             else:
                 logger.error(
                     f"Database initialization exception details: {e}"

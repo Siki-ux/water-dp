@@ -15,6 +15,5 @@ done
 echo "Initializing database schema (once)..."
 python -c "from app.core.database import init_db; init_db()"
 
-echo "Starting application with Gunicorn..."
-# Increased workers from 4 to 8 for better concurrency with async endpoints
-exec python -m gunicorn app.main:app -k uvicorn.workers.UvicornWorker -w 2 -b 0.0.0.0:8000 --timeout 120 --keep-alive 60 --graceful-timeout 30 --reload
+echo "Starting application with Gunicorn (${WEB_CONCURRENCY:-4} workers)..."
+exec python -m gunicorn app.main:app -k uvicorn.workers.UvicornWorker -w ${WEB_CONCURRENCY:-4} -b 0.0.0.0:8000 --timeout 120 --keep-alive 60 --graceful-timeout 30 --reload

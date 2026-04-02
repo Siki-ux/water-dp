@@ -1,54 +1,41 @@
-import { getApiUrl } from "@/lib/utils";
-import { auth } from "@/lib/auth";
+"use client";
+
+import { useSearchParams } from "next/navigation";
 import { SensorsClient } from "./SensorsClient";
+import { useSMSSensors } from "@/hooks/queries/useSMS";
+import { Loader2 } from "lucide-react";
 
-async function getSensors(page = 1, pageSize = 20, search?: string, ingestType?: string) {
-    const session = await auth();
-    if (!session?.accessToken) return { items: [], total: 0 };
+const PAGE_SIZE = 20;
 
-    const apiUrl = getApiUrl();
-    const params = new URLSearchParams({
-        page: String(page),
-        page_size: String(pageSize),
+export default function SensorsPage() {
+    const searchParams = useSearchParams();
+    const page = Number(searchParams.get("page")) || 1;
+    const search = searchParams.get("search") || "";
+    const ingestType = searchParams.get("ingest_type") || "";
+
+    const { data, isLoading } = useSMSSensors({
+        page,
+        page_size: PAGE_SIZE,
+        search: search || undefined,
+        ingest_type: ingestType || undefined,
     });
-    if (search) params.set("search", search);
-    if (ingestType) params.set("ingest_type", ingestType);
 
-    try {
-        const res = await fetch(`${apiUrl}/sms/sensors?${params}`, {
-            headers: {
-                Authorization: `Bearer ${session.accessToken}`,
-            },
-            cache: 'no-store'
-        });
+    const totalPages = Math.ceil((data?.total ?? 0) / PAGE_SIZE);
 
-        if (!res.ok) throw new Error("Failed to fetch sensors");
-
-        return await res.json();
-    } catch (error) {
-        console.error("Error fetching sensors:", error);
-        return { items: [], total: 0 };
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center py-20 text-white/40">
+                <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                Loading sensors…
+            </div>
+        );
     }
-}
-
-export default async function SensorsPage({
-    searchParams,
-}: {
-    searchParams: Promise<{ page?: string; search?: string; ingest_type?: string }>;
-}) {
-    const params = await searchParams;
-    const page = Number(params.page) || 1;
-    const pageSize = 20;
-    const search = params.search || "";
-    const ingestType = params.ingest_type || "";
-    const data = await getSensors(page, pageSize, search, ingestType);
-    const totalPages = Math.ceil(data.total / pageSize);
 
     return (
         <SensorsClient
-            data={data}
+            data={data ?? { items: [], total: 0 }}
             page={page}
-            pageSize={pageSize}
+            pageSize={PAGE_SIZE}
             totalPages={totalPages}
             search={search}
             ingestType={ingestType}

@@ -1,37 +1,26 @@
+"use client";
+
 import { DashboardCard } from "@/components/DashboardCard";
 import Link from "next/link";
-import { Plus } from "lucide-react";
-import { getApiUrl } from "@/lib/utils";
-import { auth } from "@/lib/auth";
+import { Plus, Loader2 } from "lucide-react";
 import { Dashboard } from "@/types/dashboard";
 import { T } from "@/components/T";
+import { useParams } from "next/navigation";
+import { useProjectDashboards } from "@/hooks/queries/useProjects";
 
-async function getDashboards(projectId: string) {
-    const session = await auth();
-    if (!session?.accessToken) return [];
+export default function ProjectDashboardsPage() {
+    const params = useParams();
+    const id = params.id as string;
+    const { data: dashboards = [] as Dashboard[], isLoading } = useProjectDashboards(id);
 
-    const apiUrl = getApiUrl();
-
-    try {
-        const res = await fetch(`${apiUrl}/projects/${projectId}/dashboards`, {
-            headers: {
-                Authorization: `Bearer ${session.accessToken}`,
-            },
-            cache: 'no-store'
-        });
-
-        if (!res.ok) throw new Error("Failed to fetch dashboards");
-
-        return await res.json() as Dashboard[];
-    } catch (error) {
-        console.error("Error fetching dashboards:", error);
-        return [];
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center py-20 text-white/40">
+                <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                Loading dashboards…
+            </div>
+        );
     }
-}
-
-export default async function ProjectDashboardsPage({ params }: { params: Promise<{ id: string }> }) {
-    const { id } = await params;
-    const dashboards = await getDashboards(id);
 
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-5 duration-700">
@@ -56,7 +45,7 @@ export default async function ProjectDashboardsPage({ params }: { params: Promis
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {dashboards.map((dashboard) => (
+                    {dashboards.map((dashboard: Dashboard) => (
                         <DashboardCard
                             key={dashboard.id}
                             dashboard={dashboard}

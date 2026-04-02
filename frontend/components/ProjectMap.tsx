@@ -8,6 +8,7 @@ import SensorDetailModal from '@/components/data/SensorDetailModal';
 import { Loader2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useTheme } from './ThemeContext';
+import { useSession } from 'next-auth/react';
 
 // Helper to check if a sensor is a dataset (should not show on map)
 const isDataset = (s: any) =>
@@ -58,7 +59,7 @@ const fetchSensorData = async (sensorUuid: string, token: string, datastreams: a
 interface ProjectMapProps {
     sensors: Sensor[];
     projectId: string;
-    token: string;
+    token?: string;
     className?: string;
 }
 
@@ -68,7 +69,9 @@ interface GeoLayer {
     is_public: boolean;
 }
 
-export default function ProjectMap({ sensors: initialSensors, projectId, token, className }: ProjectMapProps) {
+export default function ProjectMap({ sensors: initialSensors, projectId, token: tokenProp, className }: ProjectMapProps) {
+    const { data: session } = useSession();
+    const token = tokenProp || (session as any)?.accessToken || "";
     const { theme } = useTheme();
     const mapContainer = useRef<HTMLDivElement>(null);
     const map = useRef<maplibregl.Map | null>(null);
@@ -576,7 +579,6 @@ export default function ProjectMap({ sensors: initialSensors, projectId, token, 
                     sensor={selectedSensor}
                     isOpen={!!selectedSensor}
                     onClose={() => setSelectedSensor(null)}
-                    token={token}
                     onDelete={() => { }}
                 />
             )}

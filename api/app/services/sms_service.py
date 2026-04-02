@@ -84,52 +84,57 @@ class SMSService:
         if not items_db:
             return {"items": [], "total": total}
 
-        # 2. Enrich with FROST Data (Optional but good for completeness)
-        # We need 'properties' which are not in config_db.thing.
-        # We have schema_name for each item.
-        # Strategy: distinct schemas -> async fetch tasks?
-        # Or just return what we have?
-        # User said "view details". Properties might be important.
-        # Let's try to fetch properties for each item.
-        # Since items are mingled, valid strategy:
-        # Group by schema -> Fetch list of IDs -> Merge.
-        # But we already have the PAGE. We just need to enrich these specific 20 items.
+        # 2. Enrich with FROST Data — batch by schema to avoid N+1 HTTP calls
+        # Group items by schema so we make one FROST request per schema instead of per item
+        from collections import defaultdict
+
+        schema_groups: Dict[str, List[Dict]] = defaultdict(list)
+        for item in items_db:
+            schema = item.get("schema_name")
+            if schema:
+                schema_groups[schema].append(item)
+
+        # Fetch all things per schema in parallel (one FROST call per schema)
+        frost_data_by_uuid: Dict[str, Dict] = {}
+
+        async def fetch_schema_batch(schema: str, items: List[Dict]):
+            """Fetch all Things for a schema with $filter on identifiers."""
+            try:
+                uuids = [it["uuid"] for it in items if it.get("uuid")]
+                if not uuids:
+                    return
+                # Build OData 4.0 or-chain filter (no 'in' operator in STA 1.1)
+                # Match both identifier and uuid — simulated Things may only have uuid
+                filter_parts = [
+                    f"(properties/identifier eq '{u}' or properties/uuid eq '{u}')"
+                    for u in uuids
+                ]
+                filter_expr = " or ".join(filter_parts)
+                service = AsyncThingService(schema)
+                things = await service.get_things(
+                    expand=["Locations"],
+                    filter_expr=filter_expr,
+                    top=len(uuids),
+                )
+                for thing in things:
+                    if thing.sensor_uuid:
+                        frost_data_by_uuid[thing.sensor_uuid] = {
+                            "properties": thing.properties,
+                            "latitude": thing.location.latitude if thing.location else None,
+                            "longitude": thing.location.longitude if thing.location else None,
+                        }
+            except Exception as e:
+                logger.warning(f"Failed to batch-fetch FROST data for schema {schema}: {e}")
+
+        tasks = [
+            fetch_schema_batch(schema, items)
+            for schema, items in schema_groups.items()
+        ]
+        if tasks:
+            await asyncio.gather(*tasks)
 
         enriched_items = []
-
-        # We will loop and fetch. For 20 items, 20 async calls is acceptable.
-        # We can optimize by grouping by schema if needed.
-
-        async def fetch_frost_details(item):
-            schema = item["schema_name"]
-            uuid = item["uuid"]
-            if not schema:
-                return {}  # No schema, no FROST data
-
-            try:
-                service = AsyncThingService(schema)
-                # We only need properties and location?
-                # location is expensive (separate entity). properties is in Thing.
-                thing = await service.get_thing(uuid, expand=["Locations"])
-                if thing:
-                    return {
-                        "properties": thing.properties,
-                        "latitude": thing.location.latitude if thing.location else None,
-                        "longitude": thing.location.longitude
-                        if thing.location
-                        else None,
-                    }
-            except Exception as e:
-                logger.warning(
-                    f"Failed to fetch FROST data for {uuid} in {schema}: {e}"
-                )
-            return {}
-
-        # Run concurrently
-        tasks = [fetch_frost_details(item) for item in items_db]
-        frost_results = await asyncio.gather(*tasks)
-
-        for item, frost_data in zip(items_db, frost_results):
+        for item in items_db:
             # Merge
             sensor_data = {
                 "uuid": item["uuid"],
@@ -150,6 +155,7 @@ class SMSService:
                 "properties": {},
             }
             # Overlay FROST data
+            frost_data = frost_data_by_uuid.get(item["uuid"])
             if frost_data:
                 sensor_data.update(frost_data)
 
@@ -563,6 +569,17 @@ class SMSService:
                     candidates = [f"{name}.py"]
                     if name.endswith("_api"):
                         candidates.append(f"{name[:-4]}.py")
+
+                    # Also try matching any file that starts with the name
+                    # (e.g. ydoc_ml417 -> ydoc_ml_417.py)
+                    if os.path.isdir(HARDCODED_PARSERS_DIR):
+                        for f in os.listdir(HARDCODED_PARSERS_DIR):
+                            if f.endswith(".py"):
+                                # Normalize: strip underscores for comparison
+                                norm_f = f[:-3].replace("_", "")
+                                norm_n = name.replace("_", "")
+                                if norm_f == norm_n and f not in candidates:
+                                    candidates.append(f)
 
                     for filename in candidates:
                         filepath = os.path.join(HARDCODED_PARSERS_DIR, filename)

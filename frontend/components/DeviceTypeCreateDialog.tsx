@@ -186,7 +186,7 @@ export function DeviceTypeCreateDialog({ isOpen, onClose, editMode = false, init
                                 value={formData.code}
                                 onChange={(e) => setFormData({ ...formData, code: e.target.value })}
                                 placeholder="def parse(payload): ..."
-                                className="w-full h-64 bg-[#1A1A1A] border border-border rounded-lg p-4 font-mono text-sm text-[var(--foreground)]/90 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-y"
+                                className="w-full h-64 bg-muted border border-border rounded-lg p-4 font-mono text-sm text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-y"
                                 spellCheck={false}
                             />
                         ) : (

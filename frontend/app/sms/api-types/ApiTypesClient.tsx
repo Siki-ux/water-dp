@@ -100,9 +100,12 @@ export function ApiTypesClient({ apiTypes }: ApiTypesClientProps) {
                                                     <Globe className="w-4 h-4" />
                                                 </div>
                                                 <div>
-                                                    <span className="font-medium text-[var(--foreground)]">
+                                                    <Link
+                                                        href={`/sms/api-types/${at.id}`}
+                                                        className="font-medium text-[var(--foreground)] hover:text-blue-400 transition-colors"
+                                                    >
                                                         {at.name}
-                                                    </span>
+                                                    </Link>
                                                     <span className={`ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full uppercase ${
                                                         isCustom(at)
                                                         ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30'
@@ -124,6 +127,13 @@ export function ApiTypesClient({ apiTypes }: ApiTypesClientProps) {
                                         </td>
                                         <td className="p-4">
                                             <div className="flex items-center gap-1">
+                                                <Link
+                                                    href={`/sms/api-types/${at.id}`}
+                                                    className="p-2 rounded-lg hover:bg-blue-500/10 text-[var(--foreground)]/40 hover:text-blue-400 transition-colors"
+                                                    title="View details"
+                                                >
+                                                    <Settings className="w-4 h-4" />
+                                                </Link>
                                                 <button
                                                     onClick={() => handleDelete(at.name)}
                                                     disabled={deleting === at.name}

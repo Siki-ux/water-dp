@@ -137,21 +137,21 @@ export function SensorEditDialog({ sensor }: SensorEditDialogProps) {
 
     // Load per-sensor QA/QC when the qaqc tab is opened
     useEffect(() => {
-        if (activeTab === 'qaqc' && thingQAQC === undefined && session?.accessToken && sensor?.uuid) {
+        if (activeTab === 'qaqc' && thingQAQC === undefined && sensor?.uuid) {
             setQAQCLoading(true);
-            getThingQAQC(sensor.uuid, session.accessToken)
+            getThingQAQC(sensor.uuid)
                 .then((cfg) => setThingQAQC(cfg))
                 .catch((e) => setQAQCError(e.message))
                 .finally(() => setQAQCLoading(false));
         }
-    }, [activeTab, sensor?.uuid, session?.accessToken, thingQAQC]);
+    }, [activeTab, sensor?.uuid, thingQAQC]);
 
     const handleAssignQAQC = async () => {
-        if (!session?.accessToken || !sensor?.uuid) return;
+        if (!sensor?.uuid) return;
         setQAQCLoading(true);
         setQAQCError(null);
         try {
-            const cfg = await createThingQAQC(sensor.uuid, { name: qaqcName, context_window: qaqcWindow }, session.accessToken);
+            const cfg = await createThingQAQC(sensor.uuid, { name: qaqcName, context_window: qaqcWindow });
             setThingQAQC(cfg);
         } catch (e: any) {
             setQAQCError(e.message);
@@ -161,12 +161,12 @@ export function SensorEditDialog({ sensor }: SensorEditDialogProps) {
     };
 
     const handleUnassignQAQC = async () => {
-        if (!session?.accessToken || !sensor?.uuid) return;
+        if (!sensor?.uuid) return;
         if (!confirm("Remove the per-sensor QA/QC override?")) return;
         setQAQCLoading(true);
         setQAQCError(null);
         try {
-            await deleteThingQAQC(sensor.uuid, session.accessToken);
+            await deleteThingQAQC(sensor.uuid);
             setThingQAQC(null);
         } catch (e: any) {
             setQAQCError(e.message);
@@ -176,10 +176,10 @@ export function SensorEditDialog({ sensor }: SensorEditDialogProps) {
     };
 
     const handleTriggerQAQC = async () => {
-        if (!session?.accessToken || !sensor?.uuid) return;
+        if (!sensor?.uuid) return;
         setTriggerSuccess(false);
         try {
-            await triggerThingQAQC(sensor.uuid, session.accessToken);
+            await triggerThingQAQC(sensor.uuid);
             setTriggerSuccess(true);
         } catch (e: any) {
             setQAQCError(e.message);
@@ -187,15 +187,15 @@ export function SensorEditDialog({ sensor }: SensorEditDialogProps) {
     };
 
     const handleAddTest = async () => {
-        if (!session?.accessToken || !thingQAQC) return;
+        if (!thingQAQC) return;
         setQAQCLoading(true);
         setQAQCError(null);
         try {
             let args: Record<string, unknown> | null = null;
             try { args = JSON.parse(newTestArgs); } catch { args = null; }
-            await addThingQAQCTest(sensor.uuid, { function: newTestFunc, name: newTestName || null, args, position: null, streams: null }, session.accessToken);
+            await addThingQAQCTest(sensor.uuid, { function: newTestFunc, name: newTestName || null, args, position: null, streams: null });
             // Refresh
-            const cfg = await getThingQAQC(sensor.uuid, session.accessToken);
+            const cfg = await getThingQAQC(sensor.uuid);
             setThingQAQC(cfg);
             setAddingTest(false);
             setNewTestName("");
@@ -208,10 +208,9 @@ export function SensorEditDialog({ sensor }: SensorEditDialogProps) {
     };
 
     const handleDeleteTest = async (testId: number) => {
-        if (!session?.accessToken) return;
         try {
-            await deleteThingQAQCTest(sensor.uuid, testId, session.accessToken);
-            const cfg = await getThingQAQC(sensor.uuid, session.accessToken);
+            await deleteThingQAQCTest(sensor.uuid, testId);
+            const cfg = await getThingQAQC(sensor.uuid);
             setThingQAQC(cfg);
         } catch (e: any) {
             setQAQCError(e.message);

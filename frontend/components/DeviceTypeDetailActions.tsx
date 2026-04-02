@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { Edit, Trash2, Loader2, Code, Settings } from "lucide-react";
 import { DeviceTypeCreateDialog } from "@/components/DeviceTypeCreateDialog";
 import { getApiUrl } from "@/lib/utils";
+import { useTranslation } from "@/lib/i18n";
 
 interface DeviceTypeDetailActionsProps {
     deviceType: {
@@ -21,6 +22,7 @@ export function DeviceTypeDetailActions({ deviceType }: DeviceTypeDetailActionsP
     const router = useRouter();
     const [isEditOpen, setIsEditOpen] = useState(false);
     const [deleting, setDeleting] = useState(false);
+    const { t } = useTranslation();
 
     // Check if dynamic (has script_bucket)
     const isDynamic = deviceType.properties && deviceType.properties.script_bucket;
@@ -29,14 +31,14 @@ export function DeviceTypeDetailActions({ deviceType }: DeviceTypeDetailActionsP
         return (
             <div className="flex items-center gap-2">
                 <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-white/40 font-medium">
-                    Built-in Type
+                    {t('sms.deviceTypes.builtInType')}
                 </span>
             </div>
         );
     }
 
     const handleDelete = async () => {
-        if (!confirm("Are you sure you want to delete this device type? This action cannot be undone.")) {
+        if (!confirm(t('sms.deviceTypes.deleteConfirm'))) {
             return;
         }
 
@@ -52,7 +54,7 @@ export function DeviceTypeDetailActions({ deviceType }: DeviceTypeDetailActionsP
 
             if (!res.ok) {
                 const err = await res.json();
-                alert(err.detail || "Failed to delete device type");
+                alert(err.detail || t('sms.deviceTypes.deleteFail'));
                 setDeleting(false);
                 return;
             }
@@ -61,7 +63,7 @@ export function DeviceTypeDetailActions({ deviceType }: DeviceTypeDetailActionsP
             router.refresh();
         } catch (error) {
             console.error(error);
-            alert("An error occurred while deleting.");
+            alert(t('sms.deviceTypes.deleteFail'));
             setDeleting(false);
         }
     };
@@ -74,7 +76,7 @@ export function DeviceTypeDetailActions({ deviceType }: DeviceTypeDetailActionsP
                     className="flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white px-4 py-2 rounded-lg font-medium transition-colors border border-white/10"
                 >
                     <Edit className="w-4 h-4 text-blue-400" />
-                    Edit
+                    {t('sms.deviceTypes.edit')}
                 </button>
                 <button
                     onClick={handleDelete}
@@ -82,7 +84,7 @@ export function DeviceTypeDetailActions({ deviceType }: DeviceTypeDetailActionsP
                     className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-2 rounded-lg font-medium transition-colors border border-red-500/20 disabled:opacity-50"
                 >
                     {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                    Delete
+                    {t('sms.deviceTypes.delete')}
                 </button>
             </div>
 

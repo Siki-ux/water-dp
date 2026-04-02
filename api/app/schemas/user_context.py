@@ -78,6 +78,7 @@ class ProjectResponse(ProjectBase):
     user_role: Optional[str] = (
         None  # effective role for the requesting user (owner/editor/viewer)
     )
+    sensor_count: int = 0
 
     @classmethod
     def model_validate(cls, obj: Any, **kwargs: Any) -> "ProjectResponse":

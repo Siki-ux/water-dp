@@ -223,3 +223,79 @@ def test_get_status_superuser_authorized(
 
         response = client.get(f"/api/v1/computations/tasks/{mock_task_id}")
         assert response.status_code == 200
+
+
+# --- Delete Tests ---
+
+
+def test_delete_computation_script_success(
+    override_deps, mock_db_session, mock_current_user
+):
+    app.dependency_overrides[get_db] = lambda: mock_db_session
+    app.dependency_overrides[deps.get_current_user] = lambda: mock_current_user
+
+    mock_script = ComputationScript(
+        id=mock_script_id,
+        project_id=mock_project_id,
+        filename="test_script.py",
+    )
+    mock_db_session.query.return_value.filter.return_value.first.return_value = (
+        mock_script
+    )
+    mock_db_session.query.return_value.filter.return_value.delete.return_value = 0
+
+    with (
+        patch(
+            "app.services.project_service.ProjectService._check_access",
+            return_value=True,
+        ),
+        patch("os.path.exists", return_value=True),
+        patch("os.remove") as mock_remove,
+    ):
+        response = client.delete(f"/api/v1/computations/{mock_script_id}")
+
+        assert response.status_code == 204
+        mock_db_session.delete.assert_called_once_with(mock_script)
+        mock_db_session.commit.assert_called()
+        mock_remove.assert_called_once()
+
+
+def test_delete_computation_script_not_found(
+    override_deps, mock_db_session, mock_current_user
+):
+    app.dependency_overrides[get_db] = lambda: mock_db_session
+    app.dependency_overrides[deps.get_current_user] = lambda: mock_current_user
+
+    mock_db_session.query.return_value.filter.return_value.first.return_value = None
+
+    response = client.delete(f"/api/v1/computations/{mock_script_id}")
+    assert response.status_code == 404
+
+
+def test_delete_computation_script_file_missing_on_disk(
+    override_deps, mock_db_session, mock_current_user
+):
+    """Delete should succeed even if the file is already gone from disk."""
+    app.dependency_overrides[get_db] = lambda: mock_db_session
+    app.dependency_overrides[deps.get_current_user] = lambda: mock_current_user
+
+    mock_script = ComputationScript(
+        id=mock_script_id,
+        project_id=mock_project_id,
+        filename="gone.py",
+    )
+    mock_db_session.query.return_value.filter.return_value.first.return_value = (
+        mock_script
+    )
+    mock_db_session.query.return_value.filter.return_value.delete.return_value = 0
+
+    with (
+        patch(
+            "app.services.project_service.ProjectService._check_access",
+            return_value=True,
+        ),
+        patch("os.path.exists", return_value=False),
+    ):
+        response = client.delete(f"/api/v1/computations/{mock_script_id}")
+        assert response.status_code == 204
+        mock_db_session.delete.assert_called_once_with(mock_script)

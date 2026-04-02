@@ -365,6 +365,100 @@ class PermissionResolver:
         return None
 
     @staticmethod
+    def resolve_batch(
+        user: Dict[str, Any], projects: List[Project], db: Session
+    ) -> Dict[UUID, EffectivePermissions]:
+        """
+        Resolve permissions for multiple projects in one pass.
+
+        Pre-fetches all ProjectMember rows for the user to avoid N+1 queries.
+        Returns a mapping of project_id → EffectivePermissions.
+        """
+        user_sub = str(user.get("sub", ""))
+        jwt_groups: List[str] = user.get("groups", [])
+        group_roles = parse_group_roles(jwt_groups)
+        highest_group_role = get_highest_group_role(group_roles)
+        realm_admin = is_realm_admin(user)
+
+        common_kwargs = dict(
+            is_realm_admin_=realm_admin,
+            highest_group_role=highest_group_role,
+        )
+
+        # Realm admin → owner on everything, skip DB lookup entirely
+        if realm_admin:
+            owner_perms = EffectivePermissions.from_role(
+                ROLE_OWNER, group_role=None, project_role=None, **common_kwargs
+            )
+            return {p.id: owner_perms for p in projects}
+
+        # Batch-load all ProjectMember rows for this user across the given projects
+        project_ids = [p.id for p in projects]
+        members = (
+            db.query(ProjectMember)
+            .filter(
+                ProjectMember.user_id == user_sub,
+                ProjectMember.project_id.in_(project_ids),
+            )
+            .all()
+        )
+        member_by_project: Dict[UUID, ProjectMember] = {
+            m.project_id: m for m in members
+        }
+
+        result: Dict[UUID, EffectivePermissions] = {}
+        for project in projects:
+            project_group_name = PermissionResolver._resolve_project_group_name(
+                project, db
+            )
+            group_role_for_project = PermissionResolver._find_group_role(
+                group_roles, project_group_name
+            )
+
+            # Group admin → owner
+            if group_role_for_project == "admin":
+                result[project.id] = EffectivePermissions.from_role(
+                    ROLE_OWNER, group_role="admin", project_role=None, **common_kwargs
+                )
+                continue
+
+            # Explicit project_members row (already fetched in batch)
+            member = member_by_project.get(project.id)
+            if member:
+                result[project.id] = EffectivePermissions.from_role(
+                    member.role,
+                    group_role=group_role_for_project,
+                    project_role=member.role,
+                    **common_kwargs,
+                )
+                continue
+
+            # Legacy owner_id fallback
+            if str(project.owner_id) == user_sub:
+                result[project.id] = EffectivePermissions.from_role(
+                    ROLE_OWNER,
+                    group_role=group_role_for_project,
+                    project_role=ROLE_OWNER,
+                    **common_kwargs,
+                )
+                continue
+
+            # Group membership without explicit row → viewer
+            if group_role_for_project is not None:
+                result[project.id] = EffectivePermissions.from_role(
+                    ROLE_VIEWER,
+                    group_role=group_role_for_project,
+                    project_role=None,
+                    **common_kwargs,
+                )
+                continue
+
+            # No access
+            result[project.id] = EffectivePermissions.no_access(**common_kwargs)
+
+        return result
+
+    @staticmethod
     def resolve_global(user: Dict[str, Any]) -> Dict[str, Any]:
         """
         Resolve global (platform-level) permissions from JWT only.

@@ -42,14 +42,14 @@ import {
 import { SAQC_FUNCTIONS, getSaQCFunction, CUSTOM_FUNCTION_SENTINEL } from "@/lib/saqc-functions";
 import { useTranslation } from "@/lib/i18n";
 
-interface Props { token: string; }
+interface Props {}
 
 // ---------------------------------------------------------------------------
 // TriggerDialog
 // ---------------------------------------------------------------------------
 
-function TriggerDialog({ config, schemaName, token, onClose }: {
-    config: QAQCConfig; schemaName: string; token: string; onClose: () => void;
+function TriggerDialog({ config, schemaName, onClose }: {
+    config: QAQCConfig; schemaName: string; onClose: () => void;
 }) {
     const { t } = useTranslation();
     const [start, setStart] = useState("");
@@ -62,7 +62,7 @@ function TriggerDialog({ config, schemaName, token, onClose }: {
             qaqc_name: config.name,
             start_date: new Date(start).toISOString(),
             end_date: new Date(end).toISOString(),
-        }, token),
+        }),
         onSuccess: () => setSuccess(true),
         onError: (e: Error) => setError(e.message),
     });
@@ -116,8 +116,8 @@ function TriggerDialog({ config, schemaName, token, onClose }: {
 // TestRow
 // ---------------------------------------------------------------------------
 
-function TestRow({ test, schemaName, qaqcId, token, index, total }: {
-    test: QAQCTest; schemaName: string; qaqcId: number; token: string; index: number; total: number;
+function TestRow({ test, schemaName, qaqcId, index, total }: {
+    test: QAQCTest; schemaName: string; qaqcId: number; index: number; total: number;
 }) {
     const { t } = useTranslation();
     const qc = useQueryClient();
@@ -147,18 +147,18 @@ function TestRow({ test, schemaName, qaqcId, token, index, total }: {
                     }
                 }
             }
-            return smsUpdateQAQCTest(schemaName, qaqcId, test.id, { function: funcName, name: testName || null, args }, token);
+            return smsUpdateQAQCTest(schemaName, qaqcId, test.id, { function: funcName, name: testName || null, args });
         },
         onSuccess: () => { inv(); setEditing(false); },
     });
 
     const deleteMutation = useMutation({
-        mutationFn: () => smsDeleteQAQCTest(schemaName, qaqcId, test.id, token),
+        mutationFn: () => smsDeleteQAQCTest(schemaName, qaqcId, test.id),
         onSuccess: inv,
     });
 
     const moveMutation = useMutation({
-        mutationFn: (pos: number) => smsUpdateQAQCTest(schemaName, qaqcId, test.id, { position: pos }, token),
+        mutationFn: (pos: number) => smsUpdateQAQCTest(schemaName, qaqcId, test.id, { position: pos }),
         onSuccess: inv,
     });
 
@@ -233,8 +233,8 @@ function TestRow({ test, schemaName, qaqcId, token, index, total }: {
 // AddTestForm
 // ---------------------------------------------------------------------------
 
-function AddTestForm({ schemaName, qaqcId, token, onClose }: {
-    schemaName: string; qaqcId: number; token: string; onClose: () => void;
+function AddTestForm({ schemaName, qaqcId, onClose }: {
+    schemaName: string; qaqcId: number; onClose: () => void;
 }) {
     const { t } = useTranslation();
     const qc = useQueryClient();
@@ -260,7 +260,7 @@ function AddTestForm({ schemaName, qaqcId, token, onClose }: {
                     if (v !== undefined && v !== "") args[p.name] = p.type === "number" ? parseFloat(v) : p.type === "integer" ? parseInt(v) : v;
                 }
             }
-            return smsAddQAQCTest(schemaName, qaqcId, { function: finalFunc, name: testName || null, args, position: null, streams: null }, token);
+            return smsAddQAQCTest(schemaName, qaqcId, { function: finalFunc, name: testName || null, args, position: null, streams: null });
         },
         onSuccess: () => { qc.invalidateQueries({ queryKey: ["sms-qaqc", schemaName] }); onClose(); },
         onError: (e: Error) => setError(e.message),
@@ -326,7 +326,7 @@ function AddTestForm({ schemaName, qaqcId, token, onClose }: {
 // ConfigCard
 // ---------------------------------------------------------------------------
 
-function ConfigCard({ config, schemaName, token }: { config: QAQCConfig; schemaName: string; token: string }) {
+function ConfigCard({ config, schemaName }: { config: QAQCConfig; schemaName: string }) {
     const { t } = useTranslation();
     const qc = useQueryClient();
     const [expanded, setExpanded] = useState(false);
@@ -339,15 +339,15 @@ function ConfigCard({ config, schemaName, token }: { config: QAQCConfig; schemaN
     const inv = () => qc.invalidateQueries({ queryKey: ["sms-qaqc", schemaName] });
 
     const setDefaultMut = useMutation({
-        mutationFn: () => smsUpdateQAQCConfig(schemaName, config.id, { is_default: !config.is_default }, token),
+        mutationFn: () => smsUpdateQAQCConfig(schemaName, config.id, { is_default: !config.is_default }),
         onSuccess: inv,
     });
     const deleteMut = useMutation({
-        mutationFn: () => smsDeleteQAQCConfig(schemaName, config.id, token),
+        mutationFn: () => smsDeleteQAQCConfig(schemaName, config.id),
         onSuccess: inv,
     });
     const saveMut = useMutation({
-        mutationFn: () => smsUpdateQAQCConfig(schemaName, config.id, { name: editName, context_window: editWindow }, token),
+        mutationFn: () => smsUpdateQAQCConfig(schemaName, config.id, { name: editName, context_window: editWindow }),
         onSuccess: () => { inv(); setEditing(false); },
     });
 
@@ -389,10 +389,10 @@ function ConfigCard({ config, schemaName, token }: { config: QAQCConfig; schemaN
                         <p className="text-sm text-white/25 text-center py-3">{t('sms.qaqc.noTests')}</p>
                     )}
                     {config.tests.map((t, i) => (
-                        <TestRow key={t.id} test={t} schemaName={schemaName} qaqcId={config.id} token={token} index={i} total={config.tests.length} />
+                        <TestRow key={t.id} test={t} schemaName={schemaName} qaqcId={config.id} index={i} total={config.tests.length} />
                     ))}
                     {addingTest ? (
-                        <AddTestForm schemaName={schemaName} qaqcId={config.id} token={token} onClose={() => setAddingTest(false)} />
+                        <AddTestForm schemaName={schemaName} qaqcId={config.id} onClose={() => setAddingTest(false)} />
                     ) : (
                         <button onClick={() => setAddingTest(true)}
                             className="w-full mt-1 flex items-center justify-center gap-2 py-2 rounded-lg border border-dashed border-white/10 text-sm text-white/25 hover:text-white/50 hover:border-white/20">
@@ -401,7 +401,7 @@ function ConfigCard({ config, schemaName, token }: { config: QAQCConfig; schemaN
                     )}
                 </div>
             )}
-            {triggerOpen && <TriggerDialog config={config} schemaName={schemaName} token={token} onClose={() => setTriggerOpen(false)} />}
+            {triggerOpen && <TriggerDialog config={config} schemaName={schemaName} onClose={() => setTriggerOpen(false)} />}
         </div>
     );
 }
@@ -410,7 +410,7 @@ function ConfigCard({ config, schemaName, token }: { config: QAQCConfig; schemaN
 // SchemaSection
 // ---------------------------------------------------------------------------
 
-function SchemaSection({ schema, token }: { schema: QAQCSchemaInfo; token: string }) {
+function SchemaSection({ schema }: { schema: QAQCSchemaInfo }) {
     const { t } = useTranslation();
     const [expanded, setExpanded] = useState(false);
     const [creating, setCreating] = useState(false);
@@ -422,12 +422,12 @@ function SchemaSection({ schema, token }: { schema: QAQCSchemaInfo; token: strin
 
     const { data: configs, isLoading } = useQuery({
         queryKey: ["sms-qaqc", schema.schema_name],
-        queryFn: () => smsListQAQCConfigs(schema.schema_name, token),
+        queryFn: () => smsListQAQCConfigs(schema.schema_name),
         enabled: expanded,
     });
 
     const createMut = useMutation({
-        mutationFn: () => smsCreateQAQCConfig(schema.schema_name, { name: newName, context_window: newWindow, is_default: isDefault }, token),
+        mutationFn: () => smsCreateQAQCConfig(schema.schema_name, { name: newName, context_window: newWindow, is_default: isDefault }),
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ["sms-qaqc", schema.schema_name] });
             qc.invalidateQueries({ queryKey: ["qaqc-schemas"] });
@@ -455,7 +455,7 @@ function SchemaSection({ schema, token }: { schema: QAQCSchemaInfo; token: strin
                 <div className="px-5 py-4 space-y-3 border-t border-white/5">
                     {isLoading && <div className="flex items-center gap-2 text-white/30 text-sm"><Loader2 className="w-4 h-4 animate-spin" /> {t('sms.qaqc.loading')}</div>}
                     {configs && configs.map(cfg => (
-                        <ConfigCard key={cfg.id} config={cfg} schemaName={schema.schema_name} token={token} />
+                        <ConfigCard key={cfg.id} config={cfg} schemaName={schema.schema_name} />
                     ))}
 
                     {creating ? (
@@ -502,7 +502,7 @@ function SchemaSection({ schema, token }: { schema: QAQCSchemaInfo; token: strin
 // Custom Functions Section
 // ---------------------------------------------------------------------------
 
-function CustomFunctionsSection({ token }: { token: string }) {
+function CustomFunctionsSection() {
     const { t } = useTranslation();
     const qc = useQueryClient();
     const [expanded, setExpanded] = useState(false);
@@ -511,12 +511,12 @@ function CustomFunctionsSection({ token }: { token: string }) {
 
     const { data: functions, isLoading } = useQuery({
         queryKey: ["custom-saqc-functions"],
-        queryFn: () => listCustomQAQCFunctions(token),
+        queryFn: () => listCustomQAQCFunctions(),
         enabled: expanded,
     });
 
     const deleteMut = useMutation({
-        mutationFn: (name: string) => deleteCustomQAQCFunction(name, token),
+        mutationFn: (name: string) => deleteCustomQAQCFunction(name),
         onSuccess: () => qc.invalidateQueries({ queryKey: ["custom-saqc-functions"] }),
     });
 
@@ -526,7 +526,7 @@ function CustomFunctionsSection({ token }: { token: string }) {
         setUploading(true);
         setUploadError(null);
         try {
-            await uploadCustomQAQCFunction(file, token);
+            await uploadCustomQAQCFunction(file);
             qc.invalidateQueries({ queryKey: ["custom-saqc-functions"] });
         } catch (err: unknown) {
             setUploadError(err instanceof Error ? err.message : "Upload failed");
@@ -604,11 +604,11 @@ def flagHighTurbidity(saqc, field, threshold=100, **kwargs):
 // Main
 // ---------------------------------------------------------------------------
 
-export default function SMSQAQCClient({ token }: Props) {
+export default function SMSQAQCClient({}: Props) {
     const { t } = useTranslation();
     const { data: schemas, isLoading, error } = useQuery({
         queryKey: ["qaqc-schemas"],
-        queryFn: () => listQAQCSchemas(token),
+        queryFn: () => listQAQCSchemas(),
     });
 
     return (
@@ -642,14 +642,14 @@ export default function SMSQAQCClient({ token }: Props) {
             )}
             {schemas && (
                 <div className="space-y-3">
-                    {schemas.map(s => <SchemaSection key={s.id} schema={s} token={token} />)}
+                    {schemas.map(s => <SchemaSection key={s.id} schema={s} />)}
                 </div>
             )}
 
             {/* Custom functions */}
             <div className="mt-2">
                 <p className="text-xs text-white/25 uppercase tracking-wider mb-2 px-1">{t('sms.qaqc.customFunctions')}</p>
-                <CustomFunctionsSection token={token} />
+                <CustomFunctionsSection />
             </div>
         </div>
     );

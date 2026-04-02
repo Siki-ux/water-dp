@@ -3,13 +3,13 @@
 import { useState, useEffect } from "react";
 import { Search, Link as LinkIcon, Info } from "lucide-react";
 import { useEscapeKey } from '@/hooks/useEscapeKey';
+import api from '@/lib/api';
 
 interface SensorLinkModalProps {
     isOpen: boolean;
     onClose: () => void;
     onLink: (sensorId: string) => Promise<void>;
     projectId: string;
-    token: string;
 }
 
 export default function SensorLinkModal({
@@ -17,7 +17,6 @@ export default function SensorLinkModal({
     onClose,
     onLink,
     projectId,
-    token
 }: SensorLinkModalProps) {
     useEscapeKey(onClose, isOpen);
 
@@ -32,13 +31,8 @@ export default function SensorLinkModal({
         setLoading(true);
         setError("");
         try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
-            const res = await fetch(`${apiUrl}/projects/${projectId}/available-sensors`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (!res.ok) throw new Error("Failed to fetch available sensors");
-            const data = await res.json();
-            setAvailableSensors(data);
+            const res = await api.get(`/projects/${projectId}/available-sensors`);
+            setAvailableSensors(res.data);
         } catch (err: any) {
             setError(err.message);
         } finally {

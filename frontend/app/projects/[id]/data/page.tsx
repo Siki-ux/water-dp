@@ -2,7 +2,6 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useSession } from "next-auth/react";
 import React from "react";
 import { useSearchParams } from "next/navigation";
 import { ArrowUpRight } from "lucide-react";
@@ -14,13 +13,13 @@ import DatasetUploadModal from "@/components/data/DatasetUploadModal";
 import SensorLinkModal from "@/components/data/SensorLinkModal";
 import { useTranslation } from "@/lib/i18n";
 import { useProjectPermissions } from "@/hooks/usePermissions";
+import api from "@/lib/api";
 
 interface PageProps {
     params: Promise<{ id: string }>;
 }
 
 export default function ProjectDataPage({ params }: PageProps) {
-    const { data: session } = useSession();
     const { id } = React.use(params);
     const { t } = useTranslation();
     const { data: perms } = useProjectPermissions(id);
@@ -41,9 +40,8 @@ export default function ProjectDataPage({ params }: PageProps) {
 
     // Fetch Sensors Function
     const fetchSensors = useCallback(async (isLoadMore = false) => {
-        if (!session?.accessToken || !id) return;
+        if (!id) return;
 
-        // Prevent concurrent fetches or fetching if no more data
         if (isLoadMore && (!hasMore || isLoadingMore)) return;
 
         try {
@@ -51,15 +49,12 @@ export default function ProjectDataPage({ params }: PageProps) {
             else setLoading(true);
 
             const currentOffset = isLoadMore ? sensors.length : 0;
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
-            // Allow caching?
-            const res = await fetch(`${apiUrl}/projects/${id}/sensors?skip=${currentOffset}&limit=${LIMIT}`, {
-                headers: { Authorization: `Bearer ${session.accessToken}` }
+            const res = await api.get(`/projects/${id}/sensors`, {
+                params: { skip: currentOffset, limit: LIMIT }
             });
 
-            if (res.ok) {
-                const data = await res.json();
+            const data = res.data;
                 const mapped = data.map((t: any) => {
                     let lat = "";
                     let lon = "";
@@ -87,36 +82,28 @@ export default function ProjectDataPage({ params }: PageProps) {
 
                 // If we got fewer items than limit, we reached the end
                 setHasMore(mapped.length === LIMIT);
-            }
         } catch (err) {
             console.error("Failed to fetch sensors", err);
         } finally {
             setLoading(false);
             setIsLoadingMore(false);
         }
-    }, [session, id, sensors.length, hasMore, isLoadingMore]);
+    }, [id, sensors.length, hasMore, isLoadingMore]);
 
     // Initial Fetch
     useEffect(() => {
-        // Only fetch initial if empty or we want to force refresh on mount
-        // We can just call it once on mount
         fetchSensors(false);
-        // Disable auto-refresh for now as it conflicts with infinite scroll
-    }, [session?.accessToken, id]); // Dependencies minimized to avoid loops
+    }, [id]);
 
     // Fetch Grafana folder UID for this project
     useEffect(() => {
-        if (!session?.accessToken || !id) return;
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
-        fetch(`${apiUrl}/projects/${id}/grafana-folder`, {
-            headers: { Authorization: `Bearer ${session.accessToken}` }
-        })
-            .then(res => res.ok ? res.json() : null)
-            .then(data => {
-                if (data?.folder_uid) setGrafanaFolderUid(data.folder_uid);
+        if (!id) return;
+        api.get(`/projects/${id}/grafana-folder`)
+            .then(res => {
+                if (res.data?.folder_uid) setGrafanaFolderUid(res.data.folder_uid);
             })
             .catch(() => { });
-    }, [session?.accessToken, id]);
+    }, [id]);
 
     // ID param logic must wait for sensors to be loaded
     const searchParams = useSearchParams();
@@ -133,11 +120,7 @@ export default function ProjectDataPage({ params }: PageProps) {
 
     // Handlers
     const handleAddSensor = async (data: any) => {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
-
-        // Check if this is a dataset creation
         if (data.station_type === 'dataset') {
-            // Use the datasets API endpoint
             const payload = {
                 name: data.name,
                 description: data.description,
@@ -150,74 +133,31 @@ export default function ProjectDataPage({ params }: PageProps) {
                 filename_pattern: data.filename_pattern || "*.csv"
             };
 
-            const res = await fetch(`${apiUrl}/datasets/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${session?.accessToken}`
-                },
-                body: JSON.stringify(payload)
-            });
-
-            if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.detail || "Failed to create dataset");
-            }
+            await api.post('/datasets/', payload);
         } else {
-            // Regular sensor creation
-            const res = await fetch(`${apiUrl}/projects/${id}/sensors`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${session?.accessToken}`
-                },
-                body: JSON.stringify(data)
-            });
-
-            if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.detail || "Failed to create sensor");
-            }
+            await api.post(`/projects/${id}/sensors`, data);
         }
 
-        // Refresh and close
         await fetchSensors();
         setIsAddModalOpen(false);
     };
 
     const handleLinkSensor = async (sensorId: string) => {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
-        const res = await fetch(`${apiUrl}/projects/${id}/sensors?thing_uuid=${sensorId}`, {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${session?.accessToken}`
-            }
+        await api.post(`/projects/${id}/sensors`, null, {
+            params: { thing_uuid: sensorId }
         });
-
-        if (!res.ok) {
-            const err = await res.json();
-            throw new Error(err.detail || "Failed to link sensor");
-        }
 
         await fetchSensors();
         setIsLinkModalOpen(false);
     };
 
     const handleDeleteSensor = async (sensorId: string, deleteFromSource: boolean) => {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
         try {
-            const url = `${apiUrl}/projects/${id}/sensors/${sensorId}` + (deleteFromSource ? `?delete_from_source=true` : ``);
-            const res = await fetch(url, {
-                method: 'DELETE',
-                headers: { Authorization: `Bearer ${session?.accessToken}` }
+            await api.delete(`/projects/${id}/sensors/${sensorId}`, {
+                params: deleteFromSource ? { delete_from_source: true } : undefined
             });
-            if (res.ok) {
-                // Refresh list from server to ensure sync
-                await fetchSensors();
-                setSelectedSensor(null);
-            } else {
-                alert(t("projects.dataSources.deleteFail"));
-            }
+            await fetchSensors();
+            setSelectedSensor(null);
         } catch (e) {
             console.error("Delete failed", e);
             alert(t("projects.dataSources.deleteError"));
@@ -230,36 +170,14 @@ export default function ProjectDataPage({ params }: PageProps) {
     const handleUploadData = async (file: File, parameter: string) => {
         if (!uploadSensor) return;
         const thingId = uploadSensor.id;
-        const stationIdStr = uploadSensor.station_id || String(uploadSensor.id); // Or use what API expects?
-        // My implementation in project_data.py uses `station_id_str` to verify against project, 
-        // AND then constructs series_id using it.
-        // Wait, the API `import_project_thing_data` uses `station_id_str` as path param.
-        // BUT it verifies `if station_id_str not in sensors`.
-        // AND `ProjectService.list_sensors` returns internal IDs (int/uuid).
-        // So I must use the INTERNAL thing ID as the text in path.
-        // Let's ensure consistent usage.
 
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
         const formData = new FormData();
         formData.append("file", file);
 
-        // Parameter is query param
-        const res = await fetch(`${apiUrl}/projects/${id}/things/${thingId}/import?parameter=${parameter}`, {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${session?.accessToken}`
-            },
-            body: formData
+        await api.post(`/projects/${id}/things/${thingId}/import`, formData, {
+            params: { parameter },
+            headers: { 'Content-Type': 'multipart/form-data' }
         });
-
-        if (!res.ok) {
-            const err = await res.json();
-            const detail = err.detail;
-            const errMsg = typeof detail === 'object' ? JSON.stringify(detail) : (detail || "Upload failed");
-            throw new Error(errMsg);
-        }
-
-        // Success
     };
 
     return (
@@ -309,7 +227,6 @@ export default function ProjectDataPage({ params }: PageProps) {
                     sensor={selectedSensor}
                     isOpen={!!selectedSensor}
                     onClose={() => setSelectedSensor(null)}
-                    token={session?.accessToken || ""}
                     onDelete={handleDeleteSensor}
                 />
             )}
@@ -347,7 +264,6 @@ export default function ProjectDataPage({ params }: PageProps) {
                 onClose={() => setIsLinkModalOpen(false)}
                 onLink={handleLinkSensor}
                 projectId={id}
-                token={session?.accessToken || ""}
             />
         </div>
     );

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Upload, FileCode, Play, Save, X, Terminal, Clock, CheckCircle, XCircle } from 'lucide-react';
 import { useParams, useSearchParams } from 'next/navigation';
+import api from '@/lib/api';
 
 interface ComputationScript {
     id: string;
@@ -24,10 +25,9 @@ interface ComputationJob {
 }
 
 interface ComputationsClientProps {
-    token: string;
 }
 
-export default function ComputationsClient({ token }: ComputationsClientProps) {
+export default function ComputationsClient({}: ComputationsClientProps) {
     const params = useParams();
     const projectId = params.id as string;
     const queryClient = useQueryClient();
@@ -38,13 +38,10 @@ export default function ComputationsClient({ token }: ComputationsClientProps) {
     const { data: scripts = [], isLoading } = useQuery({
         queryKey: ['computations', projectId],
         queryFn: async () => {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/computations/list/${projectId}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (!res.ok) throw new Error('Failed to fetch scripts');
-            return await res.json() as ComputationScript[];
+            const res = await api.get(`/computations/list/${projectId}`);
+            return res.data as ComputationScript[];
         },
-        enabled: !!token && !!projectId
+        enabled: !!projectId
     });
 
     // Handle ID query param
@@ -114,7 +111,6 @@ export default function ComputationsClient({ token }: ComputationsClientProps) {
                 {selectedScript ? (
                     <ScriptEditor
                         script={selectedScript}
-                        token={token}
                         onClose={() => setSelectedScript(null)}
                     />
                 ) : (
@@ -129,7 +125,6 @@ export default function ComputationsClient({ token }: ComputationsClientProps) {
             {isUploadOpen && (
                 <UploadModal
                     projectId={projectId}
-                    token={token}
                     onClose={() => setIsUploadOpen(false)}
                     onSuccess={() => {
                         queryClient.invalidateQueries({ queryKey: ['computations', projectId] });
@@ -143,7 +138,7 @@ export default function ComputationsClient({ token }: ComputationsClientProps) {
 
 // --- Sub-components ---
 
-function ScriptEditor({ script, token, onClose }: { script: ComputationScript, token: string, onClose: () => void }) {
+function ScriptEditor({ script, onClose }: { script: ComputationScript, onClose: () => void }) {
     const [code, setCode] = useState('');
     const [isDirty, setIsDirty] = useState(false);
     const queryClient = useQueryClient();
@@ -152,13 +147,9 @@ function ScriptEditor({ script, token, onClose }: { script: ComputationScript, t
     const { isLoading: isLoadingContent } = useQuery({
         queryKey: ['computationContent', script.id],
         queryFn: async () => {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/computations/content/${script.id}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (!res.ok) throw new Error('Failed to load content');
-            const data = await res.json();
-            setCode(data.content);
-            return data;
+            const res = await api.get(`/computations/content/${script.id}`);
+            setCode(res.data.content);
+            return res.data;
         },
         enabled: !!script.id
     });
@@ -167,11 +158,8 @@ function ScriptEditor({ script, token, onClose }: { script: ComputationScript, t
     const { data: jobs = [] } = useQuery({
         queryKey: ['computationJobs', script.id],
         queryFn: async () => {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/computations/jobs/${script.id}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (!res.ok) return [];
-            return await res.json() as ComputationJob[];
+            const res = await api.get(`/computations/jobs/${script.id}`);
+            return res.data as ComputationJob[];
         },
         enabled: !!script.id,
         refetchInterval: 5000 // Poll for status updates
@@ -180,39 +168,19 @@ function ScriptEditor({ script, token, onClose }: { script: ComputationScript, t
     // Save Mutation
     const saveMutation = useMutation({
         mutationFn: async (newContent: string) => {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/computations/content/${script.id}`, {
-                method: 'PUT',
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ content: newContent })
-            });
-            if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.detail || 'Failed to save');
-            }
-            return await res.json();
+            const res = await api.put(`/computations/content/${script.id}`, { content: newContent });
+            return res.data;
         },
         onSuccess: () => {
             setIsDirty(false);
-            // Could show toast success here
         }
     });
 
     // Run Mutation (Trigger Job)
     const runMutation = useMutation({
         mutationFn: async () => {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/computations/run/${script.id}`, {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ params: {} }) // Empty params for now
-            });
-            if (!res.ok) throw new Error('Failed to run task');
-            return await res.json();
+            const res = await api.post(`/computations/run/${script.id}`, { params: {} });
+            return res.data;
         },
         onSuccess: (data) => {
             // Invalidate jobs to show new one immediately
@@ -340,7 +308,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 
-function UploadModal({ projectId, token, onClose, onSuccess }: { projectId: string, token: string, onClose: () => void, onSuccess: () => void }) {
+function UploadModal({ projectId, onClose, onSuccess }: { projectId: string, onClose: () => void, onSuccess: () => void }) {
     const [file, setFile] = useState<File | null>(null);
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
@@ -356,17 +324,10 @@ function UploadModal({ projectId, token, onClose, onSuccess }: { projectId: stri
             formData.append('description', description);
             formData.append('project_id', projectId);
 
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/computations/upload`, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${token}` },
-                body: formData
+            const res = await api.post('/computations/upload', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
             });
-
-            if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.detail || 'Upload failed');
-            }
-            return await res.json();
+            return res.data;
         },
         onSuccess,
         onError: (err) => setError(err.message)

@@ -53,8 +53,8 @@ async def create_project(
 
 @router.get("/", response_model=List[ProjectResponse])
 async def list_projects(
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
     group_id: Optional[str] = Query(
         None, description="Filter by Keycloak group ID or name"
     ),
@@ -67,12 +67,35 @@ async def list_projects(
     projects = ProjectService.list_projects(
         database, user, skip=skip, limit=limit, group_id=group_id
     )
-    # Annotate each project with the requesting user's effective role (avoids N+1 on frontend)
+    # Batch-resolve permissions for all projects in one query (avoids N+1)
+    perms_map = PermissionResolver.resolve_batch(user, projects, database)
+
+    # Batch-count linked sensors per project (avoids N+1)
+    from sqlalchemy import func, select
+    from app.models.user_context import project_sensors
+
+    project_ids = [p.id for p in projects]
+    if project_ids:
+        count_stmt = (
+            select(
+                project_sensors.c.project_id,
+                func.count().label("cnt"),
+            )
+            .where(project_sensors.c.project_id.in_(project_ids))
+            .group_by(project_sensors.c.project_id)
+        )
+        sensor_counts = {
+            row.project_id: row.cnt
+            for row in database.execute(count_stmt).all()
+        }
+    else:
+        sensor_counts = {}
+
     result = []
     for p in projects:
-        perms = PermissionResolver.resolve(user, p, database)
         resp = ProjectResponse.model_validate(p)
-        resp.user_role = perms.effective_role
+        resp.user_role = perms_map[p.id].effective_role
+        resp.sensor_count = sensor_counts.get(p.id, 0)
         result.append(resp)
     return result
 

@@ -304,7 +304,7 @@ export default async function SensorDetailPage({ params }: { params: Promise<{ u
             </div>
 
             {/* QA/QC Override */}
-            <SensorQAQCSection sensorUuid={sensor.uuid} token={session?.accessToken || ''} />
+            <SensorQAQCSection sensorUuid={sensor.uuid} />
 
         </div >
     );

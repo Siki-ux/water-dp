@@ -1,35 +1,26 @@
-import { auth } from "@/lib/auth";
+"use client";
+
 import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Loader2 } from "lucide-react";
 import { Dashboard } from "@/types/dashboard";
 import DashboardEditor from "@/components/dashboard/DashboardEditor";
-import { getApiUrl } from "@/lib/utils";
+import { useParams } from "next/navigation";
+import { useDashboard } from "@/hooks/queries/useDashboards";
 
-async function getDashboard(dashboardId: string) {
-    const session = await auth();
-    if (!session?.accessToken) return null;
+export default function DashboardPage() {
+    const params = useParams();
+    const id = params.id as string;
+    const dashboardId = params.dashboardId as string;
+    const { data: dashboard, isLoading } = useDashboard(dashboardId);
 
-    const apiUrl = getApiUrl();
-
-    try {
-        const res = await fetch(`${apiUrl}/dashboards/${dashboardId}`, {
-            headers: {
-                Authorization: `Bearer ${session.accessToken}`,
-            },
-            cache: 'no-store'
-        });
-
-        if (!res.ok) return null;
-        return await res.json() as Dashboard;
-    } catch (error) {
-        console.error("Error fetching dashboard:", error);
-        return null;
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center py-20 text-white/40">
+                <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                Loading dashboard…
+            </div>
+        );
     }
-}
-
-export default async function DashboardPage({ params }: { params: Promise<{ id: string, dashboardId: string }> }) {
-    const { id, dashboardId } = await params;
-    const dashboard = await getDashboard(dashboardId);
 
     if (!dashboard) {
         return (
@@ -53,21 +44,21 @@ export default async function DashboardPage({ params }: { params: Promise<{ id: 
                         <ChevronLeft className="w-5 h-5" />
                     </Link>
                     <div>
-                        <h1 className="text-2xl font-bold text-white">{dashboard.name}</h1>
+                        <h1 className="text-2xl font-bold text-white">{(dashboard as Dashboard).name}</h1>
                         <div className="flex items-center gap-2 text-sm text-white/50">
-                            {dashboard.is_public ? (
+                            {(dashboard as Dashboard).is_public ? (
                                 <span className="px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 border border-green-500/30 text-xs">Public</span>
                             ) : (
                                 <span className="px-2 py-0.5 rounded-full bg-white/10 border border-white/10 text-xs">Private</span>
                             )}
-                            <span>Updated {new Date(dashboard.updated_at).toLocaleDateString()}</span>
+                            <span>Updated {new Date((dashboard as Dashboard).updated_at).toLocaleDateString()}</span>
                         </div>
                     </div>
                 </div>
             </header>
 
             <main className="flex-1 bg-white/5 rounded-xl border border-white/10 overflow-hidden">
-                <DashboardEditor dashboard={dashboard} />
+                <DashboardEditor dashboard={dashboard as Dashboard} />
             </main>
         </div>
     );

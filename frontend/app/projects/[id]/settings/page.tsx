@@ -1,11 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Save, Trash2, UserPlus, X } from "lucide-react";
-import axios from "axios";
 import { useTranslation } from "@/lib/i18n";
 import { use } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -15,7 +13,6 @@ import { useProjectPermissions } from "@/hooks/usePermissions";
 export default function ProjectSettingsPage({ params }: { params: Promise<{ id: string }> }) {
     // Use React.use() to unwrap the promise in client component
     const { id } = use(params);
-    const { data: session } = useSession();
     const router = useRouter();
     const { t } = useTranslation();
     const { data: perms } = useProjectPermissions(id);
@@ -28,28 +25,20 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ id: 
     const [name, setName] = useState("");
     const [desc, setDesc] = useState("");
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
-
     useEffect(() => {
-        // console.log("Settings Page Session:", session);
-        if (session?.accessToken && id) {
+        if (id) {
             fetchProject();
-        } else if (session && !session.accessToken) {
-            // Session missing accessToken — handled by auth flow
         }
-    }, [session, id]);
+    }, [id]);
 
     const fetchProject = async () => {
         try {
-            const res = await axios.get(`${apiUrl}/projects/${id}`, {
-                headers: { Authorization: `Bearer ${session?.accessToken}` }
-            });
+            const res = await api.get(`/projects/${id}`);
             setProject(res.data);
             setName(res.data.name);
             setDesc(res.data.description || "");
         } catch (error: any) {
             console.error("Fetch Project Error:", error.response?.data || error.message);
-            // Optionally set an error state to show in UI
         } finally {
             setLoading(false);
         }
@@ -59,13 +48,10 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ id: 
         e.preventDefault();
         setSaving(true);
         try {
-            await axios.put(`${apiUrl}/projects/${id}`, {
+            await api.put(`/projects/${id}`, {
                 name,
                 description: desc
-            }, {
-                headers: { Authorization: `Bearer ${session?.accessToken}` }
             });
-            // alert("Project updated successfully");
             router.refresh();
         } catch (error) {
             console.error("Failed to update project", error);
@@ -80,9 +66,7 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ id: 
         }
 
         try {
-            await axios.delete(`${apiUrl}/projects/${id}`, {
-                headers: { Authorization: `Bearer ${session?.accessToken}` }
-            });
+            await api.delete(`/projects/${id}`);
             router.push("/projects");
         } catch (error) {
             console.error("Failed to delete project", error);

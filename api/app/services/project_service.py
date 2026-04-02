@@ -12,7 +12,7 @@ from uuid import UUID
 
 from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.core.exceptions import (
     AuthorizationException,
@@ -403,7 +403,7 @@ class ProjectService:
         )
 
         if admin:
-            query = db.query(Project)
+            query = db.query(Project).options(selectinload(Project.members))
             if group_id:
                 query = query.filter(
                     or_(
@@ -453,7 +453,9 @@ class ProjectService:
                 )
             )
 
-            query = db.query(Project).filter(or_(*criteria))
+            query = db.query(Project).options(
+                selectinload(Project.members)
+            ).filter(or_(*criteria))
 
             # Optional group filter
             if group_id:
@@ -728,12 +730,16 @@ class ProjectService:
 
         logger.info(f"Expand: {expand}")
         thing_service = ThingService(project.schema_name)
-        # Fetch all things (use a high limit if needed, or default)
-        all_sensors: List[Thing] = thing_service.get_things(expand, top=1000)
-
-        linked_things: List[Thing] = [
-            thing for thing in all_sensors if thing.sensor_uuid in linked_uuids
+        # Build $filter with or-chained identifiers/uuid (some Things only
+        # have properties/uuid injected by the DB view, not properties/identifier)
+        filter_parts = [
+            f"(properties/identifier eq '{uuid}' or properties/uuid eq '{uuid}')"
+            for uuid in linked_uuids
         ]
+        filter_expr = " or ".join(filter_parts)
+        linked_things: List[Thing] = thing_service.get_things(
+            expand, filter_expr=filter_expr, top=len(linked_uuids)
+        )
 
         # Optimization: Fetch last activity timestamp
         if linked_things:

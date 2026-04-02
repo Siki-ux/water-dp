@@ -198,3 +198,129 @@ def test_get_linked_sensors(mock_resolver, mock_db_session, mock_user):
                 mock_db_session, project_id, mock_user
             )
             assert len(result) == 1
+
+
+@patch("app.services.project_service.PermissionResolver")
+def test_get_linked_sensors_frost_filter_uses_both_identifier_and_uuid(
+    mock_resolver, mock_db_session, mock_user
+):
+    """
+    Verify the FROST $filter queries both properties/identifier and properties/uuid,
+    since simulated things only have properties/uuid injected by the DB view.
+    """
+    project_id = uuid.uuid4()
+    thing_uuid = "22222222-2222-2222-2222-222222222222"
+    project = Project(
+        id=project_id,
+        name="p2",
+        owner_id=mock_user["sub"],
+        authorization_provider_group_id="g1",
+        schema_name="sim_schema",
+    )
+
+    mock_db_session.query.return_value.filter.return_value.first.return_value = project
+
+    mock_perms = MagicMock()
+    mock_perms.can_view = True
+    mock_perms.effective_role = "viewer"
+    mock_resolver.resolve.return_value = mock_perms
+
+    mock_db_session.execute.return_value.scalars.return_value.all.return_value = [
+        uuid.UUID(thing_uuid)
+    ]
+
+    mock_thing = MagicMock()
+    mock_thing.sensor_uuid = thing_uuid
+    mock_thing.name = "simulated_sensor"
+
+    with patch("app.services.project_service.ThingService") as mock_thing_svc:
+        mock_thing_svc.return_value.get_things.return_value = [mock_thing]
+
+        with patch("app.services.project_service.TimeIODatabase"):
+            ProjectService.get_linked_sensors(
+                mock_db_session, project_id, mock_user
+            )
+
+            # Verify ThingService.get_things was called with the dual filter
+            call_args = mock_thing_svc.return_value.get_things.call_args
+            filter_arg = call_args[1].get("filter_expr") or call_args[0][1]
+            assert f"properties/identifier eq '{thing_uuid}'" in filter_arg
+            assert f"properties/uuid eq '{thing_uuid}'" in filter_arg
+            assert " or " in filter_arg
+
+
+@patch("app.services.project_service.PermissionResolver")
+def test_get_linked_sensors_multiple_uuids_filter(
+    mock_resolver, mock_db_session, mock_user
+):
+    """Verify that multiple linked UUIDs produce or-chained filter."""
+    project_id = uuid.uuid4()
+    uuid1 = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    uuid2 = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+    project = Project(
+        id=project_id,
+        name="multi",
+        owner_id=mock_user["sub"],
+        authorization_provider_group_id="g1",
+        schema_name="multi_schema",
+    )
+
+    mock_db_session.query.return_value.filter.return_value.first.return_value = project
+
+    mock_perms = MagicMock()
+    mock_perms.can_view = True
+    mock_perms.effective_role = "viewer"
+    mock_resolver.resolve.return_value = mock_perms
+
+    mock_db_session.execute.return_value.scalars.return_value.all.return_value = [
+        uuid.UUID(uuid1),
+        uuid.UUID(uuid2),
+    ]
+
+    with patch("app.services.project_service.ThingService") as mock_thing_svc:
+        mock_thing_svc.return_value.get_things.return_value = []
+
+        with patch("app.services.project_service.TimeIODatabase"):
+            ProjectService.get_linked_sensors(
+                mock_db_session, project_id, mock_user
+            )
+
+            call_args = mock_thing_svc.return_value.get_things.call_args
+            filter_arg = call_args[1].get("filter_expr") or call_args[0][1]
+            # Each UUID should have both identifier and uuid checks
+            assert f"properties/identifier eq '{uuid1}'" in filter_arg
+            assert f"properties/uuid eq '{uuid1}'" in filter_arg
+            assert f"properties/identifier eq '{uuid2}'" in filter_arg
+            assert f"properties/uuid eq '{uuid2}'" in filter_arg
+
+
+@patch("app.services.project_service.PermissionResolver")
+def test_get_linked_sensors_no_schema(mock_resolver, mock_db_session, mock_user):
+    """Projects without schema_name should return basic info without FROST data."""
+    project_id = uuid.uuid4()
+    thing_uuid = "cccccccc-cccc-cccc-cccc-cccccccccccc"
+    project = Project(
+        id=project_id,
+        name="no_schema",
+        owner_id=mock_user["sub"],
+        authorization_provider_group_id=None,
+        schema_name=None,
+    )
+
+    mock_db_session.query.return_value.filter.return_value.first.return_value = project
+
+    mock_perms = MagicMock()
+    mock_perms.can_view = True
+    mock_perms.effective_role = "viewer"
+    mock_resolver.resolve.return_value = mock_perms
+
+    mock_db_session.execute.return_value.scalars.return_value.all.return_value = [
+        uuid.UUID(thing_uuid)
+    ]
+
+    result = ProjectService.get_linked_sensors(
+        mock_db_session, project_id, mock_user
+    )
+    assert len(result) == 1
+    assert result[0]["thing_uuid"] == thing_uuid
+    assert result[0]["status"] == "schema_not_assigned"

@@ -12,6 +12,8 @@ interface DeviceTypesClientProps {
 export function DeviceTypesClient({ deviceTypes }: DeviceTypesClientProps) {
     const { t } = useTranslation();
 
+    const isCustom = (dt: any) => dt.properties?.script_bucket;
+
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-5 duration-700">
             <div className="flex items-center justify-between">
@@ -51,12 +53,25 @@ export function DeviceTypesClient({ deviceTypes }: DeviceTypesClientProps) {
                                         </td>
                                         <td className="p-4">
                                             <div className="flex items-center gap-3">
-                                                <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400 group-hover:bg-blue-500/20 transition-colors">
+                                                <div className={`p-2 rounded-lg transition-colors ${
+                                                    isCustom(dt)
+                                                    ? 'bg-purple-500/10 text-purple-400 group-hover:bg-purple-500/20'
+                                                    : 'bg-blue-500/10 text-blue-400 group-hover:bg-blue-500/20'
+                                                }`}>
                                                     <Cpu className="w-4 h-4" />
                                                 </div>
-                                                <Link href={`/sms/device-types/${dt.id}`} className="font-medium text-[var(--foreground)] group-hover:text-blue-500 transition-colors hover:underline">
-                                                    {dt.name}
-                                                </Link>
+                                                <div>
+                                                    <Link href={`/sms/device-types/${dt.id}`} className="font-medium text-[var(--foreground)] group-hover:text-blue-500 transition-colors hover:underline">
+                                                        {dt.name}
+                                                    </Link>
+                                                    <span className={`ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full uppercase ${
+                                                        isCustom(dt)
+                                                        ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30'
+                                                        : 'bg-blue-500/15 text-blue-400 border border-blue-500/30'
+                                                    }`}>
+                                                        {isCustom(dt) ? t('sms.apiTypes.custom') : t('sms.apiTypes.builtIn')}
+                                                    </span>
+                                                </div>
                                             </div>
                                         </td>
                                         <td className="p-4">

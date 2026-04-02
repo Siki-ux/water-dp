@@ -4,19 +4,22 @@ import sys
 import time
 
 # Minimal dependencies check
+_pip_extra = ""
+if os.getenv("SKIP_SSL_VERIFY", "false").lower() == "true":
+    _pip_extra = " --trusted-host pypi.org --trusted-host files.pythonhosted.org"
 
 try:
     import requests
 except ImportError:
     print("Requests module not found. Installing...")
-    os.system("pip install requests")
+    os.system(f"pip install{_pip_extra} requests")
     import requests
 
 try:
     import psycopg2
 except ImportError:
     print("psycopg2 module not found. Installing...")
-    os.system("pip install psycopg2-binary")
+    os.system(f"pip install{_pip_extra} psycopg2-binary")
     import psycopg2
 
 import glob

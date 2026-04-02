@@ -11,9 +11,15 @@ import { useTranslation } from "@/lib/i18n";
 interface ApiTypeCreateDialogProps {
     isOpen: boolean;
     onClose: () => void;
+    editMode?: boolean;
+    initialData?: {
+        id: string;
+        name: string;
+        code?: string;
+    };
 }
 
-export function ApiTypeCreateDialog({ isOpen, onClose }: ApiTypeCreateDialogProps) {
+export function ApiTypeCreateDialog({ isOpen, onClose, editMode = false, initialData }: ApiTypeCreateDialogProps) {
     const { data: session } = useSession();
     const router = useRouter();
     const [loading, setLoading] = useState(false);
@@ -29,12 +35,21 @@ export function ApiTypeCreateDialog({ isOpen, onClose }: ApiTypeCreateDialogProp
     });
 
     useEffect(() => {
-        if (isOpen) {
+        if (isOpen && initialData) {
+            setFormData({
+                name: initialData.name,
+                code: initialData.code || "",
+                file: null
+            });
+            if (initialData.code) {
+                setActiveTab("write");
+            }
+        } else if (isOpen && !editMode) {
             setFormData({ name: "", code: "", file: null });
             setError(null);
             setActiveTab("write");
         }
-    }, [isOpen]);
+    }, [isOpen, initialData, editMode]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -116,9 +131,9 @@ export function ApiTypeCreateDialog({ isOpen, onClose }: ApiTypeCreateDialogProp
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="max-w-2xl bg-card border-border text-[var(--foreground)]">
                 <DialogHeader>
-                    <DialogTitle>{t('sms.apiTypes.createTitle')}</DialogTitle>
+                    <DialogTitle>{editMode ? t('sms.apiTypes.editTitle') : t('sms.apiTypes.createTitle')}</DialogTitle>
                     <DialogDescription>
-                        {t('sms.apiTypes.createDesc')}
+                        {editMode ? t('sms.apiTypes.editDesc') : t('sms.apiTypes.createDesc')}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -138,8 +153,9 @@ export function ApiTypeCreateDialog({ isOpen, onClose }: ApiTypeCreateDialogProp
                             value={formData.name}
                             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                             placeholder={t('sms.apiTypes.placeholderName')}
-                            className="w-full bg-muted/50 border border-border rounded-lg px-4 py-2 text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                            className="w-full bg-muted/50 border border-border rounded-lg px-4 py-2 text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-60"
                             required
+                            disabled={editMode}
                         />
                         <p className="text-xs text-[var(--foreground)]/40">{t('sms.apiTypes.apiTypeDesc')}</p>
                     </div>
@@ -177,7 +193,7 @@ export function ApiTypeCreateDialog({ isOpen, onClose }: ApiTypeCreateDialogProp
                                 value={formData.code}
                                 onChange={(e) => setFormData({ ...formData, code: e.target.value })}
                                 placeholder={t('sms.apiTypes.placeholderCode')}
-                                className="w-full h-64 bg-[#1A1A1A] border border-border rounded-lg p-4 font-mono text-sm text-[var(--foreground)]/90 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-y"
+                                className="w-full h-64 bg-muted border border-border rounded-lg p-4 font-mono text-sm text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-y"
                                 spellCheck={false}
                             />
                         ) : (
@@ -217,7 +233,7 @@ export function ApiTypeCreateDialog({ isOpen, onClose }: ApiTypeCreateDialogProp
                             className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                            {t('sms.apiTypes.createSubmit')}
+                            {editMode ? t('sms.apiTypes.saveChanges') : t('sms.apiTypes.createSubmit')}
                         </button>
                     </div>
                 </form>

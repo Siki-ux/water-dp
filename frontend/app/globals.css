@@ -1,0 +1,286 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Cleaner light mode colors (slate/blue tinted) */
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #020617;
+  --popover: #ffffff;
+  --popover-foreground: #020617;
+  --primary: #0070f3;
+  --primary-foreground: #ffffff;
+  --secondary: #e2e8f0;
+  --secondary-foreground: #0f172a;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --accent: #f1f5f9;
+  --accent-foreground: #0f172a;
+  --border: #cbd5e1;
+  --input: #e2e8f0;
+  --ring: #94a3b8;
+  --header-bg: rgba(255, 255, 255, 0.8);
+  --sidebar-bg: rgba(255, 255, 255, 0.6);
+  --water-depth-bg: #f8fafc;
+  /* Replaces the hardcoded tailwind linear gradient for light mode */
+}
+
+.dark {
+  /* Richer dark mode */
+  --background: #000000;
+  --foreground: #ffffff;
+  --card: #0f172a;
+  --card-foreground: #f8fafc;
+  --popover: #0f172a;
+  --popover-foreground: #f8fafc;
+  --primary: #0070f3;
+  --primary-foreground: #ffffff;
+  --secondary: #1e293b;
+  --secondary-foreground: #f8fafc;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+  --accent: #1e293b;
+  --accent-foreground: #f8fafc;
+  --border: rgba(255, 255, 255, 0.1);
+  --input: #1e293b;
+  --ring: #cbd5e1;
+  --header-bg: rgba(0, 0, 0, 0.4);
+  --sidebar-bg: rgba(15, 23, 42, 0.6);
+  --water-depth-bg: linear-gradient(to bottom, #000000 0%, #031024 100%);
+}
+
+/* Fix native <select> and <option> in dark mode — browser defaults ignore CSS vars */
+.dark select,
+.dark select option {
+  background-color: var(--muted);
+  color: var(--foreground);
+  color-scheme: dark;
+}
+
+/* Ensure inputs also follow dark theme */
+.dark input[type="number"],
+.dark input[type="text"],
+.dark input[type="password"],
+.dark input[type="datetime-local"],
+.dark textarea {
+  color-scheme: dark;
+  background-color: var(--muted);
+  color: var(--foreground);
+}
+
+@layer utilities {
+
+  /* 
+   * Global Overrides for Light Mode
+   * The app was built with hardcoded dark-mode tailwind classes (bg-black/20, text-white, etc).
+   * Instead of editing 60+ components, we invert their meaning in light mode.
+   */
+  :root:not(.dark) {
+    .bg-white\/5 {
+      background-color: rgba(15, 23, 42, 0.05) !important;
+    }
+
+    .bg-white\/10 {
+      background-color: rgba(15, 23, 42, 0.1) !important;
+    }
+
+    .border-white\/5 {
+      border-color: rgba(15, 23, 42, 0.05) !important;
+    }
+
+    .border-white\/10 {
+      border-color: rgba(15, 23, 42, 0.1) !important;
+    }
+
+    .border-white\/20 {
+      border-color: rgba(15, 23, 42, 0.2) !important;
+    }
+
+    .text-white {
+      color: #0f172a !important;
+    }
+
+    .text-white\/20 {
+      color: rgba(15, 23, 42, 0.28) !important;
+    }
+
+    .text-white\/25 {
+      color: rgba(15, 23, 42, 0.35) !important;
+    }
+
+    .text-white\/30 {
+      color: rgba(15, 23, 42, 0.42) !important;
+    }
+
+    .text-white\/35 {
+      color: rgba(15, 23, 42, 0.48) !important;
+    }
+
+    .text-white\/40 {
+      color: rgba(15, 23, 42, 0.54) !important;
+    }
+
+    .text-white\/50 {
+      color: rgba(15, 23, 42, 0.64) !important;
+    }
+
+    .text-white\/60 {
+      color: rgba(15, 23, 42, 0.72) !important;
+    }
+
+    .text-white\/70 {
+      color: rgba(15, 23, 42, 0.82) !important;
+    }
+
+    .text-white\/80 {
+      color: rgba(15, 23, 42, 0.9) !important;
+    }
+
+    .text-blue-400 {
+      color: #0284c7 !important;
+    }
+
+    .bg-black\/20 {
+      background-color: rgba(255, 255, 255, 0.8) !important;
+    }
+
+    .bg-black\/30 {
+      background-color: rgba(255, 255, 255, 0.9) !important;
+    }
+
+    .bg-black\/40 {
+      background-color: rgba(241, 245, 249, 0.9) !important;
+    }
+
+    .bg-black\/50 {
+      background-color: rgba(241, 245, 249, 1) !important;
+    }
+
+    .bg-black\/60 {
+      background-color: rgba(255, 255, 255, 0.85) !important;
+    }
+
+    .bg-black\/80 {
+      background-color: rgba(255, 255, 255, 0.95) !important;
+    }
+
+    .bg-white\/5 {
+      background-color: rgba(0, 0, 0, 0.03) !important;
+    }
+
+    .bg-white\/10 {
+      background-color: rgba(0, 0, 0, 0.06) !important;
+    }
+
+    .border-white\/5 {
+      border-color: rgba(0, 0, 0, 0.05) !important;
+    }
+
+    .border-white\/10 {
+      border-color: rgba(0, 0, 0, 0.1) !important;
+    }
+
+    /* Additional fractional bg/border classes used by QA/QC and other newer components */
+    .bg-white\/2 {
+      background-color: rgba(0, 0, 0, 0.015) !important;
+    }
+
+    .bg-white\/3 {
+      background-color: rgba(0, 0, 0, 0.02) !important;
+    }
+
+    .bg-white\/4 {
+      background-color: rgba(0, 0, 0, 0.03) !important;
+    }
+
+    .border-white\/30 {
+      border-color: rgba(15, 23, 42, 0.3) !important;
+    }
+
+    .border-white\/15 {
+      border-color: rgba(15, 23, 42, 0.15) !important;
+    }
+
+    .hover\:bg-white\/4:hover {
+      background-color: rgba(0, 0, 0, 0.03) !important;
+    }
+
+    .hover\:text-white\/50:hover {
+      color: rgba(15, 23, 42, 0.64) !important;
+    }
+
+    .hover\:text-white\/70:hover {
+      color: rgba(15, 23, 42, 0.82) !important;
+    }
+
+    .hover\:border-white\/20:hover {
+      border-color: rgba(15, 23, 42, 0.2) !important;
+    }
+
+    .hover\:text-white:hover {
+      color: #020617 !important;
+    }
+
+    .hover\:bg-white\/5:hover {
+      background-color: rgba(0, 0, 0, 0.05) !important;
+    }
+
+    .hover\:bg-white\/10:hover {
+      background-color: rgba(0, 0, 0, 0.08) !important;
+    }
+
+    .hover\:border-white\/10:hover {
+      border-color: rgba(0, 0, 0, 0.15) !important;
+    }
+
+    /* Used natively for layout backgrounds */
+    .bg-water-depth {
+      background: var(--water-depth-bg) !important;
+    }
+  }
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* MapLibre Popup Customization */
+.hydro-map-popup .maplibregl-popup-content {
+  background: var(--popover);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 0;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+  color: var(--foreground);
+  overflow: hidden;
+}
+
+.hydro-map-popup .maplibregl-popup-tip {
+  border-top-color: var(--popover);
+  border-bottom-color: transparent;
+}
+
+/* Fix for bottom anchored popups */
+.maplibregl-popup-anchor-bottom .maplibregl-popup-tip {
+  border-top-color: var(--popover);
+}
+
+.maplibregl-popup-anchor-top .maplibregl-popup-tip {
+  border-bottom-color: var(--popover);
+}
+
+.maplibregl-popup-anchor-left .maplibregl-popup-tip {
+  border-right-color: var(--popover);
+}
+
+.maplibregl-popup-anchor-right .maplibregl-popup-tip {
+  border-left-color: var(--popover);
+}
+
+.hydro-map-popup .maplibregl-popup-close-button {
+  display: none;
+}

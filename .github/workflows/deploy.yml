@@ -16,26 +16,26 @@ jobs:
       matrix:
         include:
           - service: api
-            image: water_dp_api
-            context: .
+            image: water-dp-api
+            context: ./api
             dockerfile: Dockerfile
           - service: worker
-            image: water_dp_worker
-            context: .
+            image: water-dp-worker
+            context: ./api
             dockerfile: Dockerfile
           - service: simulator
-            image: water_dp_simulator
-            context: .
+            image: water-dp-simulator
+            context: ./api
             dockerfile: Dockerfile
           - service: tm_migrations
-            image: water_dp_tm_migrations
-            context: .
+            image: water-dp-tm-migrations
+            context: ./api
             dockerfile: docker/migrations.Dockerfile
           - service: tm_seeder
-            image: water_dp_tm_seeder
+            image: water-dp-tm-seeder
             context: .
-            dockerfile: docker/seeder.Dockerfile
-    
+            dockerfile: api/docker/seeder.Dockerfile
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -55,7 +55,7 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: ${{ matrix.context }}
-          file: ${{ matrix.dockerfile }}
+          file: ${{ matrix.context }}/${{ matrix.dockerfile }}
           push: true
           tags: ghcr.io/${{ env.REPO }}/${{ matrix.image }}:latest
 
@@ -78,13 +78,13 @@ jobs:
           # Use the same password for MinIO if not provided primarily
           echo "OBJECT_STORAGE_ROOT_USER=minioadmin" >> .env
           echo "OBJECT_STORAGE_ROOT_PASSWORD=${{ secrets.MINIO_PASSWORD }}" >> .env
-          
+
           echo "SECRET_KEY=${{ secrets.SECRET_KEY }}" >> .env
           echo "GEOSERVER_ADMIN_PASSWORD=${{ secrets.GEOSERVER_ADMIN_PASSWORD }}" >> .env
-          
+
           echo "KEYCLOAK_ADMIN_PASSWORD=${{ secrets.KEYCLOAK_ADMIN_PASSWORD }}" >> .env
           echo "MQTT_PASSWORD=${{ secrets.MQTT_PASSWORD }}" >> .env
-          
+
           echo "PUBLIC_HOSTNAME=${{ secrets.PUBLIC_HOSTNAME_URL }}" >> .env
           echo "KEYCLOAK_EXTERNAL_URL=http://${{ secrets.PUBLIC_HOSTNAME_URL }}:8081" >> .env
           echo "GITHUB_REPOSITORY_LOWER=${{ env.REPO }}" >> .env
@@ -96,8 +96,8 @@ jobs:
           host: ${{ secrets.AZURE_VM_HOST }}
           username: ${{ secrets.AZURE_VM_USERNAME }}
           password: ${{ secrets.AZURE_VM_PASSWORD }}
-          source: "docker-compose.prod.yml,.env,mosquitto.conf,nginx_proxy_api.conf,timeio.env,keycloak/import,scripts/setup_keycloak.sh"
-          target: "~/water_dp"
+          source: "deploy/docker-compose.prod.yml,.env,mosquitto.conf,nginx_proxy_api.conf,timeio.env,keycloak/import,scripts/setup_keycloak.sh"
+          target: "~/water-dp"
 
       - name: Deploy on VM
         uses: appleboy/ssh-action@master
@@ -107,23 +107,23 @@ jobs:
           password: ${{ secrets.AZURE_VM_PASSWORD }}
           command_timeout: 60m
           script: |
-            cd ~/water_dp
-            
+            cd ~/water-dp
+
             # Login to GHCR to pull private images
             echo ${{ secrets.GHCR_PAT }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            
+
             # Reset environment (Stop containers and remove volumes)
             # "|| true" ensures this doesn't fail if containers are already down/missing
-            docker-compose -f docker-compose.prod.yml down -v || true
-            
+            docker-compose -f deploy/docker-compose.prod.yml down -v || true
+
             # FREE DISK SPACE (Critical for small VMs)
             # Remove all unused images, containers, networks
             docker system prune -af
             # Remove all unused volumes
             docker volume prune -f
-            
+
             # Pull latest images (Quietly to avoid log spam)
-            docker-compose -f docker-compose.prod.yml pull --quiet
-            
+            docker-compose -f deploy/docker-compose.prod.yml pull --quiet
+
             # Start services
-            docker-compose -f docker-compose.prod.yml up -d
+            docker-compose -f deploy/docker-compose.prod.yml up -d

@@ -135,15 +135,21 @@ flowchart LR
 
 | Endpoint | Description |
 |----------|-------------|
-| `GET /api/v1/things/` | List all sensors from FROST |
-| `POST /api/v1/things/simulated` | Create simulated sensor |
+| `POST /api/v1/things/` | Create a new sensor |
+| `GET /api/v1/things/{schema}/all` | List all sensors in a project |
 | `GET /api/v1/projects/` | List user projects |
 | `POST /api/v1/projects/{id}/sensors` | Link sensor to project |
-| `GET /api/v1/datasets/` | Export time series data |
+| `POST /api/v1/datasets/` | Create a dataset for file ingestion |
 | `GET /api/v1/geospatial/layers` | List GeoServer layers |
 | `GET /api/v1/groups/` | Browse TSM groups |
-| `POST /api/v1/alerts/` | Create alert definition |
-| `POST /api/v1/computations/` | Submit computation job |
+| `POST /api/v1/alerts/definitions` | Create alert definition |
+| `POST /api/v1/computations/upload` | Upload computation script |
+| `POST /api/v1/computations/run/{id}` | Run computation job |
+| `GET /api/v1/dashboards/` | List dashboards |
+| `POST /api/v1/projects/{id}/simulator/things` | Create simulated sensor |
+| `GET /api/v1/sms/` | SMS notifications |
+| `POST /api/v1/external-sources/` | Register external data source |
+| `POST /api/v1/auth/login` | Authentication |
 
 ---
 
@@ -166,7 +172,7 @@ git clone https://github.com/Siki-ux/tsm-orchestration.git
 
 # 2. Setup environment
 cd water-dp
-cp .env.example .env
+cp env.example .env
 
 # 3. Create shared network
 docker network create water_shared_net
@@ -179,7 +185,7 @@ docker network create water_shared_net
 
 ```bash
 # 1. Setup environment
-cp .env.example .env
+cp env.example .env
 
 # 2. Start services
 docker compose up -d --build
@@ -326,8 +332,10 @@ Each TSM project/thing gets its own schema with:
 
 | Network | Purpose |
 |---------|---------|
-| `water_shared_net` | Cross-stack communication (created manually) |
-| `tsm-orchestration_default` | TSM internal network (auto-created) |
+| `water_shared_net` | Cross-stack communication (declared `external: true`) |
+| `tsm_network` | TSM internal network (declared `external: true`) |
+
+> **Note**: When using `hydro-deploy`, both networks are mapped to a single `hydro-platform-net` network, so there is no need to create them manually.
 
 ---
 

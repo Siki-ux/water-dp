@@ -10,7 +10,7 @@ from pathlib import Path
 # Add the app directory to the Python path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from app.core.logging_config import configure_logging
+from app.core.logging_config import setup_logging
 
 logger = logging.getLogger(__name__)
 
@@ -22,16 +22,25 @@ def run_migrations():
     try:
         # Run Alembic upgrade
         result = subprocess.run(
-            ["alembic", "upgrade", "head"], check=True, capture_output=True, text=True
+            ["alembic", "upgrade", "head"], check=False, capture_output=True, text=True
         )
 
+        if result.returncode != 0:
+            logger.error(f"Alembic failed with code {result.returncode}")
+            logger.error(f"STDOUT: {result.stdout}")
+            logger.error(f"STDERR: {result.stderr}")
+            return False
+
+        logger.info(f"Alembic output: {result.stdout}")
+        if result.stderr:
+            logger.info(f"Alembic stderr: {result.stderr}")
+
+        # Schema patches are now handled by Alembic revision 475f93023348
+        # (consolidate_schema_patches)
+
         logger.info("Migrations completed successfully.")
-        logger.info(f"Output: {result.stdout}")
         return True
 
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Migration failed: {e.stderr}")
-        return False
     except Exception as e:
         logger.error(f"Unexpected error during migration: {e}")
         return False
@@ -63,7 +72,7 @@ def create_migration(message: str):
 
 def main():
     """Main migration function."""
-    configure_logging()
+    setup_logging()
 
     if len(sys.argv) < 2:
         print("Usage: python run_migrations.py [upgrade|create] [message]")

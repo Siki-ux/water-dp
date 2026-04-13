@@ -2,43 +2,102 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
 # Virtual Environment
 venv/
 .venv/
 env/
+ENV/
+env.bak/
+venv.bak/
 
 # Environment Variables
 .env
 timeio.env
-
-# Distribution / Packaging
-dist/
-build/
-*.egg-info/
+*.env.*
+!.env.example
 
 # Unit Tests / Coverage
 .pytest_cache/
 .coverage
+.coverage.*
 htmlcov/
 junit/
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.tox/
+.nox/
+.cache
+.hypothesis/
 
 # Type Checking
 .mypy_cache/
+.pyre/
+.pytype/
 
 # IDEs
 .vscode/
 .idea/
+*.swp
+*.swo
+.project
+.pydevproject
+.settings/
 
 # Logs
 *.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
 
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# Seeded Computation Scripts
-app/computations/*_flood_prediction.py
+# Node.js / Frontend
+node_modules/
+frontend/node_modules/
+.next/
+frontend/.next/
+out/
+frontend/out/
+.npm
+frontend/.npm
+.pnpm-debug.log*
+frontend/.pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.eslintcache
+frontend/.eslintcache
+
+# Project Specific
+api/app/computations/*_flood_prediction.py
+openapi.json
+
+# Generated Podman compose files (created at runtime by scripts/strip_postgres.py)
+docker-compose.podman.yml
+docker-compose.tsm.podman.yml
 
 # Ruff cache
 .ruff_cache/

@@ -1,0 +1,27 @@
+services:
+  hydro_portal:
+    image: ghcr.io/${GITHUB_REPOSITORY_LOWER}/hydro_portal:latest
+    container_name: hydro_portal
+    restart: unless-stopped
+    ports:
+      - "80:3000"
+    environment:
+      # We don't actully need NEXT_PUBLIC_... here at runtime for Next.js (baked in), 
+      # but good to have for reference or if using newer Next.js runtime config features.
+      - NEXT_PUBLIC_API_URL=http://${PUBLIC_HOSTNAME}:8000/api/v1
+      - NEXT_PUBLIC_GEOSERVER_URL=http://${PUBLIC_HOSTNAME}:8080/geoserver
+      # Internal URL for container-to-container communication (SSR)
+      - INTERNAL_API_URL=http://water_dp_api:8000/api/v1
+
+      # Auth
+      - NEXTAUTH_URL=http://${PUBLIC_HOSTNAME}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - AUTH_SECRET=${NEXTAUTH_SECRET}
+      - AUTH_TRUST_HOST=true
+    networks:
+      - water_dp_network
+
+networks:
+  water_dp_network:
+    external: true
+    name: water_dp_network

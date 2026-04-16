@@ -35,7 +35,6 @@ async def lifespan(app: FastAPI):
     """Application lifespan events."""
     logger.info("Starting Water Data Platform API...")
 
-    # Initialize startup state
     app.state.startup_complete = False
 
     try:

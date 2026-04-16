@@ -161,7 +161,7 @@ def seed_keycloak_users_and_groups():
                 return c["id"]
         return None
 
-    # 1. Create users
+    # Create users
     for username, password, first_name, last_name in SEED_USERS:
         existing = _find_user(username)
         if existing:
@@ -188,7 +188,7 @@ def seed_keycloak_users_and_groups():
             else:
                 logger.warning(f"Could not create user '{username}': {r.text}")
 
-    # 2. Ensure client roles exist (viewer/editor/admin)
+    # Ensure client roles exist (viewer/editor/admin)
     cu = _client_uuid()
     if cu:
         for role in ("viewer", "editor", "admin"):
@@ -202,7 +202,7 @@ def seed_keycloak_users_and_groups():
 
     SUBGROUP_ROLES = {"viewers": "viewer", "editors": "editor", "admins": "admin"}
 
-    # 3. Create groups + subgroups + assign roles + add users
+    # Create groups + subgroups + assign roles + add users
     for group_name, subgroup_members in SEED_GROUPS:
         # Create or find parent group
         existing_group = _find_group(group_name)

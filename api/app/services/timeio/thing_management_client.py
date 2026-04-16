@@ -436,10 +436,7 @@ class ThingManagementClient:
 
     def delete_thing(self, thing_id: int) -> bool:
         """
-        Delete a thing.
-
-        Note: thing-management-api may not support DELETE.
-        Consider using soft-delete or direct DB cleanup.
+        Delete a thing. Falls back gracefully if the API returns 405.
 
         Args:
             thing_id: Thing ID

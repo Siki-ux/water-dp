@@ -108,8 +108,8 @@ class KeycloakService:
             # But 'admin-cli' public client often uses password.
             # We'll try dynamic approach based on config.
 
-            # Note: For keycloak-admin library, you usually connect to Master realm to manage others,
-            # OR connect directly to target realm if the client has realm-management roles there.
+            # For keycloak-admin library, typically connect to Master realm to manage others,
+            # or connect directly to target realm if the client has realm-management roles.
 
             # Assuming we use a client in the SAME realm or a dedicated service account
 

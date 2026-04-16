@@ -21,7 +21,6 @@ class IngestionService:
         """
         db = TimeIODatabase()
 
-        # 1. Fetch S3 Config for this Thing
         s3_config = db.get_s3_config(thing_uuid)
         if not s3_config:
             raise ResourceNotFoundException(
@@ -32,11 +31,9 @@ class IngestionService:
         access_key = s3_config["user"]
         secret_key = s3_config["password"]
 
-        # 2. Initialize MinIO client using the configured endpoint and TLS setting.
+        # Initialize MinIO client with per-thing credentials from ConfigDB.
         # `settings.minio_url` and `settings.minio_secure` define how the API
-        # connects to object storage. Per-thing credentials from ConfigDB are
-        # used instead of the global MinioService singleton because each thing's
-        # bucket has its own access/secret key pair.
+        # connects to object storage.
 
         try:
             client = Minio(
@@ -46,7 +43,6 @@ class IngestionService:
                 secure=settings.minio_secure,
             )
 
-            # 3. Determine file size without loading entirely into memory
             upload_stream = file.file
             upload_stream.seek(0, io.SEEK_END)
             file_size = upload_stream.tell()
@@ -56,7 +52,7 @@ class IngestionService:
             if file_size > max_upload_size:
                 raise AppException(message="Uploaded file is too large (max 256MB)")
 
-            # 4. Upload — stream directly without reading into memory
+            # Stream directly without reading into memory
             # Wrap synchronous MinIO put_object in a thread to avoid blocking the event loop
             # Sanitize filename to prevent path traversal in object keys
             from app.utils.storage import sanitize_object_name

@@ -539,11 +539,9 @@ class TimeIOOrchestrator:
         bucket_user = f"u_{thing_uuid.split('-')[0]}"
         bucket_pass = self._generate_password()
 
-        # 3. Construct Parser Settings
-        # TSM expects: skiprows, skipfooter, header, timestamp_columns
-        # NOTE: When header=0, TSM auto-skips that line for column names.
-        #       skiprows is for ADDITIONAL rows to skip (e.g. comments before header)
-        #       Don't set skiprows based on user's "skip header" intention - header field handles that.
+        # Construct parser settings.
+        # header=0 tells TSM to use that row for column names;
+        # skiprows covers additional rows before the header (e.g. comment lines).
         parser_settings = {
             "type": "csvparser",
             "name": f"{dataset_name}_parser",

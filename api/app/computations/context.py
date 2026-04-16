@@ -67,10 +67,7 @@ class ComputationContext:
         Proxy to FrostClient.
         """
         try:
-            # Note: TSM/FROST structure usually requires querying Datastreams for data,
-            # not just "Thing ID".
-            # TimeSeriesService.get_latest_data(sensor_id) was doing some magic or
-            # likely fetching observations for datastreams of that thing.
+            # TSM/FROST requires querying Datastreams, not just Thing ID.
             # FrostClient `get_observations` needs a Datastream ID.
 
             # Helper to find datastreams for a thing

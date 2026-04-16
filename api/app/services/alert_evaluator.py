@@ -12,9 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class AlertEvaluator:
-    """
-    Evaluates 'Passive' alert rules against computation results.
-    """
+    """Evaluates passive alert rules against computation results."""
 
     def __init__(self, db: Session):
         self.db = db

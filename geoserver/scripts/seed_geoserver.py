@@ -56,7 +56,7 @@ def init_geoserver():
     auth = (GS_USER, GS_PASS)
     headers = {"Content-Type": "application/json", "Accept": "application/json"}
 
-    # 1. Create Workspace 'water_data'
+    # Create workspace
     ws_name = "water_data"
     r = requests.get(f"{GS_URL}/rest/workspaces/{ws_name}", auth=auth)
     if r.status_code == 404:
@@ -68,7 +68,7 @@ def init_geoserver():
     else:
         logger.info(f"Workspace '{ws_name}' exists.")
 
-    # 2. Create/Update DataStore 'water_data_store'
+    # Create/update datastore
     store_name = "water_data_store"
     logger.info(f"Checking DataStore '{store_name}'...")
 
@@ -129,7 +129,7 @@ def init_geoserver():
         if r.status_code != 201:
             logger.error(f"Failed to create DataStore: {r.text}")
 
-    # 3. Seed Layers from /app/data
+    # Seed layers from /app/data
     seed_layers(auth, headers, db_schema)
 
     logger.info("GeoServer Initialization Complete.")
@@ -196,8 +196,7 @@ def seed_layers(auth, headers, db_schema="public"):
                 cur.execute("CREATE EXTENSION IF NOT EXISTS postgis;")
                 cur.execute(f"CREATE SCHEMA IF NOT EXISTS {db_schema};")
 
-                # Check if table exists? We might want to overwrite or skip
-                # For now, drop and recreate ensures clean state
+                # Drop and recreate for clean state
                 cur.execute(f"DROP TABLE IF EXISTS {db_schema}.{table_name} CASCADE;")
                 cur.execute(
                     f"""
@@ -226,7 +225,6 @@ def seed_layers(auth, headers, db_schema="public"):
                 logger.info(f"Table {db_schema}.{table_name} populated.")
 
             # Publish Layer in GeoServer
-            # 1. FeatureType
             ws_name = "water_data"
             store_name = "water_data_store"
 
@@ -240,7 +238,6 @@ def seed_layers(auth, headers, db_schema="public"):
                 }
             }
 
-            # Check if layer exists
             r = requests.get(
                 f"{GS_URL}/rest/workspaces/{ws_name}/datastores/{store_name}/featuretypes/{table_name}",
                 auth=auth,

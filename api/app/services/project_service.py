@@ -55,13 +55,7 @@ def _is_project_admin(user: Dict[str, Any]) -> bool:
 
 
 class ProjectService:
-    """
-    Project management service.
-
-    .. note::
-        Methods interacting with TimeIO will use the new service layer internally
-        while maintaining backward compatibility with existing endpoints.
-    """
+    """Project management service."""
 
     @staticmethod
     def _get_timeio_db() -> TimeIODatabase:
@@ -487,25 +481,15 @@ class ProjectService:
             db, project_id, user, required_role="editor"
         )
 
-        # Note: Logic above allows Editor to update project details.
-        # If strict ownership is required for renaming, change role check.
-        # Assuming Editors can rename.
-
         if project_in.name is not None:
             project.name = project_in.name
         if project_in.description is not None:
             project.description = project_in.description
 
-        # Update groups
-        # Note: Should we validate membership again?
-        # Ideally yes, but maybe Editor role is trusted?
-        # Let's simple validate if non-admin for safety.
         if project_in.authorization_provider_group_id is not None:
             auth_group_id = project_in.authorization_provider_group_id
 
             if auth_group_id and not ProjectService._is_admin(user):
-                # Simple check
-                # (User must have access to new group?)
                 pass  # Editor trusted
 
             project.authorization_provider_group_id = auth_group_id

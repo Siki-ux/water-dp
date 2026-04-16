@@ -195,14 +195,14 @@ docker compose up -d --build
 
 ### Access Points
 
-| Service | URL | Credentials |
-|---------|-----|-------------|
-| **API Docs** | http://localhost:8000/api/v1/docs | - |
-| **Frontend** | http://localhost:3000 | via Keycloak |
-| **GeoServer** | http://localhost:8079/geoserver | `admin` / `geoserver` |
-| **FROST API** | http://localhost/sta/v1.1 | - |
-| **Keycloak** | http://localhost:8081 | `admin` / `admin` |
-| **TSM Portal** | http://localhost | - |
+| Service | URL | Credentials | Mode |
+|---------|-----|-------------|------|
+| **API Docs** | http://localhost:8000/api/v1/docs | - | Both |
+| **Frontend** | http://localhost:3000 | via Keycloak | Both |
+| **GeoServer** | http://localhost:8079/geoserver | `admin` / `geoserver` | Both |
+| **FROST API** | http://localhost/sta/v1.1 | - | TSM only |
+| **Keycloak** | http://localhost:8081 | `admin` / `admin` | TSM only |
+| **TSM Portal** | http://localhost | - | TSM only |
 
 ---
 

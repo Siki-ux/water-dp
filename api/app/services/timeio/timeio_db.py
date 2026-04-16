@@ -614,13 +614,7 @@ class TimeIODatabase:
                 uuid_base = f"{name}{group_id}"
                 parser_uuid = str(uuid_pkg.uuid5(uuid_pkg.NAMESPACE_DNS, uuid_base))
 
-                # 3. Prepare Params JSON
-                # Map Schema fields to ConfigDB Params
-                # Schema: delimiter, exclude_headlines, exclude_footlines, timestamp_columns
-                # ConfigDB: delimiter, skiprows, skipfooter, timestamp_columns
-                # Note: configdb.py mapping:
-                # "skiprows": exclude_headlines
-                # "skipfooter": exclude_footlines
+                # Prepare parser params (schema -> configdb mapping)
                 params = {
                     "delimiter": settings.get("delimiter", ","),
                     "skiprows": settings.get("exclude_headlines", 0),

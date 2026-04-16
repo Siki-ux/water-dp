@@ -22,9 +22,7 @@ def wait_for_services():
     """Wait for essential external services."""
     import requests
 
-    # 1. Wait for Local DB (Implicit in SessionLocal connection, handled by docker depends_on mostly)
-
-    # 2. Wait for FROST (TimeIO Stack)
+    # Wait for FROST
     frost_url = os.getenv("FROST_URL", settings.frost_url)
     if not frost_url:
         frost_url = (

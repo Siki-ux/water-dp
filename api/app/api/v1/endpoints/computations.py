@@ -128,11 +128,9 @@ async def upload_computation_script(
     # Check Project Access (Editor required)
     ProjectService._check_access(database, project_id, user, required_role="editor")
 
-    # 1. Validate Extension
     if not file.filename.endswith(".py"):
         raise HTTPException(status_code=400, detail="Only .py files are allowed")
 
-    # 2. Validate Size & Content Security
     content = await file.read()
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(status_code=400, detail="File size exceeds 1MB limit")
@@ -467,14 +465,11 @@ async def update_script_content(
 
     new_content = update_data.content
 
-    # 1. Validate Security
     validate_script_security(new_content)
 
-    # 2. Validate Size (approx)
     if len(new_content.encode("utf-8")) > MAX_FILE_SIZE:
         raise HTTPException(status_code=400, detail="File size exceeds 1MB limit")
 
-    # 3. Save
     script_path = os.path.join(COMPUTATIONS_DIR, script.filename)
     with open(script_path, "w", encoding="utf-8") as file_object:
         file_object.write(new_content)

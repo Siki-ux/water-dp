@@ -57,7 +57,6 @@ async def publish_sensor(
     """
     Publish an MQTT message for a specific sensor.
     """
-    # 1. Fetch credentials from ConfigDB
     configs = timeio_db.get_thing_configs_by_uuids([sensor_uuid])
     config = configs.get(sensor_uuid)
 
@@ -70,7 +69,6 @@ async def publish_sensor(
     mqtt_user = config.get("mqtt_user")
     mqtt_pass = config.get("mqtt_pass")
 
-    # 2. Publish using observation format
     success = mqtt_client.publish_observation(
         mqtt_username=mqtt_user,
         mqtt_password=mqtt_pass,

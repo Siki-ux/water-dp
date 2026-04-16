@@ -63,7 +63,6 @@ async def get_geo_layers(
     from app.models.geospatial import GeoLayer as GeoLayerModel
 
     try:
-        # 1. Query DB for seeded / user-created layers
         q = database.query(GeoLayerModel)
         if workspace:
             q = q.filter(GeoLayerModel.workspace == workspace)
@@ -100,7 +99,7 @@ async def get_geo_layers(
                 }
             )
 
-        # 2. Also fetch from GeoServer (merge in any that aren't already in DB)
+        # Merge in GeoServer layers not already in DB
         try:
             geoserver_service = GeoServerService()
             target_workspace = workspace or settings.geoserver_workspace or "water_data"
@@ -131,7 +130,6 @@ async def get_geo_layers(
                 f"GeoServer not reachable, returning DB layers only: {gs_err}"
             )
 
-        # 3. Paginate
         total = len(mapped_layers)
         paged = mapped_layers[skip : skip + limit]
 
@@ -257,7 +255,6 @@ async def delete_geo_feature(
 async def spatial_query(query: SpatialQuery, database: Session = Depends(get_db)):
     """Perform spatial query on geospatial features."""
     try:
-        # Note: You'll need to implement spatial_query in DatabaseService
         raise HTTPException(status_code=501, detail="Spatial query not yet implemented")
     except Exception as error:
         logger.error(f"Failed to perform spatial query: {error}")
@@ -669,7 +666,7 @@ async def create_layer_from_geojson(
       - geojson_data: raw GeoJSON string (from map drawing)
     Saves to local DB as geo_layers + geo_features and publishes to GeoServer.
     """
-    # 1. Parse GeoJSON
+    # Parse GeoJSON
     geojson = None
     if geojson_file:
         content = await geojson_file.read()
@@ -703,7 +700,7 @@ async def create_layer_from_geojson(
     if not features:
         raise HTTPException(status_code=400, detail="GeoJSON has no features")
 
-    # 2. Determine layer metadata
+    # Determine layer metadata
     import re
 
     raw_name = (
@@ -716,7 +713,7 @@ async def create_layer_from_geojson(
     first_geom = features[0].get("geometry", {})
     geom_type = first_geom.get("type", "Polygon").lower()
 
-    # 3. Create layer record in DB
+    # Create layer record in DB
     from geoalchemy2.shape import from_shape
     from shapely.geometry import shape
 
@@ -744,7 +741,7 @@ async def create_layer_from_geojson(
     db.add(layer_record)
     db.flush()
 
-    # 4. Add features
+    # Add features
     for idx, feat in enumerate(features):
         geom_dict = feat.get("geometry")
         props = feat.get("properties", {})
@@ -770,7 +767,7 @@ async def create_layer_from_geojson(
 
     db.commit()
 
-    # 5. Try to publish to GeoServer (best effort)
+    # Publish to GeoServer (best effort)
     try:
         geoserver_service = GeoServerService()
         if geoserver_service.test_connection():

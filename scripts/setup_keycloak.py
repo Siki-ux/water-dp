@@ -283,7 +283,6 @@ def create_user(token, realm, username, password, first_name="", last_name=""):
 
 
 def assign_role(token, realm, user_id, role_name):
-    # 1. Get Role
     url = f"{KEYCLOAK_URL}/admin/realms/{realm}/roles/{role_name}"
     headers = {"Authorization": f"Bearer {token}"}
     response = requests.get(url, headers=headers)
@@ -296,7 +295,6 @@ def assign_role(token, realm, user_id, role_name):
     response.raise_for_status()
     role_rep = response.json()
 
-    # 2. Assign
     assign_url = (
         f"{KEYCLOAK_URL}/admin/realms/{realm}/users/{user_id}/role-mappings/realm"
     )
@@ -338,9 +336,7 @@ if __name__ == "__main__":
     keycloak_admin.realm_name = KEYCLOAK_REALM
     print(f"Switched KeycloakAdmin context to realm: {keycloak_admin.realm_name}")
 
-    # ----------------------------------------------------------------------
-    # 1. Update SSL Requirement for Master and TimeIO Realms
-    # ----------------------------------------------------------------------
+    # --- SSL requirement ---
     print("Updating 'master' realm sslRequired to 'NONE'...")
     try:
         keycloak_admin.update_realm("master", {"sslRequired": "NONE"})
@@ -355,9 +351,7 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Warning: Could not update '{KEYCLOAK_REALM}' realm SSL settings: {e}")
 
-    # ----------------------------------------------------------------------
-    # 2. Create the Realm (if not exists)
-    # ----------------------------------------------------------------------
+    # --- Realm creation ---
     try:
         keycloak_admin.create_realm(payload={"realm": KEYCLOAK_REALM, "enabled": True})
         print(f"Realm '{KEYCLOAK_REALM}' created successfully.")
@@ -367,9 +361,7 @@ if __name__ == "__main__":
         else:
             print(f"Failed to create realm '{KEYCLOAK_REALM}': {e}")
 
-    # ----------------------------------------------------------------------
-    # 3. Create 'admin-siki' User with Full Privileges
-    # ----------------------------------------------------------------------
+    # --- Admin user ---
     print("Obtaining new admin token for user operations...")
     token = get_admin_token()
 
@@ -386,9 +378,7 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Error creating/configuring user: {e}")
 
-    # ----------------------------------------------------------------------
-    # 4. Setup 'timeIO-client' Client
-    # ----------------------------------------------------------------------
+    # --- Client setup ---
     client_id = "timeIO-client"
     print(f"Checking/Creating client '{client_id}'...")
 
@@ -401,17 +391,12 @@ if __name__ == "__main__":
     else:
         print("Could not find client to update.")
 
-    # ----------------------------------------------------------------------
-    # 5. Ensure viewer / editor / admin client roles exist on timeIO-client
-    # ----------------------------------------------------------------------
+    # --- Client roles ---
     print("Ensuring client roles (viewer, editor, admin) exist on timeIO-client...")
     for role in ("viewer", "editor", "admin"):
         ensure_client_role(token, KEYCLOAK_REALM, CLIENT_ID_NAME, role)
 
-    # ----------------------------------------------------------------------
-    # 5.5 Ensure 'groups' protocol mapper on timeIO-client
-    #     Without this, JWT tokens won't contain the user's group membership.
-    # ----------------------------------------------------------------------
+    # --- Groups protocol mapper (needed for JWT group claims) ---
     if client_uuid:
         print("Ensuring 'groups' protocol mapper on timeIO-client...")
         mapper_name = "group-membership-mapper"

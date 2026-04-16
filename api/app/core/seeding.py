@@ -69,20 +69,17 @@ def seed_data(db: Session) -> None:
 
     logger.info("Checking if database seeding is needed...")
 
-    # -------------------------------------------------------------------------
-    # PART 1: Seed GeoLayers (Regions)
-    # -------------------------------------------------------------------------
+    # --- Seed GeoLayers (Regions) ---
     try:
-        region_features = []  # List of (GeoFeature, ShapelyGeometry)
+        region_features = []
 
-        # Check if Czech Regions layer exists
+        # Czech Regions layer
         cr_layer_exists = (
             db.query(GeoLayer).filter(GeoLayer.layer_name == "czech_regions").first()
         )
 
         if not cr_layer_exists:
             logger.info("Seeding Czech Regions GeoLayer...")
-            # 1. Create GeoLayer for Czech Republic Regions
             cr_layer = GeoLayer(
                 layer_name="czech_regions",
                 title="Czech Republic Regions",
@@ -96,7 +93,6 @@ def seed_data(db: Session) -> None:
             db.add(cr_layer)
             db.flush()
 
-            # 2. Generate Grid Regions (GeoFeatures)
             data_dir = os.path.join(
                 os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
                 "geoserver",
@@ -303,17 +299,13 @@ def seed_data(db: Session) -> None:
         # We rely on GeoServer WFS for this layer now.
         pass
 
-        # -------------------------------------------------------------------------
-        # PART 2: Seed TimeIO (FROST) - CHECK ONLY (Consumer Mode)
-        # -------------------------------------------------------------------------
-        # Updated Logic: We assume TimeIO Stack is the Producer.
-        # We only check if FROST is up. We do NOT create standard sensors/obs props.
+        # --- Seed TimeIO (FROST) — consumer mode ---
+        # TimeIO is the producer; only verify FROST is reachable.
         logger.info("Checking TimeIO data (Consumer Mode)...")
 
         FROST_URL = settings.frost_url
 
-        # Check if FROST is actually reachable with retries
-        # Check if FROST is actually reachable with retries
+        # Check if FROST is reachable
         import time
 
         max_retries = 12
@@ -463,17 +455,12 @@ def seed_data(db: Session) -> None:
 
             db.commit()
 
-        # 5. Publish to GeoServer - SKIPPED
-        # GeoServer is now independent and seeded via geoserver_stack/scripts/seed_geoserver.py.
-        # This prevents overwriting the DataStore configuration.
+    # GeoServer publish skipped — handled by geoserver_stack/scripts/seed_geoserver.py
 
-        # -------------------------------------------------------------------------
-        # PART 3: Seed User Context (Projects, Dashboards)
-        # -------------------------------------------------------------------------
+        # --- Seed User Context (Projects, Dashboards) ---
         logger.info("[SEEDING] Starting Part 3: User Context Seeding")
-        DEMO_USER_ID = "f5655555-5555-5555-5555-555555555555"  # Demo User ID
+        DEMO_USER_ID = "f5655555-5555-5555-5555-555555555555"
 
-        # Check if project exists
         project = db.query(Project).filter(Project.name == "Demo Project").first()
         auth_group = "UFZ-TSM:MyProject"
 
@@ -584,12 +571,10 @@ def seed_data(db: Session) -> None:
                     t_name = t.get("name", "")
                     t_id = t.get("@iot.id")
 
-                    # 1. Skip if name contains "unlinked" (case-insensitive)
+                    # Skip "unlinked" sensors
                     if "unlinked" in t_name.lower():
                         continue
 
-                    # 2. Skip if already linked (we can try insertion and ignore conflict)
-                    # Convert to string for DB
                     s_id_str = str(t_id)
 
                     try:
@@ -704,19 +689,14 @@ def seed_data(db: Session) -> None:
             else:
                 logger.info("Computation script already exists/checked.")
 
-        # -------------------------------------------------------------------------
-        # PART 4: Advanced Scenarios & Simulator Setup
-        # -------------------------------------------------------------------------
+        # --- Advanced Scenarios & Simulator ---
         logger.info("[SEEDING] Starting Part 4: Advanced Scenarios & Simulator")
         seed_advanced_logic(db)
         seed_simulator_entities()  # Ensure simulator entities are seeded if needed
 
-        # -------------------------------------------------------------------------
-        # PART 5: Seeding Inactive Sensors and Datasets
-        # -------------------------------------------------------------------------
+        # --- Inactive Sensors and Datasets ---
         logger.info("[SEEDING] Starting Part 5: Inactive Sensors & Datasets")
 
-        # 1. Seed Inactive Sensor
         inactive_sensor_id = ensure_frost_entity(
             "Things",
             {
@@ -767,8 +747,7 @@ def seed_data(db: Session) -> None:
             except Exception as e:
                 logger.warning(f"Failed to link inactive sensor: {e}")
 
-        # 2. Seed Non-Sensor Dataset
-        # This represents a dataset (e.g., CSV upload) that isn't a physical sensor
+        # Seed non-sensor dataset (e.g., CSV upload, not a physical sensor)
         dataset_id = ensure_frost_entity(
             "Things",
             {
@@ -811,9 +790,7 @@ def seed_data(db: Session) -> None:
 
         logger.info("Demo Project, Dashboard, and Advanced Scenarios seeded/checked.")
 
-        # -------------------------------------------------------------------------
-        # PART 6: Seed QA/QC Configurations
-        # -------------------------------------------------------------------------
+        # --- QA/QC Configurations ---
         logger.info("[SEEDING] Starting Part 6: QA/QC Configurations")
         try:
             seed_qaqc_configs()
@@ -836,7 +813,7 @@ def seed_advanced_logic(db: Session):
     SIKI_ID = "user-siki-123"
     USER2_ID = "user-2-456"
 
-    # 1. Add Siki to Demo Project (via Keycloak group)
+    # Add Siki to Demo Project via Keycloak group
     p1 = db.query(Project).filter(Project.name == "Demo Project").first()
     if p1:
         # Try to find real Siki ID from Keycloak to ensure useful seeding
@@ -862,7 +839,7 @@ def seed_advanced_logic(db: Session):
         except Exception as e:
             logger.warning(f"Keycloak sync note for Siki: {e}")
 
-    # 2. Create Project 2
+    # Create Project 2
     p2 = db.query(Project).filter(Project.name == "Demo Project 2").first()
     if not p2:
         logger.info("Creating Demo Project 2...")
@@ -875,8 +852,7 @@ def seed_advanced_logic(db: Session):
         db.commit()
         db.refresh(p2)
 
-    # 3. Link Sensors to Project 2 (IDs 1 and 5 if available)
-    # 3. Link Sensors to Project 2 (IDs 1 and 5 if available)
+    # Link sensors to Project 2 (IDs 1 and 5)
     target_sensors = ["1", "5"]
     for sid in target_sensors:
         stmt = project_sensors.select().where(
@@ -887,8 +863,6 @@ def seed_advanced_logic(db: Session):
         )
         exists = db.execute(stmt).first()
         if not exists:
-            # Only link if not already linked (simple check)
-            # We don't check if sensor exists in FROST here, assuming basic seeding created ID 1
             insert_stmt = project_sensors.insert().values(
                 project_id=p2.id, thing_uuid=sid
             )
@@ -925,7 +899,7 @@ def seed_simulator_entities():
         except Exception as e:
             logger.warning(f"Failed to create sim thing {payload.get('name')}: {e}")
 
-    # 1. Auto-Simulated Sensor (For Simulator Service)
+    # Auto-simulated sensor
     create_thing(
         {
             "name": "Auto-Simulated Sensor",
@@ -947,7 +921,7 @@ def seed_simulator_entities():
         }
     )
 
-    # 2. Unlinked Sensors (For UI Testing)
+    # Unlinked sensors (for UI testing)
     for i in range(1, 6):
         create_thing(
             {

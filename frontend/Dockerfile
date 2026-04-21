@@ -39,8 +39,26 @@ CMD ["npm", "run", "dev"]
 
 # Rebuild the source code only when needed
 FROM base AS builder
+ARG SKIP_SSL_VERIFY=false
+RUN if [ "$SKIP_SSL_VERIFY" = "true" ]; then \
+      apk add --no-check-certificate --no-cache libc6-compat; \
+    else \
+      apk add --no-cache libc6-compat; \
+    fi
 WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false
+ENV NPM_CONFIG_FUND=false
+ENV NPM_CONFIG_AUDIT=false
+
+COPY package.json package-lock.json* ./
+RUN if [ "$SKIP_SSL_VERIFY" = "true" ]; then \
+      export NODE_TLS_REJECT_UNAUTHORIZED=0; \
+      npm config set strict-ssl false; \
+    fi && \
+    if [ -f package-lock.json ]; then npm ci --legacy-peer-deps; \
+    else echo "Lockfile not found." && npm install --legacy-peer-deps; \
+    fi
 COPY . .
 
 # Next.js collects completely anonymous telemetry data about general usage.

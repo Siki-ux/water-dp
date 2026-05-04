@@ -41,6 +41,7 @@ import {
 } from "@/lib/qaqc-api";
 import { SAQC_FUNCTIONS, getSaQCFunction, CUSTOM_FUNCTION_SENTINEL } from "@/lib/saqc-functions";
 import { useTranslation } from "@/lib/i18n";
+import { DateTimePicker } from "@/components/DateTimePicker";
 
 interface Props {}
 
@@ -88,13 +89,11 @@ function TriggerDialog({ config, schemaName, onClose }: {
                         <div className="grid grid-cols-2 gap-3">
                             <div>
                                 <label className="text-xs text-white/40 block mb-1">{t('sms.qaqc.triggerStart')}</label>
-                                <input type="datetime-local" value={start} onChange={e => setStart(e.target.value)}
-                                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                                <DateTimePicker value={start} onChange={setStart} />
                             </div>
                             <div>
                                 <label className="text-xs text-white/40 block mb-1">{t('sms.qaqc.triggerEnd')}</label>
-                                <input type="datetime-local" value={end} onChange={e => setEnd(e.target.value)}
-                                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                                <DateTimePicker value={end} onChange={setEnd} />
                             </div>
                         </div>
                         {error && <p className="text-red-400 text-xs">{error}</p>}

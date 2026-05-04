@@ -9,6 +9,7 @@ import { DataTable, Column } from "@/components/data/DataTable";
 import { format, subHours } from "date-fns";
 import { getApiUrl } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n";
+import { DateTimePicker } from "@/components/DateTimePicker";
 
 interface PageProps {
     params: Promise<{ id: string; sensorId: string }>;
@@ -312,21 +313,11 @@ export default function SensorDataPage({ params }: PageProps) {
 
                             <div className="flex flex-col gap-1">
                                 <label className="text-xs text-white/50 px-1 flex items-center gap-1"><Calendar className="w-3 h-3" /> {t("projects.sensorData.from")}</label>
-                                <input
-                                    type="datetime-local"
-                                    value={startDate}
-                                    onChange={(e) => setStartDate(e.target.value)}
-                                    className="bg-white/5 border border-white/10 rounded px-2 py-1 text-white text-xs focus:ring-1 focus:ring-hydro-primary outline-none"
-                                />
+                                <DateTimePicker value={startDate} onChange={setStartDate} />
                             </div>
                             <div className="flex flex-col gap-1">
                                 <label className="text-xs text-white/50 px-1 flex items-center gap-1"><Calendar className="w-3 h-3" /> {t("projects.sensorData.to")}</label>
-                                <input
-                                    type="datetime-local"
-                                    value={endDate}
-                                    onChange={(e) => setEndDate(e.target.value)}
-                                    className="bg-white/5 border border-white/10 rounded px-2 py-1 text-white text-xs focus:ring-1 focus:ring-hydro-primary outline-none"
-                                />
+                                <DateTimePicker value={endDate} onChange={setEndDate} />
                             </div>
                             <div className="h-8 w-px bg-white/10 mx-2"></div>
                             <div className="flex items-end gap-2">

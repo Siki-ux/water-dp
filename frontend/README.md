@@ -109,12 +109,12 @@ Access at: http://localhost:3000
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `NEXT_PUBLIC_API_URL` | Water DP API URL (browser) | `http://localhost:8000/api/v1` |
-| `INTERNAL_API_URL` | API URL (server-side) | `http://water-dp-api:8000/api/v1` |
-| `NEXT_PUBLIC_GEOSERVER_URL` | GeoServer URL | `http://localhost:8079/geoserver` |
-| `NEXTAUTH_URL` | NextAuth callback URL | `http://localhost:3000` |
-| `NEXTAUTH_SECRET` | Session encryption key | Random 32+ char string |
-| `AUTH_SECRET` | Alternative auth secret | Same as NEXTAUTH_SECRET |
+| `NEXT_PUBLIC_API_URL` | Water DP API base URL visible to the browser. Use a **relative path** when deployed behind a reverse proxy so the browser uses the same origin and avoids mixed-content issues. | `/water-api/api/v1` |
+| `INTERNAL_API_URL` | API URL used by server-side code (Next.js server components, server actions). Points directly to the API container. | `http://water-dp-api:8000/api/v1` |
+| `NEXT_PUBLIC_GEOSERVER_URL` | GeoServer URL (browser-facing, relative path preferred) | `/geoserver` |
+| `AUTH_URL` / `NEXTAUTH_URL` | Base URL of the deployment **without** the `/portal` path prefix. Auth.js v5 automatically appends the Next.js `basePath` (`/portal`). Including `/portal` here causes redirect URL mismatches. | `https://your-domain.com` |
+| `AUTH_SECRET` / `NEXTAUTH_SECRET` | Session encryption key — must be a strong random string | 32+ char random string |
+| `AUTH_TRUST_HOST` | Set to `true` when behind a reverse proxy (nginx, Cloudflare, etc.) | `true` |
 
 ### Docker Build Args
 
@@ -156,17 +156,27 @@ Reusable dashboard components for data visualization:
 
 ## 🔐 Authentication
 
-Authentication is handled via NextAuth.js with Keycloak as the OIDC provider.
+Authentication uses **Auth.js v5** (next-auth) with a **credentials provider** backed by Keycloak. The API handles Keycloak communication; the frontend only exchanges a username/password for a JWT.
 
 **Flow:**
-1. User clicks "Login"
-2. Redirect to Keycloak login page
-3. Keycloak authenticates and redirects back
-4. NextAuth creates session with JWT
-5. API calls include auth token
+1. User submits the sign-in form at `/portal/auth/signin`
+2. A Next.js **server action** (`app/auth/signin/actions.ts`) calls `signIn("credentials", ...)` server-side
+3. Auth.js calls the `authorize` function which POSTs to the API (`/auth/token`) using the OAuth2 password grant
+4. The API forwards to Keycloak and returns an access + refresh token pair
+5. Auth.js encrypts the tokens into a session cookie and redirects to `/portal/projects`
+6. All subsequent API calls attach the `Authorization: Bearer <token>` header from the session
+
+> **Why a server action instead of `signIn` from `next-auth/react`?**
+> Auth.js v5 beta blocks direct POST to `/api/auth/callback/credentials` from the
+> browser (`InvalidProvider` error). Calling `signIn()` from a server action
+> bypasses this restriction while keeping the credentials out of client-side code.
+
+**Token refresh:**
+The session callback in `lib/auth.ts` automatically refreshes the access token
+(via `POST /auth/refresh`) when it is within 10 seconds of expiry.
 
 **Protected Routes:**
-All routes under `/projects/` and `/groups/` require authentication.
+All routes under `/portal/projects/`, `/portal/sms/`, and `/portal/portal/` require authentication — enforced by `middleware.ts`.
 
 ---
 

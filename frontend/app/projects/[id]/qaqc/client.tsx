@@ -36,6 +36,7 @@ import {
     CUSTOM_FUNCTION_SENTINEL,
     getSaQCFunction,
 } from "@/lib/saqc-functions";
+import { DateTimePicker } from "@/components/DateTimePicker";
 
 interface QAQCClientProps {}
 
@@ -96,21 +97,11 @@ function QAQCTriggerDialog({
                         <div className="space-y-3">
                             <div>
                                 <label className="text-xs text-white/50 block mb-1">Start Date</label>
-                                <input
-                                    type="datetime-local"
-                                    value={startDate}
-                                    onChange={(e) => setStartDate(e.target.value)}
-                                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-hydro-primary/50"
-                                />
+                                <DateTimePicker value={startDate} onChange={setStartDate} className="w-full" />
                             </div>
                             <div>
                                 <label className="text-xs text-white/50 block mb-1">End Date</label>
-                                <input
-                                    type="datetime-local"
-                                    value={endDate}
-                                    onChange={(e) => setEndDate(e.target.value)}
-                                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-hydro-primary/50"
-                                />
+                                <DateTimePicker value={endDate} onChange={setEndDate} className="w-full" />
                             </div>
                         </div>
                         {error && (

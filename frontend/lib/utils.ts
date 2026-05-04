@@ -13,5 +13,10 @@ export function getApiUrl(): string {
         return process.env.INTERNAL_API_URL;
     }
 
+    // new URL() requires an absolute URL — prepend origin when path is relative
+    if (!isServer && publicUrl.startsWith('/')) {
+        return window.location.origin + publicUrl;
+    }
+
     return publicUrl;
 }

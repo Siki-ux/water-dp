@@ -455,7 +455,7 @@ def seed_data(db: Session) -> None:
 
             db.commit()
 
-    # GeoServer publish skipped — handled by geoserver_stack/scripts/seed_geoserver.py
+        # GeoServer publish skipped — handled by geoserver_stack/scripts/seed_geoserver.py
 
         # --- Seed User Context (Projects, Dashboards) ---
         logger.info("[SEEDING] Starting Part 3: User Context Seeding")

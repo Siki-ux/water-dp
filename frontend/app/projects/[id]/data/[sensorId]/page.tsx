@@ -44,8 +44,11 @@ export default function SensorDataPage({ params }: PageProps) {
     const defaultEnd = new Date();
     const defaultStart = subHours(defaultEnd, 24);
 
-    // Format for datetime-local input: YYYY-MM-DDTHH:mm
-    const formatDateForInput = (date: Date) => date.toISOString().slice(0, 16);
+    // Format as local YYYY-MM-DDTHH:mm (not UTC) so the picker matches the user's timezone
+    const formatDateForInput = (date: Date) => {
+        const pad = (n: number) => String(n).padStart(2, "0");
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    };
 
     const [startDate, setStartDate] = useState<string>(formatDateForInput(defaultStart));
     const [endDate, setEndDate] = useState<string>(formatDateForInput(defaultEnd));

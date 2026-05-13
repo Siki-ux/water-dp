@@ -7,11 +7,7 @@ ARG SKIP_SSL_VERIFY=false
 FROM base AS deps
 ARG SKIP_SSL_VERIFY=false
 # Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
-RUN if [ "$SKIP_SSL_VERIFY" = "true" ]; then \
-      apk add --no-check-certificate --no-cache libc6-compat; \
-    else \
-      apk add --no-cache libc6-compat; \
-    fi
+RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 ENV NPM_CONFIG_UPDATE_NOTIFIER=false
@@ -39,26 +35,8 @@ CMD ["npm", "run", "dev"]
 
 # Rebuild the source code only when needed
 FROM base AS builder
-ARG SKIP_SSL_VERIFY=false
-RUN if [ "$SKIP_SSL_VERIFY" = "true" ]; then \
-      apk add --no-check-certificate --no-cache libc6-compat; \
-    else \
-      apk add --no-cache libc6-compat; \
-    fi
 WORKDIR /app
-
-ENV NPM_CONFIG_UPDATE_NOTIFIER=false
-ENV NPM_CONFIG_FUND=false
-ENV NPM_CONFIG_AUDIT=false
-
-COPY package.json package-lock.json* ./
-RUN if [ "$SKIP_SSL_VERIFY" = "true" ]; then \
-      export NODE_TLS_REJECT_UNAUTHORIZED=0; \
-      npm config set strict-ssl false; \
-    fi && \
-    if [ -f package-lock.json ]; then npm ci --legacy-peer-deps; \
-    else echo "Lockfile not found." && npm install --legacy-peer-deps; \
-    fi
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Next.js collects completely anonymous telemetry data about general usage.

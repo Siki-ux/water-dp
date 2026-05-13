@@ -38,7 +38,8 @@ export function DateTimePicker({ value, onChange, className }: Props) {
     const current = toDate(value);
     const curHour = current.getHours();
     const curMinute = current.getMinutes();
-    const nearestQ = Math.round(curMinute / 15) * 15 % 60;
+    // Floor to previous quarter to avoid jumping backwards (e.g. 10:59 → 10:45 not 11:00→10:00)
+    const nearestQ = Math.floor(curMinute / 15) * 15;
 
     // Close both panels on outside click
     useEffect(() => {
@@ -57,7 +58,7 @@ export function DateTimePicker({ value, onChange, className }: Props) {
     useEffect(() => {
         if (!timeOpen || !hourListRef.current) return;
         const el = hourListRef.current.querySelector<HTMLElement>("[data-selected='true']");
-        el?.scrollIntoView({ block: "center", behavior: "instant" });
+        el?.scrollIntoView({ block: "center", behavior: "auto" });
     }, [timeOpen]);
 
     // Calendar grid

@@ -176,7 +176,7 @@ The session callback in `lib/auth.ts` automatically refreshes the access token
 (via `POST /auth/refresh`) when it is within 10 seconds of expiry.
 
 **Protected Routes:**
-All routes under `/portal/projects/`, `/portal/sms/`, and `/portal/portal/` require authentication — enforced by `middleware.ts`.
+All routes (except `/portal/auth/signin` and public assets) require authentication — enforced by `middleware.ts`.
 
 ---
 

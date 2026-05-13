@@ -1,4 +1,4 @@
-# Note: We rely on the autouse fixture 'disable_seeding' from conftest.py to keep these fast.
+# Relies on the autouse fixture 'disable_seeding' from conftest.py.
 
 
 class TestApiCoverage:

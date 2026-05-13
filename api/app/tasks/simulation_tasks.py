@@ -28,7 +28,6 @@ def run_simulation_step():
     tsm_db = TimeIODatabase()  # TSM Config DB
 
     try:
-        # 1. Fetch active simulations from Local DB
         logger.info("Fetching active simulations from Local DB")
         active_sims = (
             db_session.query(Simulation).filter(Simulation.is_enabled.is_(True)).all()
@@ -64,7 +63,7 @@ def run_simulation_step():
 
         logger.info(f"Simulations to run: {[str(s.id) for s in sims_to_run]}")
 
-        # 2. Batch Fetch MQTT Configs from TSM
+        # Batch-fetch MQTT configs
         thing_uuids = [s.thing_uuid for s in sims_to_run]
         logger.debug(f"Fetching configs for things: {thing_uuids}")
         thing_configs = tsm_db.get_thing_configs_by_uuids(thing_uuids)
@@ -85,7 +84,6 @@ def run_simulation_step():
         count = 0
         for sim in sims_to_run:
             try:
-                # 3. Get Credentials from Batch (using str() since thing_configs keys are strings)
                 t_config = thing_configs.get(str(sim.thing_uuid))
 
                 if not t_config:
@@ -100,7 +98,6 @@ def run_simulation_step():
 
                 mqtt_user = t_config.get("mqtt_user")
 
-                # 4. Generate and Publish
                 process_single_simulation(client, sim.config, mqtt_user)
                 count += 1
 

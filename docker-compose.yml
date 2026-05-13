@@ -192,14 +192,15 @@ services:
       - INTERNAL_API_URL=http://water-dp-api:8000/api/v1
       - AUTH_SECRET=${AUTH_SECRET:-6e2e9c8b3a4f5d6e7f8g9h0i1j2k3l4m5n6o7p8q9r}
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-6e2e9c8b3a4f5d6e7f8g9h0i1j2k3l4m5n6o7p8q9r}
-      # AUTH_URL must include the Next.js basePath (/portal) so Auth.js generates
-      # correct signIn/signOut redirect URLs (e.g. /portal/auth/signin).
-      # Without this, HOSTNAME=0.0.0.0 in the Dockerfile causes http://0.0.0.0:3000 URLs.
-      - AUTH_URL=${PROXY_URL:-http://localhost:8080}/portal
-      - NEXTAUTH_URL=${PROXY_URL:-http://localhost:8080}/portal
+      # Auth.js v5 auto-appends the Next.js basePath (/portal) to AUTH_URL,
+      # so do NOT include /portal here — adding it causes basepath-mismatch and
+      # breaks redirect URLs (e.g. redirects land on /api/auth/error instead of
+      # /portal/api/auth/error).
+      - AUTH_URL=${PROXY_URL:-http://localhost:8080}
+      - NEXTAUTH_URL=${PROXY_URL:-http://localhost:8080}
       - AUTH_TRUST_HOST=true
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000"]
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000"]
       interval: 10s
       timeout: 5s
       retries: 12

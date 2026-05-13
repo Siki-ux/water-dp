@@ -136,7 +136,6 @@ class TestDatabaseService:
     def test_update_geo_feature(self, service, mock_db_session):
         mock_feature = GeoFeature(feature_id="F1", layer_id="rivers", properties={})
         # Implementation calls specific query, let's just match the return of first()
-        # Note: update likely calls get_geo_feature internally or does similar query
         mock_db_session.query.return_value.filter.return_value.first.return_value = (
             mock_feature
         )

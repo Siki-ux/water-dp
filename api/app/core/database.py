@@ -51,11 +51,7 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def init_db() -> None:
-    """
-    Initialize database tables.
-    Creates tables and indexes if they don't exist.
-    Handles existing objects gracefully.
-    """
+    """Create tables and indexes if they don't exist."""
     import time
 
     max_retries = 30

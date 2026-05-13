@@ -26,19 +26,16 @@ class LoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         start_time = time.time()
 
-        # 1. Generate or Extract Request ID
         request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
         request_id_context.set(request_id)
 
-        # 2. Log Request Start
-        # Skip health check noise usually, but let's keep it minimal
+        # Skip health check noise
         if request.url.path != "/health":
             logger.info(f"Request: {request.method} {request.url.path}")
 
         try:
             response = await call_next(request)
 
-            # 3. Log Response
             process_time = time.time() - start_time
             if request.url.path != "/health":
                 logger.info(f"Response: {response.status_code} - {process_time:.3f}s")

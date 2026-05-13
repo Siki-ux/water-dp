@@ -712,11 +712,10 @@ def seed_external_sources(headers, admin_headers=None):
     if cfg.get("members"):
         seed_project_members(headers, project_id, cfg["members"])
 
-    # Step 1: Register custom types (requires realm admin)
     register_custom_device_type(admin_headers if admin_headers else headers)
     register_open_meteo_api_type(admin_headers if admin_headers else headers)
 
-    # Step 2: Create CSV parser for SFTP sensor
+    # Create CSV parser for SFTP sensor
     parser_id = create_csv_parser(
         headers,
         "Water Quality CSV",
@@ -730,7 +729,6 @@ def seed_external_sources(headers, admin_headers=None):
     logger.info("Waiting 5s for TSM orchestration...")
     time.sleep(5)
 
-    # Step 3: Create the external source sensors
     for sensor_cfg in EXTERNAL_SOURCES_SENSORS:
         if sensor_cfg.get("needs_parser") and parser_id:
             sensor_cfg["parser_id"] = parser_id

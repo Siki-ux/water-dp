@@ -1,14 +1,12 @@
 "use client";
 
 import { WaterBackground } from "@/components/WaterBackground";
-import { signIn } from "next-auth/react";
+import { credentialsSignIn } from "./actions";
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import { useTranslation } from "@/lib/i18n";
 
 export default function SignIn() {
-    const router = useRouter();
     const { t } = useTranslation();
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
@@ -21,18 +19,11 @@ export default function SignIn() {
         setError("");
 
         try {
-            const result = await signIn("credentials", {
-                username,
-                password,
-                redirect: false,
-            });
-
+            const result = await credentialsSignIn(username, password);
+            // If result has an error, show it; otherwise NEXT_REDIRECT navigates the page
             if (result?.error) {
                 setError(t('auth.invalidCreds'));
                 setLoading(false);
-            } else {
-                router.push("/projects");
-                router.refresh();
             }
         } catch (err) {
             setError(t('auth.errorGeneric'));

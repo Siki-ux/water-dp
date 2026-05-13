@@ -222,12 +222,8 @@ class SimulatorService:
         )
 
         # 2. Extract metadata for SSM creation
-        properties_metadata = {}  # Format: {name: unit}
-        # Note: TimeIOOrchestrator expects Dict[name, unit] or similar for simple properties
-        # But wait, it also takes 'properties' list for metadata registration
-
-        # New Orchestrator takes: properties: Dict[str, Any]
-        # And creates datastreams based on them.
+        properties_metadata = {}
+        # TimeIOOrchestrator expects Dict[name, unit]
 
         # Helper to convert List[Dict] (v3) to Dict[name, unit] (v1/new)
         # OR we pass rich structure if orchestrator handles it?

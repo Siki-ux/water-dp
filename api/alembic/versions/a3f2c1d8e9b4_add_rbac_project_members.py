@@ -25,7 +25,7 @@ def upgrade() -> None:
     # Ensure pgcrypto is available for gen_random_uuid()
     op.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto")
 
-    # 1. Add authorization_provider_group_name to projects
+    # Add authorization_provider_group_name to projects
     op.add_column(
         "projects",
         sa.Column(
@@ -42,7 +42,7 @@ def upgrade() -> None:
         schema="water_dp",
     )
 
-    # 2. Add user_id index to project_members for efficient per-user queries
+    # Index user_id on project_members for per-user lookups
     op.create_index(
         "ix_project_members_user_id",
         "project_members",
@@ -50,8 +50,7 @@ def upgrade() -> None:
         schema="water_dp",
     )
 
-    # 3. Backfill project_members: insert 'owner' rows for all existing projects
-    #    Uses ON CONFLICT DO NOTHING to be safe on re-runs
+    # Backfill project_members: insert 'owner' rows for existing projects
     op.execute(
         """
         INSERT INTO water_dp.project_members (id, project_id, user_id, role, created_at, updated_at)
@@ -70,10 +69,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Remove backfilled owner rows (only those without updated_at changed,
-    # i.e., ones created by this migration — identified by role='owner')
-    # NOTE: This is a best-effort downgrade; manually-added owner rows
-    # created after migration will also be removed.
+    # Best-effort downgrade: removes owner rows, including any added after migration
     op.execute(
         """
         DELETE FROM water_dp.project_members

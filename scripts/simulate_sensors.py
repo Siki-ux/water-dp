@@ -544,10 +544,10 @@ def seed_external_sources(headers):
         logger.error("Could not create/find external sources project. Skipping.")
         return
 
-    # Step 1: Register custom API types
+    # Register custom API types
     register_open_meteo_api_type(headers)
 
-    # Step 2: Create CSV parser for SFTP sensor
+    # Create CSV parser for SFTP sensor
     parser_id = create_csv_parser(
         headers, "Water Quality CSV",
         delimiter=",", timestamp_column=0,
@@ -558,7 +558,7 @@ def seed_external_sources(headers):
     logger.info("Waiting 5s for TSM orchestration...")
     time.sleep(5)
 
-    # Step 3: Create the external source sensors
+    # Create the external source sensors
     for sensor_cfg in EXTERNAL_SOURCES_SENSORS:
         if sensor_cfg.get("needs_parser") and parser_id:
             sensor_cfg["parser_id"] = parser_id

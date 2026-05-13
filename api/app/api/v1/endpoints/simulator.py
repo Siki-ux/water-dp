@@ -151,7 +151,6 @@ async def start_simulation(
     token: str = Depends(deps.oauth2_scheme),
 ):
     check_admin_access(user, project_id, database)
-    # 1. Fetch current config to toggle
     things = SimulatorService.get_all_simulated_things(str(project_id), database, token)
     target = next(
         (
@@ -193,7 +192,6 @@ async def stop_simulation(
     token: str = Depends(deps.oauth2_scheme),
 ):
     check_admin_access(user, project_id, database)
-    # 1. Fetch current config to toggle
     things = SimulatorService.get_all_simulated_things(str(project_id), database, token)
     target = next(
         (

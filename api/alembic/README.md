@@ -1,13 +1,19 @@
-# Alembic Migrations for water_dp Schema
+# Alembic Migrations for water_dp
 
 ## Overview
 
-This directory contains Alembic migrations for the `water_dp` schema within the TSM database.
+This directory contains Alembic database migrations managed by the application.
 
 ## Setup
 
-The migrations target the `water_dp` schema. The database URL should point to the TSM database:
+The database URL is set via the `DATABASE_URL` environment variable. The correct value depends on the deployment mode:
 
+**Standalone** (water-dp's own PostgreSQL):
+```
+DATABASE_URL=postgresql://postgres:postgres@postgres-app:5432/water_app
+```
+
+**Integrated with TSM** (shared PostgreSQL, `water_dp` schema):
 ```
 DATABASE_URL=postgresql://postgres:postgres@database:5432/postgres?options=-csearch_path=water_dp,public
 ```
@@ -66,16 +72,17 @@ All models inherit from `BaseModel` which sets:
 
 The `alembic_version` table is also created in the `water_dp` schema.
 
-## Alternative: Raw SQL
+## Alternative: Raw SQL (TSM Integration Only)
 
-The `tsm-orchestration/src/sql/water_dp/` directory contains equivalent raw SQL files. You can use either approach:
+When running integrated with TSM, the `tsm-orchestration/src/sql/water_dp/` directory contains
+equivalent raw SQL files. You can use either approach:
 
 - **Alembic**: Best for development, auto-generates migrations from model changes
-- **Raw SQL**: Best for production, explicit control, matches TSM pattern
+- **Raw SQL**: Best for production TSM deployments, explicit control
 
-To deploy via raw SQL instead of Alembic:
+To deploy via raw SQL (from the tsm-orchestration directory):
 ```bash
-docker-compose exec -T database psql -U postgres < src/sql/water_dp/000_deploy_all.sql
+docker-compose exec -T database psql -U postgres -d postgres < src/sql/water_dp/000_deploy_all.sql
 ```
 
 ## Handling Existing Schema

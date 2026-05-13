@@ -11,7 +11,7 @@ def run(ctx):
     Main entry point for computation.
     :param ctx: ComputationContext object with helper methods (get_sensor_data, alert, params)
     """
-    # 1. Get Inputs (from params or live sensor)
+    # Get inputs
     location_id = ctx.params.get("location_id")
     water_level = ctx.params.get("water_level")
 
@@ -38,7 +38,7 @@ def run(ctx):
         # Simulate a value for demo purposes
         water_level = round(random.uniform(50.0, 160.0), 2)
 
-    # 2. Simulate Processing
+    # Evaluate risk
     risk_score = 0.0
     if water_level > 150:
         risk_score = 80.0
@@ -49,7 +49,7 @@ def run(ctx):
 
     prediction = "FLOOD" if risk_score > 50 else "NORMAL"
 
-    # 3. Active Alerting (Script-Driven)
+    # Trigger alerts
     if risk_score > 75:
         ctx.alert(
             message=f"CRITICAL FLOOD RISK detected at {location_id or 'Simulation'}",
@@ -63,7 +63,6 @@ def run(ctx):
             severity="warning",
         )
 
-    # 4. Return Results
     result = {
         "status": "success",
         "location_id": location_id,

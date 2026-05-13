@@ -1,0 +1,4 @@
+Method,Name,Error,Occurrences
+GET,/health [GET],HTTPError('404 Client Error: Not Found for url: /health [GET]'),24
+GET,/projects/{id}/things [LIST],HTTPError('404 Client Error: Not Found for url: /projects/{id}/things [LIST]'),34
+GET,/alerts/{id} [LIST],HTTPError('404 Client Error: Not Found for url: /alerts/{id} [LIST]'),16

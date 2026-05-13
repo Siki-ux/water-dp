@@ -1,0 +1,8 @@
+Method,Name,Error,Occurrences
+GET,/health [GET],HTTPError('404 Client Error: Not Found for url: /health [GET]'),53
+GET,/projects/{id}/things [LIST],HTTPError('404 Client Error: Not Found for url: /projects/{id}/things [LIST]'),56
+GET,/auth/me [GET],HTTPError('401 Client Error: Unauthorized for url: /auth/me [GET]'),6
+GET,/sms/sensors [LIST],HTTPError('401 Client Error: Unauthorized for url: /sms/sensors [LIST]'),10
+GET,/alerts/{id} [LIST],HTTPError('404 Client Error: Not Found for url: /alerts/{id} [LIST]'),23
+POST,/auth/login,HTTPError('429 Client Error: Too Many Requests for url: /auth/login'),42
+GET,/projects/ [LIST],CatchResponseError('Auth expired'),37

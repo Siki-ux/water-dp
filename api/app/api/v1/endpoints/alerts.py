@@ -4,11 +4,13 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import UUID4, BaseModel
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from app.api import deps
 from app.core.database import get_db
 from app.models.alerts import Alert, AlertDefinition
+from app.services.monitoring_service import MonitoringService
 from app.services.project_service import ProjectService
 
 logger = logging.getLogger(__name__)
@@ -190,6 +192,33 @@ def delete_alert_definition(
     return {"ok": True}
 
 
+@router.post("/record-activity/{thing_uuid}", include_in_schema=False)
+def record_sensor_activity(thing_uuid: str):
+    """Internal endpoint: called by ingest bridges to mark a sensor as seen.
+    No auth required — only reachable from within the Docker network."""
+    MonitoringService().record_activity_for_thing(thing_uuid)
+    return {"ok": True}
+
+
+@router.get("/count/{project_id}")
+def get_active_alert_count(
+    project_id: UUID4,
+    status: Optional[str] = "active",
+    database: Session = Depends(get_db),
+    user: dict = Depends(deps.get_current_user),
+):
+    """Return the total count of alerts with the given status for a project (no limit)."""
+    ProjectService._check_access(database, project_id, user, required_role="viewer")
+    query = (
+        database.query(func.count(Alert.id))
+        .join(AlertDefinition)
+        .filter(AlertDefinition.project_id == project_id)
+    )
+    if status:
+        query = query.filter(Alert.status == status)
+    return {"count": query.scalar() or 0}
+
+
 @router.get("/history/{project_id}", response_model=List[AlertRead])
 def get_alert_history(
     project_id: UUID4,
@@ -213,7 +242,12 @@ def get_alert_history(
     if status:
         query = query.filter(Alert.status == status)
 
-    alerts = query.order_by(Alert.timestamp.desc()).limit(limit).all()
+    # Active alerts first (so they're never pushed out of the limit window by newer acknowledged/resolved ones),
+    # then by timestamp descending within each status group.
+    alerts = query.order_by(
+        case((Alert.status == "active", 0), else_=1),
+        Alert.timestamp.desc(),
+    ).limit(limit).all()
     return alerts
 
 

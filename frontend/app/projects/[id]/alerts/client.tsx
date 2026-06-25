@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { Loader2, Plus, Bell, AlertTriangle, CheckCircle, Trash2, Zap, ArrowUpRight } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
 import { useProjectPermissions } from '@/hooks/usePermissions';
@@ -40,7 +40,10 @@ export default function AlertsClient({}: AlertsClientProps) {
     const projectId = params.id as string;
     const queryClient = useQueryClient();
     const { t } = useTranslation();
-    const [activeTab, setActiveTab] = useState<'rules' | 'history'>('rules');
+    const searchParams = useSearchParams();
+    const [activeTab, setActiveTab] = useState<'rules' | 'history'>(
+        searchParams.get('tab') === 'history' ? 'history' : 'rules'
+    );
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const { data: perms } = useProjectPermissions(projectId);
     const canEditAlerts = perms?.can_edit_alerts ?? false;
@@ -285,9 +288,15 @@ function RulesList({ projectId, queryClient, canEdit }: { projectId: string, que
     );
 }
 
+const PAGE_SIZE = 25;
+
 function HistoryList({ projectId }: { projectId: string }) {
     const { t } = useTranslation();
     const queryClient = useQueryClient();
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [isBulkPending, setIsBulkPending] = useState(false);
+    const [page, setPage] = useState(0);
+
     const { data: alerts = [], isLoading } = useQuery({
         queryKey: ['alertsHistory', projectId],
         queryFn: async () => {
@@ -297,6 +306,14 @@ function HistoryList({ projectId }: { projectId: string }) {
         refetchInterval: 5000
     });
 
+    const totalPages = Math.max(1, Math.ceil(alerts.length / PAGE_SIZE));
+    const pagedAlerts = alerts.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+    const activeAlerts = alerts.filter(a => a.status === 'active');
+    const activeIds = new Set(activeAlerts.map(a => a.id));
+    const allActiveSelected = activeAlerts.length > 0 && activeAlerts.every(a => selectedIds.has(a.id));
+    const someSelected = selectedIds.size > 0;
+
     const acknowledgeMutation = useMutation({
         mutationFn: async (alertId: string) => {
             const res = await api.post(`/alerts/history/${alertId}/acknowledge`);
@@ -304,9 +321,37 @@ function HistoryList({ projectId }: { projectId: string }) {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['alertsHistory', projectId] });
-            queryClient.invalidateQueries({ queryKey: ['activeAlertsCount'] }); // Optional but good practice if we cache count
+            queryClient.invalidateQueries({ queryKey: ['activeAlertsCount'] });
         }
     });
+
+    const toggleSelect = (id: string) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            next.has(id) ? next.delete(id) : next.add(id);
+            return next;
+        });
+    };
+
+    const toggleSelectAll = () => {
+        if (allActiveSelected) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(activeAlerts.map(a => a.id)));
+        }
+    };
+
+    const acknowledgeSelected = async (ids: string[]) => {
+        setIsBulkPending(true);
+        try {
+            await Promise.all(ids.map(id => api.post(`/alerts/history/${id}/acknowledge`)));
+            setSelectedIds(new Set());
+            queryClient.invalidateQueries({ queryKey: ['alertsHistory', projectId] });
+            queryClient.invalidateQueries({ queryKey: ['activeAlertsCount'] });
+        } finally {
+            setIsBulkPending(false);
+        }
+    };
 
     if (isLoading) return <div className="p-8 flex justify-center"><Loader2 className="animate-spin text-hydro-primary" /></div>;
 
@@ -318,63 +363,153 @@ function HistoryList({ projectId }: { projectId: string }) {
     );
 
     return (
-        <div className="overflow-auto h-full">
-            <table className="w-full text-left text-sm text-[var(--foreground)]/70">
-                <thead className="bg-muted/50 text-[var(--foreground)]/40 sticky top-0 z-10">
-                    <tr>
-                        <th className="px-6 py-3 font-medium">{t('alerts.colTime')}</th>
-                        <th className="px-6 py-3 font-medium">{t('alerts.colSource')}</th>
-                        <th className="px-6 py-3 font-medium">{t('alerts.colStatus')}</th>
-                        <th className="px-6 py-3 font-medium">{t('alerts.colDetails')}</th>
-                        <th className="px-6 py-3 font-medium text-right">{t('alerts.colActions')}</th>
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                    {alerts.map(alert => (
-                        <tr key={alert.id} className="hover:bg-muted/50">
-                            <td className="px-6 py-4 font-mono text-xs text-[var(--foreground)]/50">
-                                {new Date(alert.timestamp).toLocaleString()}
-                            </td>
-                            <td className="px-6 py-4">
-                                {alert.definition?.target_id ? (
-                                    <Link
-                                        href={`/projects/${projectId}/data?sensorId=${alert.definition.target_id}`}
-                                        className="flex items-center gap-1 text-hydro-primary hover:underline font-medium"
-                                    >
-                                        {alert.definition.name}
-                                        <ArrowUpRight size={12} />
-                                    </Link>
-                                ) : (
-                                    <span className="text-[var(--foreground)]/50">{alert.definition?.name || t('alerts.unknownRule')}</span>
+        <div className="flex flex-col h-full">
+            {/* Bulk action toolbar — only visible when active alerts exist */}
+            {activeAlerts.length > 0 && (
+                <div className="flex items-center gap-3 px-6 py-3 border-b border-border bg-muted/30 shrink-0">
+                    <span className="text-xs text-[var(--foreground)]/40">
+                        {someSelected
+                            ? `${selectedIds.size} selected`
+                            : `${activeAlerts.length} active alert${activeAlerts.length !== 1 ? 's' : ''}`}
+                    </span>
+                    <div className="flex items-center gap-2 ml-auto">
+                        {someSelected && (
+                            <button
+                                onClick={() => acknowledgeSelected([...selectedIds].filter(id => activeIds.has(id)))}
+                                disabled={isBulkPending}
+                                className="flex items-center gap-1.5 text-xs bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded-lg transition-colors font-semibold disabled:opacity-50"
+                            >
+                                {isBulkPending ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle size={12} />}
+                                Acknowledge selected ({selectedIds.size})
+                            </button>
+                        )}
+                        <button
+                            onClick={() => acknowledgeSelected(activeAlerts.map(a => a.id))}
+                            disabled={isBulkPending || activeAlerts.length === 0}
+                            className="flex items-center gap-1.5 text-xs bg-white/5 hover:bg-white/10 text-[var(--foreground)]/60 hover:text-[var(--foreground)] border border-border px-3 py-1.5 rounded-lg transition-colors font-semibold disabled:opacity-40"
+                        >
+                            {isBulkPending ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle size={12} />}
+                            Acknowledge all ({activeAlerts.length})
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            <div className="overflow-auto flex-1">
+                <table className="w-full text-left text-sm text-[var(--foreground)]/70">
+                    <thead className="bg-muted/50 text-[var(--foreground)]/40 sticky top-0 z-10">
+                        <tr>
+                            <th className="px-4 py-3 w-10">
+                                {activeAlerts.length > 0 && (
+                                    <input
+                                        type="checkbox"
+                                        checked={allActiveSelected}
+                                        onChange={toggleSelectAll}
+                                        className="rounded border-border accent-hydro-primary cursor-pointer"
+                                        title="Select all active"
+                                    />
                                 )}
-                                <div className="text-[10px] text-[var(--foreground)]/30 truncate max-w-[150px]">
-                                    {alert.definition?.id}
-                                </div>
-                            </td>
-                            <td className="px-6 py-4">
-                                <span className={`flex items-center gap-1.5 font-bold ${alert.status === 'active' ? 'text-red-400' : 'text-emerald-400'}`}>
-                                    {alert.status === 'active' ? <AlertTriangle size={14} /> : <CheckCircle size={14} />}
-                                    {alert.status}
-                                </span>
-                            </td>
-                            <td className="px-6 py-4 text-[var(--foreground)]/80 font-mono text-xs">
-                                {typeof alert.details === 'string' ? alert.details : JSON.stringify(alert.details, null, 2)}
-                            </td>
-                            <td className="px-6 py-4 text-right">
-                                {alert.status === 'active' && (
-                                    <button
-                                        onClick={() => acknowledgeMutation.mutate(alert.id)}
-                                        disabled={acknowledgeMutation.isPending}
-                                        className="text-xs bg-white/10 hover:bg-white/20 text-[var(--foreground)] px-3 py-1.5 rounded transition-colors border border-border"
-                                    >
-                                        {t('alerts.acknowledge')}
-                                    </button>
-                                )}
-                            </td>
+                            </th>
+                            <th className="px-4 py-3 font-medium">{t('alerts.colTime')}</th>
+                            <th className="px-4 py-3 font-medium">{t('alerts.colSource')}</th>
+                            <th className="px-4 py-3 font-medium">{t('alerts.colStatus')}</th>
+                            <th className="px-4 py-3 font-medium">{t('alerts.colDetails')}</th>
+                            <th className="px-4 py-3 font-medium text-right">{t('alerts.colActions')}</th>
                         </tr>
-                    ))}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                        {pagedAlerts.map(alert => {
+                            const isActive = alert.status === 'active';
+                            const isChecked = selectedIds.has(alert.id);
+                            return (
+                                <tr
+                                    key={alert.id}
+                                    className={`hover:bg-muted/50 transition-colors ${isChecked ? 'bg-hydro-primary/5' : ''}`}
+                                >
+                                    <td className="px-4 py-4">
+                                        {isActive && (
+                                            <input
+                                                type="checkbox"
+                                                checked={isChecked}
+                                                onChange={() => toggleSelect(alert.id)}
+                                                className="rounded border-border accent-hydro-primary cursor-pointer"
+                                            />
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-4 font-mono text-xs text-[var(--foreground)]/50">
+                                        {new Date(alert.timestamp).toLocaleString()}
+                                    </td>
+                                    <td className="px-4 py-4">
+                                        {alert.definition?.target_id ? (
+                                            <Link
+                                                href={`/projects/${projectId}/data?sensorId=${alert.definition.target_id}`}
+                                                className="flex items-center gap-1 text-hydro-primary hover:underline font-medium"
+                                            >
+                                                {alert.definition.name}
+                                                <ArrowUpRight size={12} />
+                                            </Link>
+                                        ) : (
+                                            <span className="text-[var(--foreground)]/50">{alert.definition?.name || t('alerts.unknownRule')}</span>
+                                        )}
+                                        <div className="text-[10px] text-[var(--foreground)]/30 truncate max-w-[150px]">
+                                            {alert.definition?.id}
+                                        </div>
+                                    </td>
+                                    <td className="px-4 py-4">
+                                        <span className={`flex items-center gap-1.5 font-bold ${isActive ? 'text-red-400' : 'text-emerald-400'}`}>
+                                            {isActive ? <AlertTriangle size={14} /> : <CheckCircle size={14} />}
+                                            {alert.status}
+                                        </span>
+                                    </td>
+                                    <td className="px-4 py-4 text-[var(--foreground)]/80 font-mono text-xs">
+                                        {typeof alert.details === 'string' ? alert.details : JSON.stringify(alert.details, null, 2)}
+                                    </td>
+                                    <td className="px-4 py-4 text-right">
+                                        {isActive && (
+                                            <button
+                                                onClick={() => acknowledgeMutation.mutate(alert.id)}
+                                                disabled={acknowledgeMutation.isPending || isBulkPending}
+                                                className="text-xs bg-white/10 hover:bg-white/20 text-[var(--foreground)] px-3 py-1.5 rounded transition-colors border border-border disabled:opacity-40"
+                                            >
+                                                {t('alerts.acknowledge')}
+                                            </button>
+                                        )}
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+                <div className="flex items-center justify-between px-6 py-3 border-t border-border shrink-0 text-xs text-[var(--foreground)]/50">
+                    <span>{alerts.length} total &mdash; page {page + 1} of {totalPages}</span>
+                    <div className="flex items-center gap-1">
+                        <button
+                            onClick={() => setPage(0)}
+                            disabled={page === 0}
+                            className="px-2 py-1 rounded border border-border hover:bg-muted/50 disabled:opacity-30 disabled:cursor-not-allowed"
+                        >«</button>
+                        <button
+                            onClick={() => setPage(p => Math.max(0, p - 1))}
+                            disabled={page === 0}
+                            className="px-2 py-1 rounded border border-border hover:bg-muted/50 disabled:opacity-30 disabled:cursor-not-allowed"
+                        >‹</button>
+                        <button
+                            onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                            disabled={page >= totalPages - 1}
+                            className="px-2 py-1 rounded border border-border hover:bg-muted/50 disabled:opacity-30 disabled:cursor-not-allowed"
+                        >›</button>
+                        <button
+                            onClick={() => setPage(totalPages - 1)}
+                            disabled={page >= totalPages - 1}
+                            className="px-2 py-1 rounded border border-border hover:bg-muted/50 disabled:opacity-30 disabled:cursor-not-allowed"
+                        >»</button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

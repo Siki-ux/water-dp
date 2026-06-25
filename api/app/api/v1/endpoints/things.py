@@ -4,7 +4,7 @@ import json
 import logging
 import re
 import uuid as uuid_pkg
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
@@ -440,6 +440,9 @@ async def get_thing_details(
     """
     Get Sensor details from via FROST (async).
     """
+    import asyncio
+    from app.services.timeio.timeio_db import TimeIODatabase
+
     schema_name = await AsyncThingService.get_schema_from_uuid(sensor_uuid)
     if schema_name is None:
         raise ResourceNotFoundException("Schema not found")
@@ -447,7 +450,133 @@ async def get_thing_details(
     thing = await thing_service.get_thing(sensor_uuid, expand)
     if not thing:
         raise ResourceNotFoundException("Thing not found")
+
+    # Populate last_activity from actual observations
+    try:
+        timeio_db = TimeIODatabase()
+        last_activities = await asyncio.to_thread(
+            timeio_db.get_last_observation_times, schema_name, [sensor_uuid]
+        )
+        if sensor_uuid in last_activities:
+            thing.last_activity = last_activities[sensor_uuid]
+    except Exception:
+        pass  # last_activity stays None — not critical
+
     return thing
+
+
+class BackfillRequest(PydanticBaseModel):
+    date_from: str  # "YYYY-MM-DD"
+    date_to: str  # "YYYY-MM-DD"
+
+
+# External API types that support on-demand historical backfill
+_BACKFILL_SYNC_TOPIC = "sync_ext_apis"
+_BACKFILLABLE_API_TYPES = frozenset({"bluebeatle"})
+
+
+def _monthly_windows(date_from: datetime, date_to: datetime):
+    """Yield (start, end) datetimes splitting [date_from, date_to] into <=1-month
+    windows. Each window is bounded so the sync worker finishes within the
+    OAuth token lifetime, and overlaps/retries are harmless thanks to the
+    (result_time, datastream_id) upsert key."""
+    cursor = date_from
+    while cursor <= date_to:
+        # First day of the next month
+        if cursor.month == 12:
+            next_month = cursor.replace(year=cursor.year + 1, month=1, day=1)
+        else:
+            next_month = cursor.replace(month=cursor.month + 1, day=1)
+        window_end = min(next_month - timedelta(seconds=1), date_to)
+        yield cursor, window_end
+        cursor = next_month
+
+
+@router.post(
+    "/{sensor_uuid}/backfill",
+    summary="Backfill historical data from the sensor's external API",
+    description=(
+        "Triggers a one-time historical sync from the sensor's external API "
+        "(e.g. BlueBeatle) for the given date range. The range is split into "
+        "monthly windows and queued to the sync worker. Re-running is safe: "
+        "observations are upserted on (result_time, datastream) so no duplicates "
+        "are created."
+    ),
+)
+def backfill_sensor_history(
+    sensor_uuid: str,
+    payload: BackfillRequest,
+    database: Session = Depends(get_db),
+    user: dict = Depends(deps.get_current_user),
+):
+    from datetime import datetime as _dt
+
+    import paho.mqtt.client as mqtt
+
+    from app.core.config import settings
+    from app.services.timeio.timeio_db import TimeIODatabase
+
+    # Validate dates
+    try:
+        dt_from = _dt.strptime(payload.date_from, "%Y-%m-%d")
+        dt_to = _dt.strptime(payload.date_to, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(
+            status_code=400, detail="Dates must be in YYYY-MM-DD format"
+        )
+    if dt_from > dt_to:
+        raise HTTPException(status_code=400, detail="date_from must be <= date_to")
+
+    # Confirm this sensor has a backfillable external API
+    timeio_db = TimeIODatabase()
+    ext_api = timeio_db.get_ext_api_info(sensor_uuid)
+    if not ext_api or ext_api["api_type"] not in _BACKFILLABLE_API_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "This sensor does not support historical backfill "
+                "(no compatible external API configured)."
+            ),
+        )
+
+    # Build the monthly sync messages
+    messages = [
+        {
+            "thing": sensor_uuid,
+            "datetime_from": start.strftime("%Y-%m-%d %H:%M:%S"),
+            "datetime_to": end.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        for start, end in _monthly_windows(dt_from, dt_to)
+    ]
+
+    # Publish all windows over a single connection, as the 'mqtt' user that
+    # normally drives ext-api syncs (same identity the cron-scheduler uses).
+    client = mqtt.Client()
+    client.username_pw_set("mqtt", settings.mqtt_password)
+    try:
+        client.connect(settings.mqtt_broker_host, 1883, keepalive=60)
+        client.loop_start()
+        for msg in messages:
+            info = client.publish(_BACKFILL_SYNC_TOPIC, json.dumps(msg), qos=2)
+            info.wait_for_publish(timeout=10)
+        client.loop_stop()
+        client.disconnect()
+    except Exception as error:
+        logger.error(f"Failed to queue backfill for {sensor_uuid}: {error}")
+        raise HTTPException(
+            status_code=502, detail="Failed to queue backfill with the sync worker."
+        )
+
+    logger.info(
+        f"Queued {len(messages)} backfill window(s) for {sensor_uuid} "
+        f"({payload.date_from} → {payload.date_to})"
+    )
+    return {
+        "queued_windows": len(messages),
+        "date_from": payload.date_from,
+        "date_to": payload.date_to,
+        "api_type": ext_api["api_type"],
+    }
 
 
 @router.post(

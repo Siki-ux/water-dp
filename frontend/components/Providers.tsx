@@ -3,6 +3,7 @@
 import { SessionProvider } from "next-auth/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
+import { Toaster } from "sonner";
 import { IdleMonitor } from "./auth/IdleMonitor";
 import { ThemeProvider } from "./ThemeContext";
 
@@ -22,6 +23,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
                 <ThemeProvider>
                     <IdleMonitor />
                     {children}
+                    <Toaster position="top-right" richColors closeButton />
                 </ThemeProvider>
             </SessionProvider>
         </QueryClientProvider>

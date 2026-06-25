@@ -122,8 +122,11 @@ export default function ProjectMap({ sensors: initialSensors, projectId, token: 
         return new Map(initialSensors.filter(s => s.uuid).map(s => [s.uuid, s]));
     }, [initialSensors]);
 
+    const hasValidLocation = (s: Sensor) =>
+        s.latitude != null && s.longitude != null && (s.latitude !== 0 || s.longitude !== 0);
+
     const displayedSensors = useMemo(() => {
-        if (!activeLayer) return initialSensors.filter(s => !isDataset(s));
+        if (!activeLayer) return initialSensors.filter(s => !isDataset(s) && hasValidLocation(s));
         if (!layerSensors) return [];
 
         return (layerSensors || [])
@@ -143,7 +146,7 @@ export default function ProjectMap({ sensors: initialSensors, projectId, token: 
                 }
                 return null;
             })
-            .filter((s): s is Sensor => s !== null && !isDataset(s));
+            .filter((s): s is Sensor => s !== null && !isDataset(s) && hasValidLocation(s));
     }, [activeLayer, layerSensors, initialSensors, projectSensorMap]);
 
     const popupSensor = useMemo(() => {
@@ -360,9 +363,9 @@ export default function ProjectMap({ sensors: initialSensors, projectId, token: 
 
         const defaultCenter: [number, number] = [15.4, 49.8];
         const defaultZoom = 6;
-        const validSensors = initialSensors.filter(s => !isDataset(s));
+        const validSensors = initialSensors.filter(s => !isDataset(s) && hasValidLocation(s));
         const initialCenter = validSensors.length > 0
-            ? [validSensors[0].longitude, validSensors[0].latitude] as [number, number]
+            ? [validSensors[0].longitude!, validSensors[0].latitude!] as [number, number]
             : defaultCenter;
 
         if (!map.current) {
@@ -414,7 +417,7 @@ export default function ProjectMap({ sensors: initialSensors, projectId, token: 
         map.current.on('style.load', handleStyleLoad);
 
         map.current.once('load', () => {
-            const mappableSensors = initialSensors.filter(s => !isDataset(s));
+            const mappableSensors = initialSensors.filter(s => !isDataset(s) && hasValidLocation(s));
             if (mappableSensors.length > 0 && !activeLayer) fitBounds(mappableSensors);
         });
 
@@ -457,7 +460,7 @@ export default function ProjectMap({ sensors: initialSensors, projectId, token: 
             if (map.current?.getSource('active-layer-source')) map.current.removeSource('active-layer-source');
             if (map.current?.getLayer('active-wms-layer')) map.current.removeLayer('active-wms-layer');
             if (map.current?.getSource('active-wms-source')) map.current.removeSource('active-wms-source');
-            const mappableSensors = initialSensors.filter(s => !isDataset(s));
+            const mappableSensors = initialSensors.filter(s => !isDataset(s) && hasValidLocation(s));
             if (mappableSensors.length > 0) fitBounds(mappableSensors);
         };
 

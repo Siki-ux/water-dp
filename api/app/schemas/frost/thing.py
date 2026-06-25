@@ -117,7 +117,7 @@ class Thing(BaseModel):
                         lat = coords[1]
 
         location_obj = None
-        if lat is not None and lon is not None:
+        if lat is not None and lon is not None and (lat != 0 or lon != 0):
             location_obj = Location(
                 type="Point", coordinates=Coordinate(latitude=lat, longitude=lon)
             )

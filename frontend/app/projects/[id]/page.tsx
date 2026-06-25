@@ -2,11 +2,12 @@
 
 import { useMemo } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import ProjectMap from "@/components/ProjectMap";
 import { Sensor } from "@/types/sensor";
 import { T } from "@/components/T";
 import { Loader2 } from "lucide-react";
-import { useProject, useProjectSensors, useAlertHistory } from "@/hooks/queries/useProjects";
+import { useProject, useProjectSensors, useActiveAlertCount } from "@/hooks/queries/useProjects";
 
 const ACTIVE_THRESHOLD_MS = 24 * 60 * 60 * 1000;
 
@@ -16,14 +17,14 @@ export default function ProjectOverviewPage() {
 
     const { data: project, isLoading: projectLoading } = useProject(id);
     const { data: rawSensors, isLoading: sensorsLoading, error: sensorError } = useProjectSensors(id);
-    const { data: alertsRaw } = useAlertHistory(id, { status: "active" });
+    const { data: activeAlertCount = 0 } = useActiveAlertCount(id);
 
     const sensors: Sensor[] = useMemo(() => {
         if (!rawSensors) return [];
         const now = Date.now();
         return (rawSensors as any[]).map((t) => {
-            const lat = t.location?.coordinates?.latitude || 0;
-            const lng = t.location?.coordinates?.longitude || 0;
+            const lat = t.location?.coordinates?.latitude ?? null;
+            const lng = t.location?.coordinates?.longitude ?? null;
             const hasRecentData =
                 t.last_activity &&
                 now - new Date(t.last_activity).getTime() < ACTIVE_THRESHOLD_MS;
@@ -56,7 +57,7 @@ export default function ProjectOverviewPage() {
         ).length;
     }, [sensors]);
 
-    const activeAlertsCount = Array.isArray(alertsRaw) ? alertsRaw.length : 0;
+    const activeAlertsCount = activeAlertCount;
 
     if (projectLoading || sensorsLoading) {
         return (
@@ -91,30 +92,42 @@ export default function ProjectOverviewPage() {
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
-                <div className="p-6 rounded-xl bg-white/5 border border-white/10">
-                    <div className="text-4xl font-bold text-hydro-secondary mb-2">
+                <Link
+                    href={`/projects/${id}/data`}
+                    className="p-6 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-hydro-secondary/30 transition-colors group block"
+                >
+                    <div className="text-4xl font-bold text-hydro-secondary mb-2 group-hover:opacity-80 transition-opacity">
                         {sensors.length}
                     </div>
-                    <div className="text-sm text-white/50">
+                    <div className="text-sm text-white/50 flex items-center gap-1">
                         <T path="projects.details.totalSensors" />
+                        <span className="opacity-0 group-hover:opacity-60 transition-opacity text-xs">↗</span>
                     </div>
-                </div>
-                <div className="p-6 rounded-xl bg-white/5 border border-white/10">
-                    <div className="text-4xl font-bold text-green-400 mb-2">
+                </Link>
+                <Link
+                    href={`/projects/${id}/data?status=active`}
+                    className="p-6 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-green-400/30 transition-colors group block"
+                >
+                    <div className="text-4xl font-bold text-green-400 mb-2 group-hover:opacity-80 transition-opacity">
                         {activeSensors}
                     </div>
-                    <div className="text-sm text-white/50">
+                    <div className="text-sm text-white/50 flex items-center gap-1">
                         <T path="projects.details.activeSensors" />
+                        <span className="opacity-0 group-hover:opacity-60 transition-opacity text-xs">↗</span>
                     </div>
-                </div>
-                <div className="p-6 rounded-xl bg-white/5 border border-white/10">
-                    <div className="text-4xl font-bold text-orange-400 mb-2">
+                </Link>
+                <Link
+                    href={`/projects/${id}/alerts?tab=history`}
+                    className="p-6 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-orange-400/30 transition-colors group block"
+                >
+                    <div className="text-4xl font-bold text-orange-400 mb-2 group-hover:text-orange-300 transition-colors">
                         {activeAlertsCount}
                     </div>
-                    <div className="text-sm text-white/50">
+                    <div className="text-sm text-white/50 flex items-center gap-1">
                         <T path="projects.details.activeAlerts" />
+                        <span className="opacity-0 group-hover:opacity-60 transition-opacity text-xs">↗</span>
                     </div>
-                </div>
+                </Link>
             </div>
 
             <div className="mt-8">

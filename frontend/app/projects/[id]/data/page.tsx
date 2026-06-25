@@ -55,6 +55,8 @@ export default function ProjectDataPage({ params }: PageProps) {
             });
 
             const data = res.data;
+                const now = Date.now();
+                const ACTIVE_THRESHOLD_MS = 24 * 60 * 60 * 1000;
                 const mapped = data.map((t: any) => {
                     let lat = "";
                     let lon = "";
@@ -62,13 +64,24 @@ export default function ProjectDataPage({ params }: PageProps) {
                     if (loc?.type === "Point" && loc?.coordinates?.length >= 2) {
                         lon = loc.coordinates[0];
                         lat = loc.coordinates[1];
+                    } else if (t.location?.coordinates?.latitude != null) {
+                        lat = t.location.coordinates.latitude;
+                        lon = t.location.coordinates.longitude;
                     }
+
+                    const hasRecentData =
+                        t.last_activity &&
+                        now - new Date(t.last_activity).getTime() < ACTIVE_THRESHOLD_MS;
+                    const effectiveStatus =
+                        t.properties?.status === "active" || hasRecentData
+                            ? "active"
+                            : t.properties?.status || "inactive";
 
                     return {
                         ...t,
                         id: t.sensor_uuid || t.thing_id,
                         uuid: t.sensor_uuid,
-                        status: 'active',
+                        status: effectiveStatus,
                         latitude: lat,
                         longitude: lon
                     };
@@ -218,6 +231,7 @@ export default function ProjectDataPage({ params }: PageProps) {
                     onSelectSensor={setSelectedSensor}
                     onUpload={setUploadSensor}
                     onDelete={handleDeleteSensor}
+                    initialStatusFilter={(searchParams.get('status') as 'active' | 'inactive') || 'all'}
                 />
             )}
 

@@ -185,35 +185,39 @@ class MonitoringService:
         thing_name: str,
         last_activity: Optional[datetime],
     ):
+        # Check for any non-resolved alert (active OR acknowledged) — prevents
+        # re-triggering after a user acknowledges while the sensor is still inactive.
         existing = (
             self.db.query(Alert)
             .filter(
                 Alert.definition_id == alert_def.id,
-                Alert.status == "active",
+                Alert.status.in_(["active", "acknowledged"]),
                 func.jsonb_extract_path_text(Alert.details, "thing_name") == thing_name,
             )
             .first()
         )
-        if not existing:
-            last_seen = last_activity.isoformat() if last_activity else "Never"
-            alert = Alert(
-                definition_id=alert_def.id,
-                message=f"Sensor '{thing_name}' is inactive. Last data: {last_seen}",
-                details={"thing_name": thing_name, "last_activity": last_seen},
-                status="active",
-                timestamp=datetime.now(timezone.utc),
-            )
-            self.db.add(alert)
-            self.db.commit()
-            logger.info("Raised inactive alert for %s", thing_name)
-            self.stats["alerts_created"] += 1
+        if existing:
+            return  # already have a live alert for this sensor; don't spam
+        last_seen = last_activity.isoformat() if last_activity else "Never"
+        alert = Alert(
+            definition_id=alert_def.id,
+            message=f"Sensor '{thing_name}' is inactive. Last data: {last_seen}",
+            details={"thing_name": thing_name, "last_activity": last_seen},
+            status="active",
+            timestamp=datetime.now(timezone.utc),
+        )
+        self.db.add(alert)
+        self.db.commit()
+        logger.info("Raised inactive alert for %s", thing_name)
+        self.stats["alerts_created"] += 1
 
     def _resolve_alert(self, alert_def: AlertDefinition, thing_name: str):
+        # Resolve any live alert (active OR acknowledged) when sensor recovers.
         existing = (
             self.db.query(Alert)
             .filter(
                 Alert.definition_id == alert_def.id,
-                Alert.status == "active",
+                Alert.status.in_(["active", "acknowledged"]),
                 func.jsonb_extract_path_text(Alert.details, "thing_name") == thing_name,
             )
             .first()

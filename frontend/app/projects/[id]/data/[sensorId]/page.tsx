@@ -3,10 +3,10 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { ArrowLeft, Download, RefreshCw, Calendar, TrendingUp, TrendingDown, Activity, Database, Layers } from "lucide-react";
+import { ArrowLeft, Download, RefreshCw, Calendar, TrendingUp, TrendingDown, Activity, Database, Layers, ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from "lucide-react";
 import TimeSeriesChart from "@/components/data/TimeSeriesChart";
 import { DataTable, Column } from "@/components/data/DataTable";
-import { format, subHours } from "date-fns";
+import { format, subHours, subDays } from "date-fns";
 import { getApiUrl } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n";
 import { DateTimePicker } from "@/components/DateTimePicker";
@@ -187,11 +187,45 @@ export default function SensorDataPage({ params }: PageProps) {
 
     const handleRefresh = handleApplyFilters;
 
-    // Decimated Data for Chart
+    // Relative time presets — set window and immediately fetch
+    const applyRelativeRange = useCallback((hours: number) => {
+        const end = new Date();
+        const start = subHours(end, hours);
+        setEndDate(formatDateForInput(end));
+        setStartDate(formatDateForInput(start));
+    }, []);
+
+    // Pan the time window left or right by half the current range
+    const panWindow = useCallback((direction: 1 | -1) => {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const shiftMs = (end.getTime() - start.getTime()) / 2;
+        setStartDate(formatDateForInput(new Date(start.getTime() + direction * shiftMs)));
+        setEndDate(formatDateForInput(new Date(end.getTime() + direction * shiftMs)));
+    }, [startDate, endDate]);
+
+    // Zoom in (halve range) or out (double range), centred on midpoint
+    const zoomWindow = useCallback((factor: number) => {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const midMs = (start.getTime() + end.getTime()) / 2;
+        const newHalf = (end.getTime() - start.getTime()) / 2 * factor;
+        setStartDate(formatDateForInput(new Date(midMs - newHalf)));
+        setEndDate(formatDateForInput(new Date(midMs + newHalf)));
+    }, [startDate, endDate]);
+
+    // Displayed data: filter by current date window first, then decimate.
+    // Pan/zoom just updates startDate/endDate without re-fetching — instant view shift.
     const displayedChartData = useMemo(() => {
-        if (decimationLevel === 1) return chartData;
-        return chartData.filter((_, index) => index % decimationLevel === 0);
-    }, [chartData, decimationLevel]);
+        const startMs = new Date(startDate).getTime();
+        const endMs = new Date(endDate).getTime();
+        const windowed = chartData.filter(d => {
+            const t = new Date(d.timestamp).getTime();
+            return t >= startMs && t <= endMs;
+        });
+        if (decimationLevel === 1) return windowed;
+        return windowed.filter((_, i) => i % decimationLevel === 0);
+    }, [chartData, startDate, endDate, decimationLevel]);
 
     // Stats (from ALL loaded chart data)
     const stats = useMemo(() => {
@@ -210,7 +244,7 @@ export default function SensorDataPage({ params }: PageProps) {
         {
             header: t("projects.sensorData.time"),
             accessorKey: "timestamp",
-            cell: (item) => <span className="text-gray-300 font-mono">{format(new Date(item.timestamp), "yyyy-MM-dd HH:mm:ss")}</span>,
+            cell: (item) => <span className="text-[var(--foreground)] font-mono">{format(new Date(item.timestamp), "yyyy-MM-dd HH:mm:ss")}</span>,
             sortable: true
         },
         {
@@ -242,12 +276,20 @@ export default function SensorDataPage({ params }: PageProps) {
                     <div>
                         <h1 className="text-2xl font-bold text-white flex items-center gap-3">
                             {sensor?.name || t("projects.sensorData.loading")}
-                            <span className={`text-xs px-2 py-0.5 rounded-full border ${sensor?.properties?.status === 'active'
-                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
-                                }`}>
-                                {sensor?.properties?.status || t("projects.sensorData.active")}
-                            </span>
+                            {sensor && (() => {
+                                const ACTIVE_MS = 24 * 60 * 60 * 1000;
+                                const lastActivity = sensor.last_activity;
+                                const isActive = (lastActivity && Date.now() - new Date(lastActivity).getTime() < ACTIVE_MS)
+                                    || sensor?.properties?.status === 'active';
+                                return (
+                                    <span className={`text-xs px-2 py-0.5 rounded-full border ${isActive
+                                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                        : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+                                        }`}>
+                                        {isActive ? 'active' : (sensor?.properties?.status || 'inactive')}
+                                    </span>
+                                );
+                            })()}
                         </h1>
                         <p className="text-white/60 text-sm">{sensor?.description || t("projects.sensorData.historyDesc")}</p>
                     </div>
@@ -292,16 +334,50 @@ export default function SensorDataPage({ params }: PageProps) {
                             </div>
                         </div>
 
-                        {/* Filter Controls */}
-                        <div className="flex flex-wrap items-center gap-2 text-sm bg-black/20 p-2 rounded-lg border border-white/5">
-                            {/* Resolution Control */}
-                            <div className="flex flex-col gap-1 w-24">
-                                <label className="text-xs text-white/50 px-1 flex items-center gap-1"><Layers className="w-3 h-3" /> {t("projects.sensorData.resolution")}</label>
-                                <select
-                                    value={decimationLevel}
-                                    onChange={(e) => setDecimationLevel(Number(e.target.value))}
-                                    className="bg-card border border-border rounded px-2 py-1 text-[var(--foreground)] text-xs focus:ring-1 focus:ring-hydro-primary outline-none"
-                                >
+                        {/* Filter Controls — single row */}
+                        <div className="flex flex-wrap items-end gap-x-3 gap-y-2 text-sm bg-black/20 px-3 py-2 rounded-lg border border-white/5 w-full">
+                            {/* Quick range presets */}
+                            <div className="flex flex-col gap-1">
+                                <label className="text-xs text-white/50 px-0.5">Quick range</label>
+                                <div className="flex gap-1">
+                                    {([["1h", 1], ["6h", 6], ["24h", 24], ["7d", 168], ["30d", 720]] as [string, number][]).map(([label, hours]) => (
+                                        <button key={label}
+                                            onClick={() => { applyRelativeRange(hours); setTimeout(handleApplyFilters, 0); }}
+                                            className="px-2 py-1 text-xs rounded bg-white/10 hover:bg-hydro-primary/30 text-white/70 hover:text-white transition-colors border border-white/10">
+                                            {label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="self-stretch w-px bg-white/10" />
+
+                            {/* From */}
+                            <div className="flex flex-col gap-1">
+                                <label className="text-xs text-white/50 px-0.5 flex items-center gap-1"><Calendar className="w-3 h-3" /> {t("projects.sensorData.from")}</label>
+                                <DateTimePicker value={startDate} onChange={setStartDate} />
+                            </div>
+
+                            {/* To + Now */}
+                            <div className="flex flex-col gap-1">
+                                <label className="text-xs text-white/50 px-0.5 flex items-center gap-1"><Calendar className="w-3 h-3" /> {t("projects.sensorData.to")}</label>
+                                <div className="flex gap-1 items-center">
+                                    <DateTimePicker value={endDate} onChange={setEndDate} />
+                                    <button onClick={() => setEndDate(formatDateForInput(new Date()))}
+                                        className="px-2 py-1 text-xs rounded bg-white/10 hover:bg-hydro-primary/30 text-white/70 hover:text-white transition-colors border border-white/10 whitespace-nowrap h-[30px]"
+                                        title="Set To to now">
+                                        Now
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="self-stretch w-px bg-white/10" />
+
+                            {/* Resolution */}
+                            <div className="flex flex-col gap-1">
+                                <label className="text-xs text-white/50 px-0.5 flex items-center gap-1"><Layers className="w-3 h-3" /> {t("projects.sensorData.resolution")}</label>
+                                <select value={decimationLevel} onChange={(e) => setDecimationLevel(Number(e.target.value))}
+                                    className="bg-card border border-border rounded px-2 py-1 text-[var(--foreground)] text-xs focus:ring-1 focus:ring-hydro-primary outline-none w-24">
                                     <option value={1} className="bg-card">{t("projects.sensorData.native")}</option>
                                     <option value={5} className="bg-card">1:5</option>
                                     <option value={10} className="bg-card">1:10</option>
@@ -309,70 +385,43 @@ export default function SensorDataPage({ params }: PageProps) {
                                 </select>
                             </div>
 
-                            <div className="h-8 w-px bg-white/10 mx-2"></div>
+                            <div className="self-stretch w-px bg-white/10" />
 
+                            {/* Y axis */}
                             <div className="flex flex-col gap-1">
-                                <label className="text-xs text-white/50 px-1 flex items-center gap-1"><Calendar className="w-3 h-3" /> {t("projects.sensorData.from")}</label>
-                                <DateTimePicker value={startDate} onChange={setStartDate} />
+                                <label className="text-xs text-white/50 px-0.5">{t("projects.sensorData.yMin")}</label>
+                                <input type="number" placeholder={t("projects.sensorData.auto")} value={yMinInput}
+                                    onChange={(e) => { setYMinInput(e.target.value); setYMin(e.target.value === "" ? "auto" : Number(e.target.value)); }}
+                                    className="bg-white/5 border border-white/10 rounded px-2 py-1 text-[var(--foreground)] text-xs focus:ring-1 focus:ring-hydro-primary outline-none w-16" />
                             </div>
                             <div className="flex flex-col gap-1">
-                                <label className="text-xs text-white/50 px-1 flex items-center gap-1"><Calendar className="w-3 h-3" /> {t("projects.sensorData.to")}</label>
-                                <DateTimePicker value={endDate} onChange={setEndDate} />
+                                <label className="text-xs text-white/50 px-0.5">{t("projects.sensorData.yMax")}</label>
+                                <input type="number" placeholder={t("projects.sensorData.auto")} value={yMaxInput}
+                                    onChange={(e) => { setYMaxInput(e.target.value); setYMax(e.target.value === "" ? "auto" : Number(e.target.value)); }}
+                                    className="bg-white/5 border border-white/10 rounded px-2 py-1 text-[var(--foreground)] text-xs focus:ring-1 focus:ring-hydro-primary outline-none w-16" />
                             </div>
-                            <div className="h-8 w-px bg-white/10 mx-2"></div>
-                            <div className="flex items-end gap-2">
-                                <div className="flex flex-col gap-1 w-16">
-                                    <label className="text-xs text-white/50 px-1">{t("projects.sensorData.yMin")}</label>
-                                    <input
-                                        type="number"
-                                        placeholder={t("projects.sensorData.auto")}
-                                        value={yMinInput}
-                                        onChange={(e) => {
-                                            setYMinInput(e.target.value);
-                                            if (e.target.value === "") setYMin("auto");
-                                            else setYMin(Number(e.target.value));
-                                        }}
-                                        className="bg-white/5 border border-white/10 rounded px-2 py-1 text-white text-xs focus:ring-1 focus:ring-hydro-primary outline-none w-full"
-                                    />
-                                </div>
-                                <div className="flex flex-col gap-1 w-16">
-                                    <label className="text-xs text-white/50 px-1">{t("projects.sensorData.yMax")}</label>
-                                    <input
-                                        type="number"
-                                        placeholder={t("projects.sensorData.auto")}
-                                        value={yMaxInput}
-                                        onChange={(e) => {
-                                            setYMaxInput(e.target.value);
-                                            if (e.target.value === "") setYMax("auto");
-                                            else setYMax(Number(e.target.value));
-                                        }}
-                                        className="bg-white/5 border border-white/10 rounded px-2 py-1 text-white text-xs focus:ring-1 focus:ring-hydro-primary outline-none w-full"
-                                    />
-                                </div>
-                            </div>
-                            <button
-                                onClick={handleApplyFilters}
-                                className="ml-2 px-3 py-1 bg-hydro-primary/20 hover:bg-hydro-primary/30 text-hydro-primary text-xs rounded transition-colors self-end h-7 border border-hydro-primary/30"
-                            >
-                                Apply
+
+                            <button onClick={handleApplyFilters}
+                                className="ml-auto px-4 py-1 bg-hydro-primary/20 hover:bg-hydro-primary/30 text-hydro-primary text-xs rounded transition-colors self-end h-[30px] border border-hydro-primary/30 whitespace-nowrap">
+                                {chartLoading ? "Loading…" : "Apply"}
                             </button>
                         </div>
                     </div>
 
-                    <div className="h-[400px]">
+                    <div className="h-[400px] relative">
                         {chartLoading ? (
                             <div className="h-full flex items-center justify-center text-white/30">
                                 <Activity className="w-6 h-6 animate-spin mr-2" /> Loading data...
                             </div>
                         ) : displayedChartData.length === 0 ? (
-                            <div className="h-full flex items-center justify-center text-white/30">No data available</div>
+                            <div className="h-full flex items-center justify-center text-white/30">No data available for this range — adjust filters and click Apply</div>
                         ) : (
                             <TimeSeriesChart
                                 series={[
                                     {
                                         name: sensor?.name || "Value",
                                         label: selectedDatastream,
-                                        color: "#10b981", // Primary emerald color
+                                        color: "#10b981",
                                         unit: datastreams.find(d => d.name === selectedDatastream)?.unit_of_measurement?.symbol || datastreams.find(d => d.name === selectedDatastream)?.unit || "",
                                         data: displayedChartData
                                     }
@@ -384,6 +433,26 @@ export default function SensorDataPage({ params }: PageProps) {
                         <div className="absolute top-2 right-2 text-[10px] text-white/20">
                             Showing {displayedChartData.length} pts (Decimation: {decimationLevel}x)
                         </div>
+                    </div>
+
+                    {/* Pan / Zoom strip — sits just under the X axis */}
+                    <div className="flex items-center justify-center gap-1 mt-2">
+                        <button onClick={() => panWindow(-1)} title="Pan left (½ window)"
+                            className="flex items-center gap-1 px-2.5 py-1 text-xs rounded bg-white/5 hover:bg-white/15 text-white/50 hover:text-white transition-colors border border-white/10">
+                            <ChevronLeft className="w-3.5 h-3.5" /> Pan
+                        </button>
+                        <button onClick={() => zoomWindow(2)} title="Zoom out (×2 range)"
+                            className="flex items-center gap-1 px-2.5 py-1 text-xs rounded bg-white/5 hover:bg-white/15 text-white/50 hover:text-white transition-colors border border-white/10">
+                            <ZoomOut className="w-3.5 h-3.5" /> Zoom−
+                        </button>
+                        <button onClick={() => zoomWindow(0.5)} title="Zoom in (½ range)"
+                            className="flex items-center gap-1 px-2.5 py-1 text-xs rounded bg-white/5 hover:bg-white/15 text-white/50 hover:text-white transition-colors border border-white/10">
+                            <ZoomIn className="w-3.5 h-3.5" /> Zoom+
+                        </button>
+                        <button onClick={() => panWindow(1)} title="Pan right (½ window)"
+                            className="flex items-center gap-1 px-2.5 py-1 text-xs rounded bg-white/5 hover:bg-white/15 text-white/50 hover:text-white transition-colors border border-white/10">
+                            Pan <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
                     </div>
                 </div>
 

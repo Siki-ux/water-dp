@@ -50,6 +50,19 @@ export function useAlertHistory(
                 .get(`/alerts/history/${projectId}`, { params })
                 .then((r) => r.data),
         enabled: !!projectId,
+        refetchInterval: 15000,
+    });
+}
+
+export function useActiveAlertCount(projectId: string | undefined) {
+    return useQuery({
+        queryKey: [...queryKeys.projects.alertHistory(projectId!), 'count'],
+        queryFn: () =>
+            api
+                .get(`/alerts/count/${projectId}`, { params: { status: 'active' } })
+                .then((r) => r.data.count as number),
+        enabled: !!projectId,
+        refetchInterval: 15000,
     });
 }
 

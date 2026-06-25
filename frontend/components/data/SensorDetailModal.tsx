@@ -4,7 +4,8 @@ import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import TimeSeriesChart from "./TimeSeriesChart";
-import { X, Trash2, Edit, ArrowUpRight, Loader2, Activity } from "lucide-react";
+import { X, Trash2, Edit, ArrowUpRight, Loader2, Activity, History } from "lucide-react";
+import { toast } from "sonner";
 import { useTranslation } from "@/lib/i18n";
 import api from "@/lib/api";
 
@@ -51,6 +52,13 @@ export default function SensorDetailModal({
     const [deleteMode, setDeleteMode] = useState<"none" | "unlink" | "source">("none");
     const [fullSensor, setFullSensor] = useState<any>(null);
     const [selectedDatastream, setSelectedDatastream] = useState<string>("");
+
+    // Historical backfill (pull older data from the sensor's external API)
+    const [showBackfill, setShowBackfill] = useState(false);
+    const [backfillFrom, setBackfillFrom] = useState("");
+    const [backfillTo, setBackfillTo] = useState(() => new Date().toISOString().slice(0, 10));
+    const [backfillPending, setBackfillPending] = useState(false);
+
     const { t } = useTranslation();
 
     const params = useParams();
@@ -116,10 +124,48 @@ export default function SensorDetailModal({
     };
     const cancelDelete = () => setDeleteMode("none");
 
+    const runBackfill = async () => {
+        const uuid = sensor.uuid || sensor.id;
+        if (!backfillFrom || !backfillTo) {
+            toast.error(t("sms.sensors.backfillPickRange"));
+            return;
+        }
+        if (backfillFrom > backfillTo) {
+            toast.error(t("sms.sensors.backfillBadRange"));
+            return;
+        }
+        setBackfillPending(true);
+        try {
+            const res = await api.post(`/things/${uuid}/backfill`, {
+                date_from: backfillFrom,
+                date_to: backfillTo,
+            });
+            const n = res.data?.queued_windows ?? 0;
+            toast.success(t("sms.sensors.backfillQueued").replace("{n}", String(n)));
+            setShowBackfill(false);
+        } catch (e: any) {
+            const detail = e?.response?.data?.detail || t("sms.sensors.backfillFailed");
+            toast.error(detail);
+        } finally {
+            setBackfillPending(false);
+        }
+    };
+
     if (!isOpen || !sensor) return null;
 
     const displaySensor = fullSensor || sensor;
     const datastreams = displaySensor.datastreams || [];
+
+    // Only sensors backed by an external API (e.g. BlueBeatle) can backfill history
+    const canBackfill = /bluebeatle/i.test(
+        `${displaySensor.description || ""} ${displaySensor.name || ""} ${sensor.description || ""}`
+    );
+
+    // Compute effective status: if sensor received data in last 24h treat as active
+    const ACTIVE_THRESHOLD_MS = 24 * 60 * 60 * 1000;
+    const lastActivity = displaySensor.last_activity || sensor.last_activity;
+    const hasRecentData = lastActivity && Date.now() - new Date(lastActivity).getTime() < ACTIVE_THRESHOLD_MS;
+    const effectiveStatus = hasRecentData ? "active" : (sensor.status || displaySensor.status || "inactive");
 
     // --- Coordinate Extraction Logic ---
     let latitude = displaySensor.latitude;
@@ -217,6 +263,15 @@ export default function SensorDetailModal({
                                     <ArrowUpRight className="w-3 h-3" />
                                     {t('sms.sensors.fullHistory')}
                                 </Link>
+                                {canBackfill && (
+                                    <button
+                                        onClick={() => setShowBackfill((v) => !v)}
+                                        className="flex items-center gap-1 px-3 py-1 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded text-sm transition-colors border border-blue-500/20"
+                                    >
+                                        <History className="w-3 h-3" />
+                                        {t('sms.sensors.backfill')}
+                                    </button>
+                                )}
                                 <button
                                     onClick={() => setDeleteMode("unlink")}
                                     className="flex items-center gap-1 px-3 py-1 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-500 rounded text-sm transition-colors border border-yellow-500/20"
@@ -237,6 +292,48 @@ export default function SensorDetailModal({
                     </div>
                 </div>
 
+                {/* Backfill panel */}
+                {canBackfill && showBackfill && (
+                    <div className="px-6 py-4 border-b border-border bg-blue-500/5">
+                        <div className="flex items-center gap-2 mb-2">
+                            <History className="w-4 h-4 text-blue-400" />
+                            <h3 className="text-sm font-semibold text-[var(--foreground)]">{t('sms.sensors.backfillTitle')}</h3>
+                        </div>
+                        <p className="text-xs text-[var(--foreground)] opacity-60 mb-3">{t('sms.sensors.backfillDesc')}</p>
+                        <div className="flex flex-wrap items-end gap-3">
+                            <div>
+                                <label className="block text-xs opacity-50 mb-1">{t('sms.sensors.backfillFrom')}</label>
+                                <input
+                                    type="date"
+                                    value={backfillFrom}
+                                    max={backfillTo || undefined}
+                                    onChange={(e) => setBackfillFrom(e.target.value)}
+                                    className="bg-background border border-border rounded px-3 py-1.5 text-sm text-[var(--foreground)] outline-none focus:border-blue-400"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs opacity-50 mb-1">{t('sms.sensors.backfillTo')}</label>
+                                <input
+                                    type="date"
+                                    value={backfillTo}
+                                    min={backfillFrom || undefined}
+                                    max={new Date().toISOString().slice(0, 10)}
+                                    onChange={(e) => setBackfillTo(e.target.value)}
+                                    className="bg-background border border-border rounded px-3 py-1.5 text-sm text-[var(--foreground)] outline-none focus:border-blue-400"
+                                />
+                            </div>
+                            <button
+                                onClick={runBackfill}
+                                disabled={backfillPending}
+                                className="flex items-center gap-2 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors"
+                            >
+                                {backfillPending && <Loader2 className="w-3 h-3 animate-spin" />}
+                                {t('sms.sensors.backfillRun')}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 <div className="p-6 flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6 bg-card">
                     {/* Left Column: Metadata & Map */}
                     <div className="space-y-6 lg:col-span-1">
@@ -246,7 +343,9 @@ export default function SensorDetailModal({
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="bg-background p-3 rounded-lg border border-border">
                                     <div className="opacity-40 mb-1">{t('sms.sensors.statusCol')}</div>
-                                    <div className="text-[var(--foreground)] capitalize">{displaySensor.status || t('sms.sensors.activeStatus')}</div>
+                                    <div className={`capitalize font-medium ${effectiveStatus === 'active' ? 'text-green-400' : 'text-gray-400'}`}>
+                                        {effectiveStatus}
+                                    </div>
                                 </div>
                                 <div className="bg-background p-3 rounded-lg border border-border">
                                     <div className="opacity-40 mb-1">{t('sms.sensors.deviceType')}</div>

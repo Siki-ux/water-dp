@@ -18,7 +18,7 @@ from app.services.timeio.crypto_utils import decrypt_password, encrypt_password
 
 logger = logging.getLogger(__name__)
 
-# Module-level connection pool (shared across all TimeIODatabase instances)
+# Module-level connection pool (shared across all TimeIODatabase instances, regular + admin)
 _connection_pool: Optional[pool.ThreadedConnectionPool] = None
 
 
@@ -28,14 +28,14 @@ def _get_pool() -> pool.ThreadedConnectionPool:
     if _connection_pool is None or _connection_pool.closed:
         _connection_pool = pool.ThreadedConnectionPool(
             minconn=2,
-            maxconn=10,
+            maxconn=20,
             host=settings.timeio_db_host,
             port=settings.timeio_db_port,
             database=settings.timeio_db_name,
             user=settings.timeio_db_user,
             password=settings.timeio_db_password,
         )
-        logger.info("TimeIO connection pool created")
+        logger.info("TimeIO connection pool created (maxconn=20)")
     return _connection_pool
 
 
@@ -75,9 +75,26 @@ class TimeIODatabase:
             conn.close()
         else:
             try:
+                conn.reset()
                 _get_pool().putconn(conn)
             except Exception:
                 conn.close()
+
+    def _get_admin_connection(self):
+        """Get an admin connection from the shared pool (same DB as regular connections)."""
+        if self._custom_params:
+            return psycopg2.connect(
+                host=self._db_host,
+                port=self._db_port,
+                database=self.database,
+                user=self.user,
+                password=self.password,
+            )
+        return _get_pool().getconn()
+
+    def _release_admin_connection(self, conn):
+        """Return an admin connection to the pool."""
+        self._release_connection(conn)
 
     @contextmanager
     def connection(self):
@@ -402,28 +419,32 @@ class TimeIODatabase:
                         'Location of ' || t.name AS "DESCRIPTION",
                         'application/vnd.geo+json'::varchar AS "ENCODING_TYPE",
                         -- Handle both Direct Object and Array-wrapped properties (common TSM artifact)
-                        COALESCE(
-                            CASE
-                                WHEN jsonb_typeof(t.properties) = 'array' AND jsonb_array_length(t.properties) > 1 THEN t.properties->1->'location'
-                                ELSE t.properties->'location'
-                            END,
-                            '{{"type": "Point", "coordinates": [0,0]}}'::jsonb
-                        ) AS "LOCATION",
+                        CASE
+                            WHEN jsonb_typeof(t.properties) = 'array' AND jsonb_array_length(t.properties) > 1 THEN t.properties->1->'location'
+                            ELSE t.properties->'location'
+                        END AS "LOCATION",
                         CASE
                             WHEN jsonb_typeof(t.properties) = 'object' THEN t.properties
                             WHEN jsonb_typeof(t.properties) = 'array' AND jsonb_array_length(t.properties) > 1 THEN t.properties->1
                             WHEN t.properties IS NULL THEN '{{}}'::jsonb
                             ELSE jsonb_build_object('wrapped_value', t.properties)
                         END AS "PROPERTIES",
-                        public.ST_GeomFromGeoJSON(
-                            COALESCE(
+                        CASE
+                            WHEN (
                                 CASE
                                     WHEN jsonb_typeof(t.properties) = 'array' AND jsonb_array_length(t.properties) > 1 THEN t.properties->1->'location'
                                     ELSE t.properties->'location'
-                                END,
-                                '{{"type": "Point", "coordinates": [0,0]}}'::jsonb
-                            )::text
-                        ) AS "GEOM"
+                                END
+                            ) IS NOT NULL THEN public.ST_GeomFromGeoJSON(
+                                (
+                                    CASE
+                                        WHEN jsonb_typeof(t.properties) = 'array' AND jsonb_array_length(t.properties) > 1 THEN t.properties->1->'location'
+                                        ELSE t.properties->'location'
+                                    END
+                                )::text
+                            )
+                            ELSE NULL
+                        END AS "GEOM"
                     FROM {schema}.thing t
                 """
                     ).format(schema=schema_id)
@@ -1876,16 +1897,6 @@ class TimeIODatabase:
 
     # ========== ConfigDB Management (v3) ==========
 
-    def _get_admin_connection(self):
-        """Get an admin connection to the system database."""
-        return psycopg2.connect(
-            host=self._db_host,
-            port=self._db_port,
-            user=settings.timeio_db_user,
-            password=settings.timeio_db_password,
-            database=settings.timeio_db_name,
-        )
-
     def get_config_id(self, schema_table: str, name: str) -> Optional[int]:
         """Get ID of a record by name in config_db."""
         connection = self._get_admin_connection()
@@ -2475,22 +2486,20 @@ class TimeIODatabase:
                         t.uuid,
                         t.name,
                         t.description,
-                        COALESCE(
+                        NULLIF(COALESCE(
                             (t.properties->'wrapped_value'->1->'location'->'coordinates'->>1)::float,
                             (t.properties->'location'->'coordinates'->>1)::float,
                             (t.properties->'location'->>'latitude')::float,
                             (loc.location->'coordinates'->>1)::float,
-                            sloc.y,
-                            0.0
-                        ) as latitude,
-                        COALESCE(
+                            sloc.y
+                        ), 0.0) as latitude,
+                        NULLIF(COALESCE(
                             (t.properties->'wrapped_value'->1->'location'->'coordinates'->>0)::float,
                             (t.properties->'location'->'coordinates'->>0)::float,
                             (t.properties->'location'->>'longitude')::float,
                             (loc.location->'coordinates'->>0)::float,
-                            sloc.x,
-                            0.0
-                        ) as longitude,
+                            sloc.x
+                        ), 0.0) as longitude,
                         t.properties
                     FROM {schema}.thing t
                     LEFT JOIN {schema}.thing_location tl ON t.id = tl.thing_id
@@ -2698,6 +2707,32 @@ class TimeIODatabase:
                 return result[0] if result else None
         except Exception as error:
             logger.error(f"Failed to fetch schema for {uuid}: {error}")
+            return None
+        finally:
+            self._release_connection(connection)
+
+    def get_ext_api_info(self, uuid: str) -> Optional[Dict[str, Any]]:
+        """Return {api_type, settings} for a thing's external API config, or None.
+
+        Used to detect which sensors support historical backfill (e.g. bluebeatle).
+        """
+        connection = self._get_admin_connection()
+        try:
+            with connection.cursor() as cursor:
+                query = """
+                    SELECT eat.name, ea.settings
+                    FROM config_db.thing t
+                    JOIN config_db.ext_api ea ON t.ext_api_id = ea.id
+                    JOIN config_db.ext_api_type eat ON eat.id = ea.api_type_id
+                    WHERE t.uuid = %s
+                """
+                cursor.execute(query, (uuid,))
+                result = cursor.fetchone()
+                if not result:
+                    return None
+                return {"api_type": result[0], "settings": result[1] or {}}
+        except Exception as error:
+            logger.error(f"Failed to fetch ext_api info for {uuid}: {error}")
             return None
         finally:
             self._release_connection(connection)
